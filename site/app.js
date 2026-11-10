@@ -1665,22 +1665,31 @@ function renderCategoryEditor() {
 
 
 // Preferred speed is browser-local; actual rate is confirmed by YouTube.
+function normalizePlaybackSpeed(value) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(0.25, Math.min(2, Math.round(value * 4) / 4));
+}
+
 function speedState() {
   if (speedState.saved) return speedState.saved;
   const key = "approved-yt-speed-v1:" +
     encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
   let preferred = 1;
+  let stored = true;
   try {
     const raw = localStorage.getItem(key);
-    const value = Number(raw);
-    if (
-      raw !== null && Number.isFinite(value) &&
-      value >= 0.25 && value <= 3
-    ) preferred = Math.round(value * 100) / 100;
-  } catch {}
+    if (raw !== null && raw.trim() !== "" && Number.isFinite(Number(raw))) {
+      preferred = normalizePlaybackSpeed(Number(raw));
+      if (Number(raw) !== preferred) {
+        localStorage.setItem(key, String(preferred));
+      }
+    }
+  } catch {
+    stored = false;
+  }
   return speedState.saved = {
     key, preferred, player: null, frame: null, ready: false,
-    timer: null, stored: true,
+    timer: null, stored,
   };
 }
 
@@ -1688,14 +1697,13 @@ function updateSpeedControls() {
   const value = speedState().preferred;
   $("speed-slider").value = String(value);
   $("speed-value").textContent = `${value}x`;
-  $("speed-preset").value = Number.isInteger(value * 4)
-    ? String(value) : "custom";
+  $("speed-preset").value = String(value);
 }
 
 function setPreferredSpeed(value) {
-  if (!Number.isFinite(value) || value < 0.25 || value > 3) return;
+  if (!Number.isFinite(value) || value < 0.25 || value > 2) return;
   const state = speedState();
-  state.preferred = Math.round(value * 100) / 100;
+  state.preferred = normalizePlaybackSpeed(value);
   try {
     localStorage.setItem(state.key, String(state.preferred));
     state.stored = true;
@@ -1703,9 +1711,8 @@ function setPreferredSpeed(value) {
     state.stored = false;
   }
   updateSpeedControls();
-  $("speed-status").textContent =
-    `Preferred ${state.preferred}x. Waiting for player confirmation.` +
-    (state.stored ? "" : " Storage unavailable; session only.");
+  $("speed-status").textContent = state.stored
+    ? "" : "Cannot save speed; using it for this session.";
   clearTimeout(state.timer);
   state.timer = setTimeout(applyPreferredSpeed, 180);
 }
@@ -1754,8 +1761,7 @@ function loadSpeedAPI() {
 function attachSpeedController(iframe, id) {
   const state = speedState();
   state.frame = iframe;
-  $("speed-status").textContent =
-    `Preferred ${state.preferred}x. Waiting for player confirmation.`;
+  $("speed-status").textContent = "";
 
   const valid = () =>
     state.frame === iframe && iframe.isConnected &&
@@ -1792,26 +1798,33 @@ function attachSpeedController(iframe, id) {
   }).catch(() => {
     if (valid()) {
       $("speed-status").textContent =
-        "Speed control API unavailable. Your preference is retained; " +
-        "use YouTube's native speed controls.";
+        "Speed control unavailable. Use YouTube's player controls.";
     }
   });
 }
 
 function reportPlaybackSpeed() {
   const state = speedState();
-  if (!state.ready || !state.player || !state.frame?.isConnected) return;
+  if (
+    !state.ready || !state.player ||
+    !state.frame?.isConnected || $("player").hidden
+  ) return;
   try {
     const actual = state.player.getPlaybackRate();
-    if (!Number.isFinite(actual) || actual <= 0) return;
-    const same = Math.abs(actual - state.preferred) < 0.001;
-    $("speed-status").textContent = (
-      same
-        ? `Playing ${actual}x.`
-        : `Preferred ${state.preferred}x; playing ${actual}x. ` +
-          "YouTube may not support the preferred rate for this video."
-    ) + (state.stored ? "" : " Storage unavailable; session only.");
-  } catch {}
+    if (!Number.isFinite(actual) || actual <= 0) {
+      $("speed-status").textContent = "Unable to confirm playback speed.";
+      return;
+    }
+    if (Math.abs(actual - state.preferred) >= 0.001) {
+      $("speed-status").textContent =
+        `Selected speed unavailable; playing ${actual}x.`;
+    } else {
+      $("speed-status").textContent = state.stored
+        ? "" : "Cannot save speed; using it for this session.";
+    }
+  } catch {
+    $("speed-status").textContent = "Unable to confirm playback speed.";
+  }
 }
 
 function applyPreferredSpeed() {
@@ -1826,25 +1839,26 @@ function applyPreferredSpeed() {
   }
   try {
     const rates = state.player.getAvailablePlaybackRates()
-      .filter(rate => Number.isFinite(rate) && rate >= 0.25 && rate <= 3)
+      .filter(rate =>
+        Number.isFinite(rate) &&
+        rate >= 0.25 && rate <= 2 &&
+        Number.isInteger(rate * 4)
+      )
       .sort((a, b) => a - b);
+
     if (!rates.length) {
-      $("speed-status").textContent =
-        "No supported speed list available. Preferred speed retained.";
+      $("speed-status").textContent = "Speed control unavailable for this video.";
       return;
     }
 
     const exact = rates.find(
       rate => Math.abs(rate - state.preferred) < 0.001
     );
-    // Unsupported preferences use the nearest supported rate not above
-    // the preference, or the minimum supported rate when none is lower.
     const target = exact ??
       rates.filter(rate => rate <= state.preferred).pop() ?? rates[0];
 
     if (Math.abs(state.player.getPlaybackRate() - target) > 0.001) {
-      $("speed-status").textContent =
-        `Preferred ${state.preferred}x; requesting supported ${target}x.`;
+      $("speed-status").textContent = "";
       state.player.setPlaybackRate(target);
     } else {
       reportPlaybackSpeed();
@@ -1852,23 +1866,17 @@ function applyPreferredSpeed() {
     clearTimeout(state.timer);
     state.timer = setTimeout(reportPlaybackSpeed, 700);
   } catch {
-    $("speed-status").textContent =
-      "Unable to confirm playback speed. Your preference is retained.";
+    $("speed-status").textContent = "Unable to apply playback speed.";
   }
 }
 
 (function initializeSpeedControls() {
-  for (let index = 1; index <= 12; index++) {
+  for (let index = 1; index <= 8; index++) {
     const value = index / 4;
     $("speed-preset").append(new Option(`${value}x`, String(value)));
   }
-  $("speed-preset").append(new Option("Custom", "custom"));
   updateSpeedControls();
   $("speed-preset").addEventListener("change", () => {
-    if ($("speed-preset").value === "custom") {
-      $("speed-slider").focus();
-      return;
-    }
     setPreferredSpeed(Number($("speed-preset").value));
   });
   $("speed-slider").addEventListener("input", () => {

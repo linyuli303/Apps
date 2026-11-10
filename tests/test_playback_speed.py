@@ -10,10 +10,11 @@ class PlaybackSpeedTests(unittest.TestCase):
         self.html = (ROOT / "site/index.html").read_text(encoding="utf-8")
 
     def test_range_and_presets(self):
-        self.assertIn('min="0.25" max="3" step="0.01"', self.html)
-        self.assertIn("index <= 12", self.js)
+        self.assertIn('min="0.25" max="2" step="0.25"', self.html)
+        self.assertIn("index <= 8", self.js)
         self.assertIn("const value = index / 4", self.js)
-        self.assertIn('new Option("Custom", "custom")', self.js)
+        self.assertNotIn('new Option("Custom", "custom")', self.js)
+        self.assertIn("normalizePlaybackSpeed", self.js)
 
     def test_preference_and_actual_rate_are_distinct(self):
         for method in (
@@ -21,7 +22,13 @@ class PlaybackSpeedTests(unittest.TestCase):
         ):
             self.assertIn(method, self.js)
         self.assertIn("approved-yt-speed-v1:", self.js)
-        self.assertIn("YouTube may not support the preferred rate", self.js)
+        self.assertIn("Selected speed unavailable; playing", self.js)
+        self.assertNotIn("Waiting for player confirmation.", self.js)
+        report = self.js.split("function reportPlaybackSpeed()", 1)[1].split(
+            "function applyPreferredSpeed()", 1
+        )[0]
+        self.assertNotIn("`Playing ${actual}x.", report)
+        self.assertIn('state.stored\n        ? ""', report)
         self.assertIn("stopSpeedController();", self.js)
 
     def test_csp_expansion_is_scoped(self):
