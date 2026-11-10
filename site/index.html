@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=kino-text-feed-1" />
-    <script src="app.js?v=kino-text-feed-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=player-shared-appearance-1" />
+    <script src="app.js?v=player-shared-appearance-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -248,7 +248,7 @@
       hidden
     >
       <div id="frame" class="frame"></div>
-      <div class="player-info">
+      <div class="player-info player-title-accessible">
         <h2 id="playing-title"></h2>
       </div>
       <div class="player-bottom">
@@ -264,6 +264,14 @@
           referrerpolicy="no-referrer"
         >Open in YouTube / App &#8599;</a>
         <button id="next" type="button">Next approved video</button>
+        <label class="player-appearance-label" for="player-appearance">
+          Appearance
+          <select id="player-appearance">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="system">System</option>
+          </select>
+        </label>
         <button id="close" type="button">Close / Esc</button>
         <span>
           Premium recognition in embeds is not guaranteed. App opening depends

@@ -345,6 +345,7 @@ document.addEventListener("keydown", (event) => {
         $("player-fullscreen"),
         $("official"),
         $("next"),
+        $("player-appearance"),
         $("close"),
       ].filter((el) => el && !el.disabled);
       if (event.shiftKey && document.activeElement === controls[0]) {
@@ -360,7 +361,9 @@ document.addEventListener("keydown", (event) => {
     }
     if (
       ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key) &&
-      document.activeElement.tagName !== "IFRAME"
+      !["IFRAME", "SELECT", "INPUT", "TEXTAREA"].includes(
+        document.activeElement.tagName,
+      )
     ) {
       event.preventDefault();
       if (event.key === "ArrowDown")
@@ -942,6 +945,7 @@ load();
     name.textContent = theme.ja + " · " + theme.name;
     trigger.replaceChildren(swatches(selected), arrow);
     appearance.value = mode;
+    if ($("player-appearance")) $("player-appearance").value = mode;
     buttons.forEach((b, i) => {
       b.setAttribute("aria-pressed", String(themes[i].id === selected));
       b.querySelector(".palette-check").textContent = themes[i].id === selected ? "✓" : "";
@@ -974,7 +978,17 @@ load();
   panel.append(panelHeading, list, element("div", "palette-footnote", "Selection remembered on this browser. No account or external service needed."));
   picker.append(summary, panel);
   actions.append(picker, refresh, announce); header.append(actions);
-  appearance.addEventListener("change", () => { mode = appearance.value; apply(true, true); });
+  function changeAppearance(value) {
+    if (!["light", "dark", "system"].includes(value)) return;
+    mode = value;
+    apply(true, true);
+  }
+  appearance.addEventListener("change", () => {
+    changeAppearance(appearance.value);
+  });
+  $("player-appearance").addEventListener("change", () => {
+    changeAppearance($("player-appearance").value);
+  });
   document.addEventListener("click", event => { if (!picker.contains(event.target)) picker.open = false; });
   document.addEventListener("keydown", event => { if (event.key === "Escape" && picker.open) { picker.open = false; summary.focus(); } });
   function systemChanged() { if (mode === "system") apply(); }
