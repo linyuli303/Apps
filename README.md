@@ -1,6 +1,6 @@
 # Hardened personal YouTube
 
-Current security-hardened edition. See the separately delivered YOUTUBE_SETUP_HARDENED_V2.md for setup and migration. No personal whitelist, raw CSV, or key is bundled. Preserve/review your ID-only channels.json when upgrading.
+Current security-hardened edition. No personal whitelist, raw CSV, or key is bundled. Preserve/review your ID-only channels.json when upgrading.
 
 - Main-only workflow guards; refresh environment reference; all Actions commit-pinned. Configure the environment's main-only rules and relocate the API secret there—code alone does not enforce secret isolation.
 - Immutable channel-ID approvals only. Resolve handles locally with scripts/resolve_handle.py and verify channel identity before adding.
