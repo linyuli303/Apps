@@ -1046,3 +1046,24 @@ header{flex-wrap:wrap}.header-actions{display:flex;align-items:center;justify-co
     transition:none;
   }
 }
+
+/* Embedded playback above the RSS catalogue, using shared theme colors. */
+#player.player{
+  z-index:100;
+  background:var(--page);
+  color:var(--text);
+}
+#player .player-bottom{
+  flex-wrap:wrap;
+}
+#player .player-bottom>span{
+  flex-basis:100%;
+  font-size:12px;
+  line-height:1.5;
+  color:var(--muted);
+}
+#player #official{
+  background:var(--surface);
+  color:var(--label-accent);
+  border-color:var(--border);
+}

@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=rss-spacious-tinted-1" />
-    <script src="app.js?v=rss-view-counts-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=embedded-playback-2" />
+    <script src="app.js?v=embedded-playback-2" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -144,8 +144,10 @@
       >
       <p id="status" role="status">Loading your approved channels…</p>
       <p class="playback-notice">
-        Videos open on official YouTube in a new tab. Sign in there with
-        your active YouTube Premium account to use its playback benefits.
+        Videos play inside MyTube. Use Open in YouTube / App for external
+        playback; whether the app opens depends on your device settings.
+        Embedded playback may not recognize your Premium membership.
+        For Premium benefits, open official YouTube while signed in.
         MyTube does not access your Google login or membership.
       </p>
       <p class="refresh-schedule-notice">
@@ -216,7 +218,7 @@
         <div id="rss-channels" class="rss-channels"></div>
         <p class="rss-footnote">
           Ranked by newest published video. Hover to preview; click to pin.
-          Video titles open YouTube in a new tab. Dates reflect the published
+          Video titles play inside MyTube; the player also offers Open in YouTube / App. Dates reflect the published
           feed snapshot. View counts reflect the last successful refresh.
         </p>
       </section>
@@ -257,11 +259,12 @@
           target="_blank"
           rel="noopener noreferrer"
           referrerpolicy="no-referrer"
-          >Open in YouTube ↗</a
+          >Open in YouTube / App &#8599;</a
         ><button id="next" type="button">Next approved video</button
         ><span
-          >Playback, embeds, and fullscreen support depend on your browser and
-          YouTube.</span
+          >Premium recognition in embeds is not guaranteed.
+          External links may open the YouTube app or browser depending
+          on your device settings.</span
         >
       </div>
     </section>

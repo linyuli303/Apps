@@ -140,10 +140,10 @@ function render() {
     card.append(img, body);
     card.setAttribute(
       "aria-label",
-      `${v.title} - Open on YouTube in a new tab`,
+      `${v.title} - Play inside MyTube`,
     );
-    card.title = "Open on YouTube in a new tab";
-    card.addEventListener("click", () => openOfficialVideo(v.id));
+    card.title = "Play inside MyTube";
+    card.addEventListener("click", () => openPlayer(v.id));
     fragment.append(card);
   });
   $("grid").replaceChildren(fragment);
@@ -211,6 +211,7 @@ function openPlayer(id) {
   $("player").hidden = false;
   document.querySelector("header").inert = true;
   document.querySelector("main").inert = true;
+  $("rss-catalogue").inert = true;
   document.body.style.overflow = "hidden";
   $("close").focus();
   $("next").disabled = visible.length < 2;
@@ -222,10 +223,15 @@ function closePlayer() {
   current = null;
   document.querySelector("header").inert = false;
   document.querySelector("main").inert = false;
+  $("rss-catalogue").inert = false;
   document.body.style.overflow = "";
   if (wasOpen && returnFocus && returnFocus.isConnected) returnFocus.focus();
 }
 $("close").addEventListener("click", closePlayer);
+$("official").addEventListener("click", () => {
+  // Stop embedded playback while allowing normal external link navigation.
+  $("frame").replaceChildren();
+});
 $("next").addEventListener("click", () => {
   if (!visible.length) return;
   const index = visible.findIndex((v) => v.id === current);
@@ -1008,9 +1014,9 @@ function renderRSSCatalogue() {
       title.title = video.title;
       title.setAttribute(
         "aria-label",
-        `${video.title} - Open on YouTube in a new tab`,
+        `${video.title} - Play inside MyTube`,
       );
-      title.addEventListener("click", () => openOfficialVideo(video.id));
+      title.addEventListener("click", () => openPlayer(video.id));
 
       const count = video.viewCount;
       let countLabel = "Unavailable";
