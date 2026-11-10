@@ -118,6 +118,9 @@ def build(config, key, request=api):
         params.update({"id":entry["id"]} if "id" in entry else {"forHandle":entry["handle"]})
         items = request("channels", params, key).get("items", [])
         if len(items) != 1:
+            diagnostic_id = entry.get("id", "")
+            if isinstance(diagnostic_id, str) and CHANNEL_ID.fullmatch(diagnostic_id):
+                print("Unresolved approved channel ID:", diagnostic_id)
             raise ValueError("A configured channel could not be resolved; no partial feed was published")
         channel = items[0]
         cid = channel["id"]
