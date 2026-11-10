@@ -916,18 +916,31 @@ function renderRSSCatalogue() {
     const setOpen = (open) => {
       state.open = open;
       panel.hidden = !open;
+      $("rss-catalogue").classList.toggle("rss-open", open);
       $("rss-toggle").setAttribute("aria-expanded", String(open));
       if (open) {
         renderRSSCatalogue();
       } else {
         state.active = null;
         state.pinned = null;
-        $("rss-catalogue").classList.remove("rss-wide");
+        state.activate(null);
         $("rss-toggle").focus();
       }
     };
 
     $("rss-toggle").addEventListener("click", () => setOpen(!state.open));
+    $("rss-toggle").addEventListener("pointerenter", (event) => {
+      if (event.pointerType === "mouse" && !state.open) setOpen(true);
+    });
+    $("rss-back").addEventListener("click", () => {
+      const previous = state.active;
+      state.pinned = null;
+      state.activate(null);
+      state.suppressPreview = true;
+      const button = previous && document.getElementById(`rss-channel-${previous}`);
+      if (button) button.focus();
+      state.suppressPreview = false;
+    });
     $("rss-close").addEventListener("click", () => setOpen(false));
     $("rss-search").addEventListener("input", () => {
       state.active = null;
@@ -941,10 +954,13 @@ function renderRSSCatalogue() {
         setOpen(false);
       }
     });
-    $("rss-channels").addEventListener("pointerleave", () => {
+    // Crossing from catalogue to feed must not collapse the feed.
+    // Leaving both panels may clear an unpinned preview, never the catalogue.
+    $("rss-catalogue").addEventListener("pointerleave", (event) => {
       if (
+        event.pointerType === "mouse" &&
         state.pinned === null &&
-        !$("rss-channels").contains(document.activeElement)
+        !$("rss-catalogue").contains(document.activeElement)
       ) {
         state.activate(null);
       }
@@ -997,6 +1013,11 @@ function renderRSSCatalogue() {
   state.activate = (id) => {
     state.active = id;
     $("rss-catalogue").classList.toggle("rss-wide", id !== null);
+    $("rss-detail").hidden = id === null;
+    const selected = rows.get(id);
+    $("rss-detail-title").textContent = selected
+      ? selected.title
+      : "Channel feed";
     rows.forEach((record, channelID) => {
       const expanded = channelID === id;
       record.section.classList.toggle("rss-active", expanded);
@@ -1010,8 +1031,12 @@ function renderRSSCatalogue() {
   };
 
   container.replaceChildren();
+  $("rss-detail-body").replaceChildren();
 
-  if (!state.open) return;
+  if (!state.open) {
+    state.activate(null);
+    return;
+  }
 
   if (!feed || !freshFeed(feed)) {
     state.active = null;
@@ -1079,7 +1104,8 @@ function renderRSSCatalogue() {
     const button = element("button", "rss-channel-button");
     button.type = "button";
     button.setAttribute("aria-expanded", "false");
-    button.setAttribute("aria-controls", `rss-videos-${channel.id}`);
+    button.id = `rss-channel-${channel.id}`;
+    button.setAttribute("aria-controls", "rss-detail");
 
     const name = element("span", "rss-channel-name", channel.title);
     const updated = element(
@@ -1108,6 +1134,7 @@ function renderRSSCatalogue() {
       section,
       button,
       content,
+      title: channel.title,
       videos: matchingVideos,
       built: false,
     };
@@ -1119,7 +1146,9 @@ function renderRSSCatalogue() {
       }
     });
     button.addEventListener("focus", () => {
-      if (state.pinned === null) state.activate(channel.id);
+      if (state.pinned === null && !state.suppressPreview) {
+        state.activate(channel.id);
+      }
     });
     button.addEventListener("click", () => {
       if (state.pinned === channel.id) {
@@ -1131,7 +1160,8 @@ function renderRSSCatalogue() {
       }
     });
 
-    section.append(button, content);
+    section.append(button);
+    $("rss-detail-body").append(content);
     fragment.append(section);
   });
 

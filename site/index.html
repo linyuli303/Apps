@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=rss-catalogue-1" />
-    <script src="app.js?v=rss-catalogue-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=rss-hover-two-panels-2" />
+    <script src="app.js?v=rss-hover-two-panels-2" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -204,6 +204,21 @@
           Video titles open YouTube in a new tab. Dates reflect the published
           feed snapshot. View counts are not yet collected.
         </p>
+      </section>
+      <section
+        id="rss-detail"
+        class="rss-detail"
+        aria-label="Selected channel uploads"
+        hidden
+      >
+        <div class="rss-detail-heading">
+          <div>
+            <small>RECENT UPLOADS</small>
+            <h2 id="rss-detail-title">Channel feed</h2>
+          </div>
+          <button id="rss-back" type="button">Back to channels</button>
+        </div>
+        <div id="rss-detail-body" class="rss-detail-body"></div>
       </section>
     </aside>
 
