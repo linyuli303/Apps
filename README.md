@@ -14,58 +14,50 @@ https://linyuli303.github.io/MyTube/
 
 This public viewer uses the owner’s published channel whitelist. To create your own feed, follow the fork setup instructions below.
 
-## Next Release — A Smoother Signed-In Experience
-
-Explore ways to make playback more seamless for users already signed in to YouTube, while preserving their privacy and Premium benefits.
-
-- Investigate whether supported YouTube integrations can recognize an existing signed-in session during playback.
-- Keep official YouTube playback as the reliable fallback.
-- Never collect passwords, copy session cookies, or expose authentication tokens.
-
-**Status:** Research planned. MyTube currently does not authenticate users with YouTube. Signing in through Google alone does not guarantee Premium recognition in embedded players; support depends on YouTube and browser restrictions.
-
 ## Features
 
-### Video browsing
+### Video browsing and playback
 
-- Search, channel filters, sorting, and 48-card pagination.
-- Thumbnails enabled by default, with an option to disable them.
-- Video cards open official YouTube in a new tab.
-- Current configuration requests **15 recent uploads per channel**, not full history.
-- Private, unavailable, upcoming, or non-embeddable videos may be excluded, so fewer than 15 may appear.
+- Search, channel/category filters, sorting, and 48-card pagination.
+- Thumbnails enabled by default; disabling them switches to a plain text feed without placeholder images.
+- Embedded playback with **Kino mode**, video-only fullscreen, and an **Open in YouTube / App** option.
+- Remembered preferred speed: **0.25×–3×** presets in 0.25 increments, plus a fine slider in 0.01 increments. YouTube determines supported rates; MyTube reports the actual applied speed and uses a supported fallback when needed.
+- Current configuration requests **15 recent uploads per channel**, not full history. Unavailable, private, upcoming, or non-embeddable videos may be excluded.
 
 ### RSS-style catalogue
 
-- Left-edge catalogue, collapsed by default.
-- Hover over the catalogue tab to open; click and keyboard controls remain available.
-- Spacious channel list ranked by the latest available video publication.
-- Separate adjacent panel containing compact rows: **Published date | Video title | Views**.
-- Theme-tinted feed background and deeper full-row hover/focus highlighting.
-- Click a channel to pin its feed.
-- Moving away does not close the first-level catalogue.
-- On narrow screens, the feed overlays the catalogue; **Back to channels** returns to navigation.
+- Left-edge catalogue, collapsed by default; hover to open, with click and keyboard support.
+- Spacious channel list ranked by newest available upload.
+- Adjacent compact feed: **Published date | Video title | Views**.
+- Theme-tinted background with full-row hover/focus highlights.
+- Click a channel to pin its feed; moving away does not close the catalogue.
+- On narrow screens, **Back to channels** returns from the feed.
 
-This is an RSS-style webpage, **not an XML feed for RSS-reader subscriptions**.
+This is an RSS-style webpage, **not an XML subscription feed**.
 
-### Appearance and channel management
+### Categories and channel management
 
-- **50 palettes**, with Fuji as the default.
-- Light, Dark, and System appearance.
-- Channel search by name or immutable ID.
-- Clickable channel names linking to official YouTube pages.
-- Browser-local whitelist drafts, with explicit Remember and Forget controls.
-- Prefilled GitHub issue forms for owner-authorized shared additions and removals.
-- Draft export and advanced JSON editing remain available.
+- Eight default categories: **Data & AI, IT & Cyber, Travel, Music, Skills, News, Talk Shows & Podcasts, Entertainment**.
+- Use **☰** beside the category filter to add, rename, delete, and assign multiple categories per channel.
+- Category filtering applies to the grid, plain text feed, and RSS catalogue.
+- Categories are saved on this browser, with export/import for backup or transfer. They do not change channel approvals or consume YouTube Data API quota.
+- Search approved channels by name or immutable ID; channel names link to official YouTube pages.
+- Browser-local whitelist drafts with Remember, Forget, and export controls.
+- Prefilled GitHub issue forms for owner-authorized shared channel additions and removals.
+
+### Appearance
+
+- **51 palettes**, with **Yūgure · 夕暮れ (Twilight)** first and the default for users without a saved preference.
+- Shared **Light, Dark, and System** appearance across browsing and playback.
+- Existing saved palette and appearance choices are preserved.
 
 ## Playback and YouTube Premium
 
-Videos open on official YouTube. Sign in there with the account holding your active Premium membership.
+Videos play inside MyTube by default. Embedded playback may not recognize Premium; use **Open in YouTube / App** while signed in to your Premium account for official playback. App opening depends on device settings. Creator-included sponsorships may remain.
 
-MyTube does not access your Google login, cookies, or membership. The YouTube API key retrieves public metadata; it does **not** connect Premium benefits to MyTube.
+MyTube does not access your Google login, cookies, or membership. Its API key retrieves public metadata, not Premium authentication. Speed preferences apply only inside MyTube.
 
-Creator-included sponsorships may remain in videos.
-
-Grid thumbnails contact YouTube’s image servers. Disable thumbnails if desired; the RSS catalogue does not load them.
+Grid thumbnails contact YouTube’s image servers. The plain text feed and RSS catalogue do not load thumbnails. Custom speed controls load YouTube’s official iframe API when a video is opened; this does not consume YouTube Data API quota.
 
 ## Refresh schedule
 
@@ -121,16 +113,19 @@ The checkbox defaults to **unchecked**, so an ordinary manual run still refreshe
 
 Reuse downloads the snapshot from the fixed, configured public Pages URL and validates it before publication.
 
+Removal-only whitelist changes are supported: deleted channels and their videos are filtered out of the validated snapshot without YouTube API calls.
+
 Reuse stops if the feed is:
 
 - Unavailable or invalid.
 - More than 24 hours old or excessively future-dated.
-- Inconsistent with the current whitelist or relevant configuration.
+- Missing newly approved channels, which require a YouTube refresh.
+- Inconsistent with other relevant configuration.
 - Outside size, schema, or credential-pattern safety checks.
 
 The original timestamp is preserved. Reuse does **not** make old data fresh and does **not** automatically fall back to YouTube requests.
 
-A failed API refresh also does not currently trigger automatic feed reuse. Use the explicit frontend-only deployment option when appropriate.
+A failed API refresh does not automatically trigger feed reuse. Use the explicit frontend-only deployment option when appropriate.
 
 ## API quota and view counts
 
@@ -298,7 +293,7 @@ Verify:
 - Local drafts are session-only by default; Remember persists them on that browser.
 - Path-scoped storage reduces accidental collisions but is **not same-origin isolation**. A dedicated origin provides a stronger separation from other hosted projects.
 - Local removal affects that browser only. Shared changes require successful processing and deployment.
-- Restrictive meta CSP, safe text rendering, local-only conversion, and credential/path checks are retained.
+- Restrictive meta CSP, safe text rendering, local-only conversion, and credential/path checks are retained. Script permissions include narrowly scoped sources for YouTube’s official iframe API.
 - Optional HTTP-header and CODEOWNERS templates are not automatically enforced.
 - This is **not parental access control**, private hosting, instant revocation, or an authenticated frontend editor.
 - Official YouTube pages can expose recommendations and content outside the whitelist.
