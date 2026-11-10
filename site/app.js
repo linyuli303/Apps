@@ -512,6 +512,7 @@ function channelRequestURL(operation, channelID) {
 }
 
 function renderManager() {
+  renderRSSCatalogue();
   const ready = Boolean(feed && draft);
   [
     "add-channel",
@@ -900,3 +901,249 @@ load();
   });
   apply();
 })();
+
+
+// RSS-style catalogue. Reads the already-loaded feed; no network requests.
+function renderRSSCatalogue() {
+  const panel = $("rss-panel");
+  if (!panel) return;
+
+  let state = renderRSSCatalogue.state;
+  if (!state) {
+    state = { open: false, active: null, pinned: null };
+    renderRSSCatalogue.state = state;
+
+    const setOpen = (open) => {
+      state.open = open;
+      panel.hidden = !open;
+      $("rss-toggle").setAttribute("aria-expanded", String(open));
+      if (open) {
+        renderRSSCatalogue();
+      } else {
+        state.active = null;
+        state.pinned = null;
+        $("rss-catalogue").classList.remove("rss-wide");
+        $("rss-toggle").focus();
+      }
+    };
+
+    $("rss-toggle").addEventListener("click", () => setOpen(!state.open));
+    $("rss-close").addEventListener("click", () => setOpen(false));
+    $("rss-search").addEventListener("input", () => {
+      state.active = null;
+      state.pinned = null;
+      renderRSSCatalogue();
+    });
+    $("rss-catalogue").addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.open) {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+      }
+    });
+    $("rss-channels").addEventListener("pointerleave", () => {
+      if (
+        state.pinned === null &&
+        !$("rss-channels").contains(document.activeElement)
+      ) {
+        state.activate(null);
+      }
+    });
+    $("rss-catalogue").addEventListener("focusout", () => {
+      setTimeout(() => {
+        if (
+          state.pinned === null &&
+          !$("rss-catalogue").contains(document.activeElement)
+        ) {
+          state.activate(null);
+        }
+      }, 0);
+    });
+  }
+
+  const container = $("rss-channels");
+  const rows = new Map();
+
+  const makeVideos = (record) => {
+    const fragment = document.createDocumentFragment();
+    if (!record.videos.length) {
+      fragment.append(
+        element("p", "rss-no-videos", "No available uploads in this snapshot."),
+      );
+      return fragment;
+    }
+
+    record.videos.forEach((video) => {
+      const row = element("div", "rss-video");
+      const date = element("time", "rss-date", dateLabel(video.publishedAt));
+      date.dateTime = video.publishedAt;
+      date.title = video.publishedAt;
+
+      const title = element("button", "rss-video-title", video.title);
+      title.type = "button";
+      title.title = video.title;
+      title.setAttribute(
+        "aria-label",
+        `${video.title} - Open on YouTube in a new tab`,
+      );
+      title.addEventListener("click", () => openOfficialVideo(video.id));
+
+      row.append(date, title);
+      fragment.append(row);
+    });
+    return fragment;
+  };
+
+  state.activate = (id) => {
+    state.active = id;
+    $("rss-catalogue").classList.toggle("rss-wide", id !== null);
+    rows.forEach((record, channelID) => {
+      const expanded = channelID === id;
+      record.section.classList.toggle("rss-active", expanded);
+      record.button.setAttribute("aria-expanded", String(expanded));
+      record.content.hidden = !expanded;
+      if (expanded && !record.built) {
+        record.content.append(makeVideos(record));
+        record.built = true;
+      }
+    });
+  };
+
+  container.replaceChildren();
+
+  if (!state.open) return;
+
+  if (!feed || !freshFeed(feed)) {
+    state.active = null;
+    state.pinned = null;
+    state.activate(null);
+    $("rss-status").textContent =
+      "A fresh published feed is required. Refresh the main page.";
+    return;
+  }
+
+  const query = $("rss-search").value.trim().toLocaleLowerCase();
+  const grouped = new Map();
+
+  feed.channels.filter((channel) => draftAllows(channel.id)).forEach((channel) => {
+    grouped.set(channel.id, { channel, videos: [], latest: null });
+  });
+
+  feed.videos.forEach((video) => {
+    const group = grouped.get(video.channelId);
+    if (
+      group &&
+      safeID(video.id) &&
+      Number.isFinite(Date.parse(video.publishedAt))
+    ) {
+      group.videos.push(video);
+    }
+  });
+
+  const groups = Array.from(grouped.values());
+  groups.forEach((group) => {
+    group.videos.sort(
+      (a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt),
+    );
+    group.latest = group.videos[0] || null;
+  });
+  groups.sort((a, b) => {
+    if (!a.latest && !b.latest)
+      return a.channel.title.localeCompare(b.channel.title);
+    if (!a.latest) return 1;
+    if (!b.latest) return -1;
+    return (
+      Date.parse(b.latest.publishedAt) - Date.parse(a.latest.publishedAt) ||
+      a.channel.title.localeCompare(b.channel.title)
+    );
+  });
+
+  let videoCount = 0;
+  const fragment = document.createDocumentFragment();
+
+  groups.forEach((group) => {
+    const channel = group.channel;
+    const channelMatch = `${channel.title} ${channel.id}`
+      .toLocaleLowerCase()
+      .includes(query);
+    const matchingVideos = channelMatch
+      ? group.videos
+      : group.videos.filter((video) =>
+          video.title.toLocaleLowerCase().includes(query),
+        );
+
+    if (!channelMatch && !matchingVideos.length) return;
+    videoCount += matchingVideos.length;
+
+    const section = element("section", "rss-channel");
+    const button = element("button", "rss-channel-button");
+    button.type = "button";
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-controls", `rss-videos-${channel.id}`);
+
+    const name = element("span", "rss-channel-name", channel.title);
+    const updated = element(
+      "span",
+      "rss-updated",
+      group.latest ? dateLabel(group.latest.publishedAt) : "No uploads",
+    );
+    button.append(name, updated);
+
+    const content = element("div", "rss-videos");
+    content.id = `rss-videos-${channel.id}`;
+    content.hidden = true;
+
+    const info = element("div", "rss-channel-info");
+    const channelLink = element("a", "", "Open channel on YouTube");
+    channelLink.href = `https://www.youtube.com/channel/${channel.id}`;
+    channelLink.target = "_blank";
+    channelLink.rel = "noopener noreferrer";
+    info.append(
+      channelLink,
+      element("span", "", `${matchingVideos.length} uploads in this view`),
+    );
+    content.append(info);
+
+    const record = {
+      section,
+      button,
+      content,
+      videos: matchingVideos,
+      built: false,
+    };
+    rows.set(channel.id, record);
+
+    section.addEventListener("pointerenter", (event) => {
+      if (event.pointerType === "mouse" && state.pinned === null) {
+        state.activate(channel.id);
+      }
+    });
+    button.addEventListener("focus", () => {
+      if (state.pinned === null) state.activate(channel.id);
+    });
+    button.addEventListener("click", () => {
+      if (state.pinned === channel.id) {
+        state.pinned = null;
+        state.activate(null);
+      } else {
+        state.pinned = channel.id;
+        state.activate(channel.id);
+      }
+    });
+
+    section.append(button, content);
+    fragment.append(section);
+  });
+
+  if (!rows.size) {
+    fragment.append(element("p", "rss-no-videos", "No matching channels or videos."));
+  }
+
+  container.append(fragment);
+  if (!rows.has(state.active)) state.active = null;
+  if (!rows.has(state.pinned)) state.pinned = null;
+  state.activate(state.active);
+  $("rss-status").textContent =
+    `${rows.size} channels / ${videoCount} videos. Newest upload first. ` +
+    `Feed refreshed ${dateLabel(feed.generatedAt)}.`;
+}

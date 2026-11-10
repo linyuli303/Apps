@@ -688,3 +688,88 @@ header{flex-wrap:wrap}.header-actions{display:flex;align-items:center;justify-co
 /* Official YouTube channel links in the whitelist manager */
 .manager-channel-link{color:var(--label-accent);text-decoration:underline;text-underline-offset:3px}
 .manager-channel-link:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:3px}
+
+
+/* RSS catalogue: uses the existing palette and appearance variables. */
+.rss-catalogue{
+  position:fixed;left:0;top:8vh;bottom:6vh;
+  width:0;z-index:20;color:var(--ink)
+}
+.rss-tab{
+  position:absolute;left:100%;top:35%;
+  writing-mode:vertical-rl;white-space:nowrap;
+  padding:18px 10px;border:1px solid var(--border);
+  border-radius:0 8px 8px 0;background:var(--surface);
+  color:var(--label-accent);letter-spacing:1px;
+  min-width:40px;cursor:pointer
+}
+.rss-catalogue:has(.rss-panel:not([hidden])){width:min(350px,calc(100vw - 48px))}
+.rss-catalogue.rss-wide:has(.rss-panel:not([hidden])){
+  width:min(850px,calc(100vw - 48px))
+}
+.rss-panel{
+  height:100%;display:flex;flex-direction:column;
+  background:var(--surface);border:1px solid var(--border);
+  border-left:0;border-radius:0 12px 12px 0;
+  box-shadow:0 12px 38px #0002;overflow:hidden
+}
+.rss-panel[hidden],.rss-videos[hidden]{display:none!important}
+.rss-heading{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;padding:18px;border-bottom:1px solid var(--border)
+}
+.rss-heading small{font-size:10px;letter-spacing:1.5px;color:var(--muted)}
+.rss-heading h2{font:26px Georgia,serif;margin:5px 0 0;color:var(--label-accent)}
+.rss-heading button{font-size:12px;padding:7px 10px;min-height:36px}
+.rss-search-label{
+  display:flex;flex-direction:column;gap:5px;
+  padding:12px 16px 0;font-size:12px;color:var(--muted)
+}
+.rss-search-label input{width:100%;min-width:0;font-size:13px;padding:9px 10px}
+.rss-status{font-size:11px;color:var(--muted);margin:10px 16px}
+.rss-channels{flex:1;min-height:0;overflow:auto;padding:0 12px 16px}
+.rss-channel{border-bottom:1px solid var(--border)}
+.rss-channel-button{
+  display:flex;align-items:center;gap:12px;
+  width:100%;text-align:left;border:0;border-radius:0;
+  background:transparent;color:inherit;padding:11px 6px;min-height:40px
+}
+.rss-channel-name{flex:1;min-width:0;font-size:12px}
+.rss-updated{white-space:nowrap;font-size:10px;color:var(--muted)}
+.rss-active{background:var(--hover)}
+.rss-active>.rss-channel-button{color:var(--label-accent)}
+.rss-videos{padding:0 8px 10px 14px}
+.rss-channel-info{
+  display:flex;justify-content:space-between;gap:12px;
+  flex-wrap:wrap;font-size:10px;color:var(--muted);padding:4px 0 8px
+}
+.rss-channel-info a{color:var(--label-accent)}
+.rss-video{
+  display:grid;grid-template-columns:100px minmax(0,1fr);
+  align-items:center;gap:10px;padding:2px 0;
+  border-top:1px solid var(--border);min-height:25px
+}
+.rss-date{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rss-video-title{
+  display:block;width:100%;min-width:0;min-height:24px;
+  padding:2px 0;margin:0;border:0;border-radius:0;
+  background:transparent;color:inherit;text-align:left;
+  font-size:12px;line-height:1.4;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.rss-video-title:hover{text-decoration:underline;color:var(--label-accent)}
+.rss-footnote{
+  font-size:10px;line-height:1.5;color:var(--muted);
+  padding:10px 16px;margin:0;border-top:1px solid var(--border)
+}
+.rss-no-videos{font-size:12px;color:var(--muted);padding:8px}
+.rss-catalogue button:focus-visible,.rss-catalogue a:focus-visible{
+  outline:3px solid var(--accent);outline-offset:2px
+}
+@media(max-width:600px){
+  .rss-catalogue{top:5vh;bottom:5vh}
+  .rss-videos{padding-left:6px}
+  .rss-video{grid-template-columns:76px minmax(0,1fr);gap:6px}
+  .rss-date{font-size:9px}
+  .rss-video-title{font-size:11px}
+}

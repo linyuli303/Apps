@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=channel-links-1" />
-    <script src="app.js?v=official-playback-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=rss-catalogue-1" />
+    <script src="app.js?v=rss-catalogue-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -168,6 +168,45 @@
         </p>
       </footer>
     </main>
+
+    <aside id="rss-catalogue" class="rss-catalogue" aria-label="RSS catalogue">
+      <button
+        id="rss-toggle"
+        class="rss-tab"
+        type="button"
+        aria-expanded="false"
+        aria-controls="rss-panel"
+      >RSS Catalogue</button>
+      <section id="rss-panel" class="rss-panel" hidden>
+        <div class="rss-heading">
+          <div>
+            <small>YOUR CHANNELS / TEXT FEED</small>
+            <h2>Catalogue</h2>
+          </div>
+          <button id="rss-close" type="button" aria-label="Close RSS catalogue">
+            Close
+          </button>
+        </div>
+        <label class="rss-search-label" for="rss-search">
+          Search channels or videos
+          <input
+            id="rss-search"
+            type="search"
+            maxlength="240"
+            autocomplete="off"
+            placeholder="Search this feed"
+          />
+        </label>
+        <p id="rss-status" class="rss-status" role="status" aria-live="polite"></p>
+        <div id="rss-channels" class="rss-channels"></div>
+        <p class="rss-footnote">
+          Ranked by newest published video. Hover to preview; click to pin.
+          Video titles open YouTube in a new tab. Dates reflect the published
+          feed snapshot. View counts are not yet collected.
+        </p>
+      </section>
+    </aside>
+
     <section
       id="player"
       class="player"
