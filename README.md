@@ -1,4 +1,4 @@
-# Hardened personal YouTube — v2
+# Hardened personal YouTube
 
 Current security-hardened edition. See the separately delivered YOUTUBE_SETUP_HARDENED_V2.md for setup and migration. No personal whitelist, raw CSV, or key is bundled. Preserve/review your ID-only channels.json when upgrading.
 
