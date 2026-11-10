@@ -82,11 +82,67 @@ def validate_snapshot(raw, config, now=None):
         raise ValueError("Feed exceeds configured channel limit")
     return feed
 
+
+def filter_removed_channels(raw, config, now=None):
+    """Allow only subtractive membership changes to a valid public snapshot."""
+    if not isinstance(raw, bytes) or len(raw) > MAX_BYTES:
+        raise ValueError("Invalid snapshot size")
+    if security.sensitive(raw):
+        raise ValueError("Snapshot failed credential-pattern checks")
+    snapshot = json.loads(raw.decode("utf-8"))
+    if not isinstance(snapshot, dict) or not isinstance(
+        snapshot.get("channels"), list
+    ):
+        raise ValueError("Invalid snapshot")
+
+    published = set()
+    for channel in snapshot["channels"]:
+        if (
+            not isinstance(channel, dict)
+            or not isinstance(channel.get("id"), str)
+            or not re.fullmatch(r"UC[A-Za-z0-9_-]{22}", channel["id"])
+        ):
+            raise ValueError("Invalid published channel")
+        published.add(channel["id"])
+
+    approved = {channel["id"] for channel in config["channels"]}
+    if not approved.issubset(published):
+        raise ValueError("New channels require a YouTube refresh")
+
+    # Validate the complete original snapshot, including videos that will
+    # be removed. Only membership differs; all other settings remain current.
+    original_config = dict(config)
+    original_config["channels"] = [
+        {"id": channel_id} for channel_id in sorted(published)
+    ]
+    validated = validate_snapshot(raw, original_config, now)
+
+    if approved == published:
+        validate_snapshot(raw, config, now)
+        return raw
+
+    filtered = dict(validated)
+    filtered["channels"] = [
+        channel for channel in validated["channels"]
+        if channel["id"] in approved
+    ]
+    filtered["videos"] = [
+        video for video in validated["videos"]
+        if video["channelId"] in approved
+    ]
+    # generatedAt is deliberately retained, not reset.
+    result = json.dumps(filtered, ensure_ascii=False).encode("utf-8")
+    validate_snapshot(result, config, now)
+    return result
+
 def main():
     try:
         config = read_config(ROOT / "channels.json")
         raw = download()
-        validate_snapshot(raw, config)
+        original = raw
+        raw = filter_removed_channels(raw, config)
+        if raw != original:
+            print("Removed unapproved channels and their videos from snapshot.")
         target = ROOT / "site" / "data" / "feed.json"
         if target.parent.is_symlink() or target.is_symlink():
             raise ValueError("Refusing symlink output")
