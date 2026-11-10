@@ -656,127 +656,97 @@ document.addEventListener("visibilitychange", () => {
 renderManager();
 load();
 
-// Japanese palette picker. Kept in app.js so the existing CSP and asset list stay unchanged.
+// Palette UI: validated names only; colors are defined in external style.css.
 (function initializeThemePicker() {
-  const themes = [
-    {
-      id: "kimono",
-      label: "着物 · Kimono",
-      description: "Warm cream · indigo · crimson · gold",
-    },
-    {
-      id: "hanami",
-      label: "花見 · Hanami",
-      description: "Sakura · soft pink · fresh green · wisteria",
-    },
-    {
-      id: "ukiyoe",
-      label: "浮世絵 · Ukiyo-e",
-      description: "Dark indigo · safflower red · gold · ink",
-    },
-    {
-      id: "japandi",
-      label: "和北欧 · Japandi",
-      description: "Natural off-white · gray · blue-green · brown",
-    },
-    {
-      id: "edo",
-      label: "江戸 · Edo",
-      description: "Warm brown · charcoal · olive · restrained red",
-    },
-    {
-      id: "wabisabi",
-      label: "侘寂 · Wabi-sabi",
-      description: "Unbleached white · earth · gray · ochre",
-    },
-  ];
-  const defaultTheme = "japandi";
-  const storageKey =
-    "approved-yt-theme-v1:" +
-    encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
-  const main = document.querySelector("main");
-  if (!main || document.getElementById("mytube-theme-picker")) return;
-
-  const picker = document.createElement("section");
-  picker.id = "mytube-theme-picker";
-  picker.className = "theme-picker";
-  picker.setAttribute("aria-label", "Color theme");
-  const caption = document.createElement("div");
-  caption.className = "theme-caption";
-  caption.textContent = "色のパレット · Color palettes";
-  const options = document.createElement("div");
-  options.className = "theme-options";
-  options.setAttribute("role", "group");
-  options.setAttribute("aria-label", "Choose a color palette");
-  const description = document.createElement("p");
-  description.className = "theme-description";
-  const status = document.createElement("span");
-  status.className = "sr-only";
-  status.setAttribute("role", "status");
-  status.setAttribute("aria-live", "polite");
-  const buttons = [];
-
-  function applyTheme(name, persist, announce) {
-    const theme = themes.find((item) => item.id === name);
-    if (!theme) return;
-    document.documentElement.dataset.theme = theme.id;
-    buttons.forEach((button, index) => {
-      button.setAttribute(
-        "aria-pressed",
-        String(themes[index].id === theme.id),
-      );
-    });
-    description.textContent = theme.description;
-    if (persist) {
-      try {
-        localStorage.setItem(storageKey, theme.id);
-      } catch {}
-    }
-    if (announce) status.textContent = theme.label + " theme applied.";
+  const themes = [{"id": "kimono", "ja": "着物", "name": "Kimono"}, {"id": "hanami", "ja": "花見", "name": "Hanami"}, {"id": "ukiyoe", "ja": "浮世絵", "name": "Ukiyo-e"}, {"id": "japandi", "ja": "和北欧", "name": "Japandi"}, {"id": "edo", "ja": "江戸", "name": "Edo"}, {"id": "wabisabi", "ja": "侘寂", "name": "Wabi-sabi"}, {"id": "nadeshiko", "ja": "撫子", "name": "Nadeshiko"}, {"id": "akabeni", "ja": "赤紅", "name": "Akabeni"}, {"id": "kaki", "ja": "柿", "name": "Kaki"}, {"id": "yamabuki", "ja": "山吹", "name": "Yamabuki"}, {"id": "karashi", "ja": "芥子", "name": "Karashi"}, {"id": "kihada", "ja": "黄檗", "name": "Kihada"}, {"id": "wakana", "ja": "若菜", "name": "Wakana"}, {"id": "moegi", "ja": "萌黄", "name": "Moegi"}, {"id": "matsuba", "ja": "松葉", "name": "Matsuba"}, {"id": "tokiwa", "ja": "常磐", "name": "Tokiwa"}, {"id": "seiji", "ja": "青磁", "name": "Seiji"}, {"id": "asagi", "ja": "浅葱", "name": "Asagi"}, {"id": "hanada", "ja": "縹", "name": "Hanada"}, {"id": "ruri", "ja": "瑠璃", "name": "Ruri"}, {"id": "kikyo", "ja": "桔梗", "name": "Kikyo"}, {"id": "fuji", "ja": "藤", "name": "Fuji"}, {"id": "ayame", "ja": "菖蒲", "name": "Ayame"}, {"id": "botan", "ja": "牡丹", "name": "Botan"}, {"id": "sakura", "ja": "桜", "name": "Sakura"}, {"id": "kohbai", "ja": "紅梅", "name": "Kohbai"}, {"id": "enji", "ja": "臙脂", "name": "Enji"}, {"id": "shu", "ja": "朱", "name": "Shu"}, {"id": "hiwada", "ja": "檜皮", "name": "Hiwada"}, {"id": "taisha", "ja": "代赭", "name": "Taisha"}, {"id": "kohaku", "ja": "琥珀", "name": "Kohaku"}, {"id": "kuchinashi", "ja": "梔子", "name": "Kuchinashi"}, {"id": "ukon", "ja": "鬱金", "name": "Ukon"}, {"id": "ominaeshi", "ja": "女郎花", "name": "Ominaeshi"}, {"id": "uguisu", "ja": "鶯", "name": "Uguisu"}, {"id": "yanagi", "ja": "柳", "name": "Yanagi"}, {"id": "byakuroku", "ja": "白緑", "name": "Byakuroku"}, {"id": "rokusho", "ja": "緑青", "name": "Rokusho"}, {"id": "aotake", "ja": "青竹", "name": "Aotake"}, {"id": "tokusa", "ja": "木賊", "name": "Tokusa"}, {"id": "sabiseiji", "ja": "錆青磁", "name": "Sabiseiji"}, {"id": "mizuasagi", "ja": "水浅葱", "name": "Mizuasagi"}, {"id": "sora", "ja": "空", "name": "Sora"}, {"id": "ai", "ja": "藍", "name": "Ai"}, {"id": "kon", "ja": "紺", "name": "Kon"}, {"id": "sumire", "ja": "菫", "name": "Sumire"}, {"id": "murasaki", "ja": "紫", "name": "Murasaki"}, {"id": "shion", "ja": "紫苑", "name": "Shion"}, {"id": "sumi", "ja": "墨", "name": "Sumi"}, {"id": "ginnezumi", "ja": "銀鼠", "name": "Ginnezumi"}];
+  const scope = encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
+  const themeKey = "approved-yt-theme-v2:" + scope;
+  const modeKey = "approved-yt-appearance-v1:" + scope;
+  let selected = "fuji", mode = "light";
+  const system = window.matchMedia("(prefers-color-scheme: dark)");
+  function readPreferences() {
+    selected = "fuji"; mode = "light";
+    try {
+      const savedTheme = localStorage.getItem(themeKey);
+      const savedMode = localStorage.getItem(modeKey);
+      if (themes.some(t => t.id === savedTheme)) selected = savedTheme;
+      if (["light", "dark", "system"].includes(savedMode)) mode = savedMode;
+    } catch {}
   }
-
-  themes.forEach((theme, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "theme-button";
-    button.dataset.themeChoice = theme.id;
-    button.setAttribute("aria-pressed", "false");
-    button.title = theme.description;
-    const label = document.createElement("span");
-    label.className = "theme-name";
-    label.textContent = theme.label;
-    button.append(label);
-    button.addEventListener("click", () => applyTheme(theme.id, true, true));
-    button.addEventListener("keydown", (event) => {
-      let next = index;
-      if (event.key === "ArrowRight") next = (index + 1) % themes.length;
-      else if (event.key === "ArrowLeft")
-        next = (index + themes.length - 1) % themes.length;
+  readPreferences();
+  const header = document.querySelector("header"), refresh = $("refresh");
+  if (!header || !refresh || $("mytube-theme-picker")) return;
+  const actions = element("div", "header-actions");
+  const picker = element("details", "palette-picker"); picker.id = "mytube-theme-picker";
+  const summary = element("summary"); summary.setAttribute("aria-label", "Choose color palette");
+  const heading = element("span");
+  const name = element("span", "palette-name");
+  heading.append(element("span", "palette-caption", "色のパレット · 50 palettes"), name);
+  const trigger = element("span", "palette-trigger-colors");
+  const arrow = element("span", "", "⌄"); arrow.setAttribute("aria-hidden", "true");
+  summary.append(heading, trigger);
+  const panel = element("section", "palette-panel"); panel.setAttribute("aria-label", "Available palettes");
+  const panelHeading = element("div", "palette-panel-heading", "Find your atmosphere");
+  panelHeading.append(element("small", "", "50 palettes · Each available in light and dark mode."));
+  const list = element("div", "palette-list"); list.setAttribute("role", "group"); list.setAttribute("aria-label", "Choose one of 50 palettes");
+  const buttons = [];
+  function swatches(id) {
+    const el = element("span", "palette-swatches"); el.dataset.palette = id; el.setAttribute("aria-hidden", "true");
+    for (let i = 0; i < 5; i++) el.append(document.createElement("i"));
+    return el;
+  }
+  const announce = element("span", "sr-only"); announce.setAttribute("role", "status"); announce.setAttribute("aria-live", "polite");
+  const modeLabel = element("label", "appearance-label", "Appearance");
+  const appearance = element("select"); appearance.id = "appearance";
+  appearance.append(new Option("Light", "light"), new Option("Dark", "dark"), new Option("System", "system"));
+  modeLabel.append(appearance);
+  function apply(persist = false, speak = false) {
+    const theme = themes.find(t => t.id === selected);
+    const dark = mode === "dark" || (mode === "system" && system.matches);
+    document.documentElement.dataset.theme = selected;
+    document.documentElement.dataset.appearance = dark ? "dark" : "light";
+    name.textContent = theme.ja + " · " + theme.name;
+    trigger.replaceChildren(swatches(selected), arrow);
+    appearance.value = mode;
+    buttons.forEach((b, i) => {
+      b.setAttribute("aria-pressed", String(themes[i].id === selected));
+      b.querySelector(".palette-check").textContent = themes[i].id === selected ? "✓" : "";
+    });
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--page").trim();
+    if (persist) try { localStorage.setItem(themeKey, selected); localStorage.setItem(modeKey, mode); } catch {}
+    if (speak) announce.textContent = theme.name + " theme applied in " + (dark ? "dark" : "light") + " mode.";
+  }
+  themes.forEach((theme, i) => {
+    const b = element("button", "palette-option"); b.type = "button";
+    const check = element("span", "palette-check"); check.setAttribute("aria-hidden", "true");
+    b.append(element("span", "palette-option-name", theme.ja + " · " + theme.name),
+      element("span", "palette-option-note", (i < 6 ? "Signature palette" : "Traditional-color inspired") + " · Light + dark"), swatches(theme.id), check);
+    b.addEventListener("click", () => { selected = theme.id; apply(true, true); picker.open = false; summary.focus(); });
+    b.addEventListener("keydown", event => {
+      let next = i;
+      if (event.key === "ArrowRight") next = (i + 1) % themes.length;
+      else if (event.key === "ArrowLeft") next = (i + themes.length - 1) % themes.length;
+      else if (event.key === "ArrowDown") next = Math.min(themes.length - 1, i + 2);
+      else if (event.key === "ArrowUp") next = Math.max(0, i - 2);
       else if (event.key === "Home") next = 0;
       else if (event.key === "End") next = themes.length - 1;
       else return;
-      event.preventDefault();
-      buttons[next].focus();
-      applyTheme(themes[next].id, true, true);
+      event.preventDefault(); buttons[next].focus();
     });
-    buttons.push(button);
-    options.append(button);
+    buttons.push(b); list.append(b);
   });
-
-  picker.append(caption, options, description, status);
-  main.prepend(picker);
-  let initial = defaultTheme;
-  try {
-    const saved = localStorage.getItem(storageKey);
-    if (themes.some((theme) => theme.id === saved)) initial = saved;
-  } catch {}
-  applyTheme(initial, false, false);
-  window.addEventListener("storage", (event) => {
-    if (event.key === storageKey || event.key === null) {
-      const name = themes.some((theme) => theme.id === event.newValue)
-        ? event.newValue
-        : defaultTheme;
-      applyTheme(name, false, false);
-    }
+  panel.append(panelHeading, list, element("div", "palette-footnote", "Selection remembered on this browser. No account or external service needed."));
+  picker.append(summary, panel);
+  actions.append(picker, modeLabel, refresh, announce); header.append(actions);
+  appearance.addEventListener("change", () => { mode = appearance.value; apply(true, true); });
+  document.addEventListener("click", event => { if (!picker.contains(event.target)) picker.open = false; });
+  document.addEventListener("keydown", event => { if (event.key === "Escape" && picker.open) { picker.open = false; summary.focus(); } });
+  function systemChanged() { if (mode === "system") apply(); }
+  if (system.addEventListener) system.addEventListener("change", systemChanged);
+  else system.addListener(systemChanged);
+  window.addEventListener("storage", event => {
+    if (event.key === themeKey || event.key === modeKey || event.key === null) { readPreferences(); apply(); }
   });
+  apply();
 })();

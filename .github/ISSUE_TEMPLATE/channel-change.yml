@@ -1,0 +1,36 @@
+name: Change MyTube channel
+description: Request an addition or removal from the shared MyTube whitelist.
+title: "[MyTube] Channel change"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Automation is not enabled yet. Submitting this form does not change the whitelist.
+        Once implemented, automated processing will accept only authorized repository-owner requests.
+        This request and the channel ID are public. Never enter credentials here.
+        Adding a channel approves its uploads, not videos from its curated playlists.
+  - type: dropdown
+    id: operation
+    attributes:
+      label: Operation
+      description: Choose the shared whitelist change.
+      options:
+        - Add
+        - Remove
+    validations:
+      required: true
+  - type: input
+    id: channel_id
+    attributes:
+      label: Channel ID
+      description: Enter the immutable 24-character channel ID beginning with UC. Handles and URLs are not accepted.
+      placeholder: "UC followed by 22 letters, digits, underscores or hyphens"
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I reviewed this channel ID and want to change the shared whitelist on all devices.
+          required: true
