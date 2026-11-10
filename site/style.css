@@ -673,3 +673,14 @@ header{flex-wrap:wrap}.header-actions{display:flex;align-items:center;justify-co
  justify-content:space-between; gap:12px; font-size:12px; font-weight:400;
 }
 .palette-panel-heading .appearance-label select { min-width:130px; }
+
+/* Whitelist search and GitHub request controls */
+.manager-search{margin-top:20px}
+.manager-channel{flex:1;min-width:0}
+.manager-row-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
+.manager-row-actions .official{font-size:inherit;text-align:center}
+#whitelist-search-results{color:var(--muted)}
+@media(max-width:700px){
+  #whitelist-list li{align-items:stretch;flex-direction:column}
+  .manager-row-actions{justify-content:flex-start}
+}

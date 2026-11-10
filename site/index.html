@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=fuji50-2" />
-    <script src="app.js?v=fuji50-2" defer></script>
+    <link rel="stylesheet" href="style.css?v=whitelist-requests-1" />
+    <script src="app.js?v=whitelist-requests-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -26,60 +26,97 @@
     </header>
     <main>
       <details id="whitelist-manager" class="manager">
-        <summary>Manage whitelist — add or remove channels</summary>
+        <summary>Manage whitelist ? search, add or remove channels</summary>
         <p>
-          Edit a local draft here. Removing a channel hides its videos on this
-          browser immediately. To update every device or fetch a new channel,
-          export the draft, commit it as <code>channels.json</code> in GitHub,
-          and wait for successful publication.
+          Search the published whitelist and your local draft by channel name
+          or immutable channel ID. This searches known channels only, not all
+          of YouTube.
         </p>
         <p>
-          No API keys or GitHub tokens are accepted here. Anyone using this
-          browser can edit its local draft; this is not parental access control.
+          <strong>Shared changes:</strong> use Request addition/removal via
+          GitHub. Review the prefilled form, confirm the operation and channel
+          ID, check the confirmation box, and submit while signed in as
+          <code>linyuli303</code>. Only owner-opened requests are eligible.
+          Changes appear on all devices only after successful processing,
+          refresh and deployment. Reload this page afterward.
+        </p>
+        <p>
+          <strong>Local changes:</strong> Add locally and Remove locally change
+          this browser's draft only. Removing locally hides videos immediately;
+          adding locally does not fetch videos. Published channels hidden
+          locally remain listed here so you can restore them or request removal.
+          Export remains available for advanced bulk editing.
+        </p>
+        <p>
+          Requests, channel IDs and the repository are public. Do not include
+          credentials. No API keys or GitHub tokens are accepted here.
+          Anyone using this browser can edit its local draft;
+          this is not parental access control.
         </p>
         <div class="manager-input">
-          <label for="new-channel"
-            >Immutable channel ID or /channel/ID URL</label
-          ><input
+          <label for="new-channel">Immutable channel ID or /channel/ID URL</label>
+          <input
             id="new-channel"
             maxlength="240"
             autocomplete="off"
-            placeholder="UC… or https://www.youtube.com/channel/UC…"
-          /><button id="add-channel" type="button">Add channel</button>
+            placeholder="UC? or https://www.youtube.com/channel/UC?"
+          />
+          <button id="add-channel" type="button">Add locally</button>
+          <button id="request-add-channel" type="button">
+            Request addition via GitHub
+          </button>
         </div>
-        <label
-          ><input id="remember-draft" type="checkbox" /> Remember this draft on
-          this browser (shared-origin storage is not private)</label
-        ><button id="forget-draft" type="button">
+        <p>
+          GitHub requests open in a new tab and do not submit automatically.
+          Channel names are search labels, not approval identifiers.
+          Resolve handles and review their immutable channel IDs before adding.
+        </p>
+        <div class="manager-input manager-search">
+          <label for="whitelist-search">Search whitelist by name or channel ID</label>
+          <input
+            id="whitelist-search"
+            type="search"
+            maxlength="240"
+            autocomplete="off"
+            aria-controls="whitelist-list"
+            aria-describedby="whitelist-search-results"
+            placeholder="For example: Lukas da Kid or UC?"
+          />
+        </div>
+        <p id="whitelist-search-results" role="status" aria-live="polite"></p>
+        <label>
+          <input id="remember-draft" type="checkbox" />
+          Remember this draft on this browser (shared-origin storage is not private)
+        </label>
+        <button id="forget-draft" type="button">
           Forget saved draft and repository
         </button>
         <p id="manager-status" role="status" aria-live="polite">
           Load the published feed to edit its whitelist.
         </p>
-        <ul id="whitelist-list" aria-label="Draft whitelist"></ul>
+        <ul id="whitelist-list" aria-label="Published whitelist and local draft"></ul>
         <div class="manager-actions">
-          <button id="export-whitelist" type="button">
-            Export channels.json</button
-          ><button id="reset-whitelist" type="button">
-            Discard local draft
-          </button>
+          <button id="export-whitelist" type="button">Export channels.json</button>
+          <button id="reset-whitelist" type="button">Discard local draft</button>
         </div>
-        <label for="repo-name"
-          >GitHub repository (owner/repository; session only unless remembering
-          is enabled)</label
-        ><input
+        <label for="repo-name">
+          Advanced bulk export: GitHub repository (owner/repository;
+          session only unless remembering is enabled)
+        </label>
+        <input
           id="repo-name"
           maxlength="140"
-          placeholder="yourname/yourrepo"
+          placeholder="linyuli303/MyTube"
           autocomplete="off"
-        /><button id="github-edit" type="button">Open GitHub editor</button>
+        />
+        <button id="github-edit" type="button">Open GitHub editor</button>
         <p>
-          In GitHub, replace the whole <code>channels.json</code> with the
-          exported file’s contents and review/commit. Sign in on GitHub itself.
-          The editor assumes branch <code>main</code>. Handles must be resolved
-          and reviewed locally before adding their immutable ID. Exported
-          settings retain the published title; the recent-video limit is
-          15—adjust it in the JSON if desired.
+          Individual request links always target <code>linyuli303/MyTube</code>;
+          the repository field above affects only the advanced editor.
+          For bulk editing, replace the whole <code>channels.json</code> with
+          your exported contents, review and commit on branch <code>main</code>.
+          Export retains the published title and the 15-video-per-channel limit.
+          Prefer individual requests for simple additions and removals.
         </p>
       </details>
       <section class="toolbar" aria-label="Feed filters">

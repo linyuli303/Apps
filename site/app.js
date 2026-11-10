@@ -467,50 +467,162 @@ function updateAfterEdit() {
   render();
   renderManager();
 }
+function channelRequestURL(operation, channelID) {
+  if (
+    !["Add", "Remove"].includes(operation) ||
+    typeof channelID !== "string" ||
+    !/^UC[A-Za-z0-9_-]{22}$/.test(channelID)
+  ) {
+    throw new Error("Use a valid immutable channel ID.");
+  }
+  const url = new URL(
+    "https://github.com/linyuli303/MyTube/issues/new",
+  );
+  url.search = new URLSearchParams({
+    template: "channel-change.yml",
+    title: "[MyTube] Channel change",
+    operation,
+    channel_id: channelID,
+  }).toString();
+  return url.href;
+}
+
 function renderManager() {
   const ready = Boolean(feed && draft);
-  ["add-channel", "export-whitelist", "reset-whitelist"].forEach(
-    (id) => ($(id).disabled = !ready),
-  );
+  [
+    "add-channel",
+    "request-add-channel",
+    "whitelist-search",
+    "export-whitelist",
+    "reset-whitelist",
+  ].forEach((id) => ($(id).disabled = !ready));
   $("whitelist-list").replaceChildren();
   if (!ready) {
+    $("whitelist-search-results").textContent = "";
     $("manager-status").textContent =
       "Published feed unavailable. Reload it before editing. No draft has been published.";
     return;
   }
+
   const names = new Map(feed.channels.map((c) => [c.id, c.title]));
+  const query = $("whitelist-search").value.trim().toLocaleLowerCase();
   const fragment = document.createDocumentFragment();
-  draft.forEach((entry, index) => {
+
+  // Keep published channels visible in the manager even when hidden locally,
+  // so their GitHub removal links remain accessible.
+  const rows = new Map();
+  feed.channels.forEach((channel) => {
+    rows.set(channel.id, { id: channel.id });
+  });
+  draft.forEach((entry) => {
+    rows.set(entryKey(entry), entry);
+  });
+
+  let matches = 0;
+  rows.forEach((entry) => {
+    const key = entryKey(entry);
+    const title = names.get(entry.id) || entry.id || entry.handle;
+    const searchable = `${title} ${entry.id || entry.handle}`.toLocaleLowerCase();
+    if (query && !searchable.includes(query)) return;
+    matches++;
+
+    const inDraft = draft.some((item) => entryKey(item) === key);
+    const published = names.has(entry.id);
     const li = element("li");
-    const text = element(
-      "span",
-      "",
-      entry.id ? names.get(entry.id) || entry.id : entry.handle,
-    );
+    const text = element("span", "manager-channel", title);
+    const state = published
+      ? inDraft
+        ? "Published; included in this local draft."
+        : "Published; hidden by this local draft only."
+      : "Local draft only; no videos fetched until publication.";
+
     text.append(
-      element(
-        "small",
-        "",
-        entry.id && names.has(entry.id)
-          ? entry.id
-          : "Pending: no videos until GitHub publication; handles resolve during the build.",
-      ),
+      element("small", "", entry.id || entry.handle),
+      element("small", "", state),
     );
-    const remove = element("button", "", "Remove");
-    remove.type = "button";
-    remove.setAttribute("aria-label", `Remove ${entry.id || entry.handle}`);
-    remove.addEventListener("click", () => {
-      draft.splice(index, 1);
+
+    const actions = element("div", "manager-row-actions");
+
+    if (entry.id && /^UC[A-Za-z0-9_-]{22}$/.test(entry.id)) {
+      const operation = published ? "Remove" : "Add";
+      const request = element(
+        "a",
+        "official",
+        published
+          ? "Request removal via GitHub"
+          : "Request addition via GitHub",
+      );
+      request.href = channelRequestURL(operation, entry.id);
+      request.target = "_blank";
+      request.rel = "noopener noreferrer";
+      request.setAttribute(
+        "aria-label",
+        `Request ${operation.toLowerCase()} for ${title} (${entry.id}) via GitHub; opens a new tab`,
+      );
+      actions.append(request);
+    }
+
+    const local = element(
+      "button",
+      "",
+      inDraft ? "Remove locally" : "Restore locally",
+    );
+    local.type = "button";
+    local.disabled = !inDraft && draft.length >= 1000;
+    local.setAttribute(
+      "aria-label",
+      `${inDraft ? "Remove" : "Restore"} ${title} (${key}) locally`,
+    );
+    local.addEventListener("click", () => {
+      // Find the actual draft entry, never a filtered-list index.
+      const actualIndex = draft.findIndex((item) => entryKey(item) === key);
+      if (actualIndex >= 0) {
+        draft.splice(actualIndex, 1);
+      } else if (draft.length < 1000) {
+        draft.push({ id: entry.id });
+      } else {
+        $("manager-status").textContent =
+          "At most 1000 local draft channels are supported.";
+        return;
+      }
       updateAfterEdit();
-      $("new-channel").focus();
+      $("whitelist-search").focus();
     });
-    li.append(text, remove);
+
+    actions.append(local);
+    li.append(text, actions);
     fragment.append(li);
   });
+
+  if (matches === 0) {
+    fragment.append(element("li", "", "No matching channels."));
+  }
   $("whitelist-list").append(fragment);
+  $("whitelist-search-results").textContent =
+    `${matches} of ${rows.size} channels shown.`;
   $("manager-status").textContent =
-    `${draft.length} draft channels. ${managerNotice || "No changes published from this editor."}`;
+    `${draft.length} local draft channels. ` +
+    `${managerNotice || "No changes published from this editor."} ` +
+    "GitHub links open request forms only; review and submit on GitHub, " +
+    "then wait for successful processing and publication.";
 }
+
+$("whitelist-search").addEventListener("input", renderManager);
+$("request-add-channel").addEventListener("click", () => {
+  if (!feed || !draft) return;
+  try {
+    const entry = parseChannel($("new-channel").value);
+    const url = channelRequestURL("Add", entry.id);
+    window.open(url, "_blank", "noopener,noreferrer");
+    $("manager-status").textContent =
+      "GitHub request form opened in a new tab (if popups are allowed). " +
+      "No local draft change was made. Review the ID, choose Add, check " +
+      "the confirmation, and submit as linyuli303. Publication is not immediate.";
+  } catch (error) {
+    $("manager-status").textContent = error.message;
+  }
+});
+
 function addDraftChannel() {
   if (!feed || !draft) return;
   try {
@@ -554,7 +666,7 @@ $("export-whitelist").addEventListener("click", () => {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
     $("manager-status").textContent =
-      "Exported draft, not yet published. Replace channels.json in GitHub, review and commit. Some TV browsers may not support file downloads; use a phone or laptop.";
+      "Exported local draft; nothing has been published. For individual changes, use the GitHub request links. Advanced bulk editing: replace channels.json with the exported contents in GitHub, then review and commit. Some TV browsers may not support downloads; use a phone or laptop.";
   } catch {
     $("manager-status").textContent =
       "Export failed. Try a modern laptop/phone browser.";
