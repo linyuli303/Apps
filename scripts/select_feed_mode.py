@@ -16,6 +16,15 @@ SHA = re.compile(r"[a-f0-9]{40}\Z")
 
 def needs_refresh(event_name, event, head, diff):
     # Manual dispatch includes owner channel requests and recovery/no-op requests.
+    if event_name == "workflow_dispatch":
+        inputs = event.get("inputs", {})
+        if not isinstance(inputs, dict):
+            raise ValueError("Invalid workflow inputs")
+        reuse = inputs.get("reuse_published_feed", False)
+        # GitHub event payloads may serialize boolean inputs as strings.
+        if reuse is True or (isinstance(reuse, str) and reuse == "true"):
+            return False
+        return True
     if event_name != "push":
         return True
     before = event.get("before")

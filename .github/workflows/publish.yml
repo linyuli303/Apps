@@ -3,6 +3,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      reuse_published_feed:
+        description: "Deploy frontend using published feed; no YouTube calls"
+        required: false
+        default: false
+        type: boolean
   # Hour selection is controlled by YOUTUBE_REFRESH_HOURS_UTC.
   schedule:
     - cron: "0 0 * * *"
