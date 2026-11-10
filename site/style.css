@@ -833,3 +833,35 @@ header{flex-wrap:wrap}.header-actions{display:flex;align-items:center;justify-co
   .rss-channel-button{min-height:36px;padding:7px 4px}
   .rss-video-title{min-height:32px}
 }
+
+
+/* Compact RSS metadata columns: inherit every palette's shared colors. */
+.rss-video,.rss-column-head{
+  display:grid;
+  grid-template-columns:95px minmax(0,1fr) 88px;
+  align-items:center;
+  gap:8px
+}
+.rss-column-head{
+  padding:4px 0 7px;
+  color:var(--muted);
+  font-size:9px;
+  letter-spacing:1px
+}
+.rss-views{
+  text-align:right;
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:400;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:normal
+}
+@media(max-width:700px){
+  .rss-video,.rss-column-head{
+    grid-template-columns:72px minmax(0,1fr) 68px;
+    gap:5px
+  }
+  .rss-views{font-size:9px}
+  .rss-column-head{font-size:8px;letter-spacing:.5px}
+}

@@ -29,8 +29,16 @@ def validate_feed(feed, config):
         if ids!={c["id"] for c in configured}:
             raise ValueError("Feed channel list differs from configuration")
     for v in feed["videos"]:
-        if set(v)!={"id","channelId","title","publishedAt","duration"} or not all(isinstance(x,str) for x in v.values()):
+        base_fields = {"id","channelId","title","publishedAt","duration"}
+        if (
+            not isinstance(v, dict)
+            or set(v) not in (base_fields, base_fields | {"viewCount"})
+            or not all(isinstance(x, str) for x in v.values())
+        ):
             raise ValueError("Invalid video schema")
+        count = v.get("viewCount", "")
+        if count != "" and not re.fullmatch(r"[0-9]{1,20}", count):
+            raise ValueError("Invalid view count")
         if v["channelId"] not in ids or not re.fullmatch(r"[A-Za-z0-9_-]{11}",v["id"]):
             raise ValueError("Unapproved video")
     return True

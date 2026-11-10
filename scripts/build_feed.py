@@ -164,7 +164,7 @@ def build(config, key, request=api):
     approved = {c["id"] for c in channels}
     videos = []
     for offset in range(0, len(ids), 50):
-        details = request("videos", {"part":"snippet,status,contentDetails", "id":",".join(ids[offset:offset+50])}, key)
+        details = request("videos", {"part":"snippet,status,contentDetails,statistics", "id":",".join(ids[offset:offset+50])}, key)
         for item in details.get("items", []):
             snippet, status = item["snippet"], item["status"]
             # Verify ownership independently; a playlist entry alone is not authorization.
@@ -175,9 +175,21 @@ def build(config, key, request=api):
             # Upcoming streams are not yet playable. Active live streams may be included.
             if snippet.get("liveBroadcastContent") == "upcoming":
                 continue
+            statistics = item.get("statistics", {})
+            view_count = (
+                statistics.get("viewCount")
+                if isinstance(statistics, dict) else None
+            )
+            # Preserve counts as decimal strings, avoiding numeric precision loss.
+            if not (
+                isinstance(view_count, str)
+                and re.fullmatch(r"[0-9]{1,20}", view_count)
+            ):
+                view_count = ""
             videos.append({"id":item["id"], "channelId":snippet["channelId"],
                            "title":snippet["title"], "publishedAt":snippet["publishedAt"],
-                           "duration":item.get("contentDetails",{}).get("duration", "")})
+                           "duration":item.get("contentDetails",{}).get("duration", ""),
+                           "viewCount":view_count})
     videos.sort(key=lambda v:v["publishedAt"], reverse=True)
     return {"title":config.get("title","My Channels"),
             "generatedAt":dt.datetime.now(dt.timezone.utc).isoformat(),

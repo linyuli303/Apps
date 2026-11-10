@@ -989,6 +989,14 @@ function renderRSSCatalogue() {
       return fragment;
     }
 
+    const headings = element("div", "rss-column-head");
+    headings.append(
+      element("span", "", "PUBLISHED"),
+      element("span", "", "VIDEO TITLE"),
+      element("span", "rss-views", "VIEWS"),
+    );
+    fragment.append(headings);
+
     record.videos.forEach((video) => {
       const row = element("div", "rss-video");
       const date = element("time", "rss-date", dateLabel(video.publishedAt));
@@ -1004,7 +1012,25 @@ function renderRSSCatalogue() {
       );
       title.addEventListener("click", () => openOfficialVideo(video.id));
 
-      row.append(date, title);
+      const count = video.viewCount;
+      let countLabel = "Unavailable";
+      if (
+        typeof count === "string" &&
+        /^[0-9]{1,20}$/.test(count)
+      ) {
+        try {
+          countLabel = BigInt(count).toLocaleString();
+        } catch {
+          // Retain exact digits if BigInt formatting is unsupported.
+          countLabel = count;
+        }
+      }
+      const views = element("span", "rss-views", countLabel);
+      views.title = countLabel === "Unavailable"
+        ? "View count unavailable in this snapshot"
+        : `${countLabel} views at the last feed refresh`;
+
+      row.append(date, title, views);
       fragment.append(row);
     });
     return fragment;
