@@ -103,6 +103,7 @@ function render() {
   visible = feed.videos.filter(
     (v) =>
       draftAllows(v.channelId) &&
+      categoryAllows(v.channelId) &&
       (!$("channel").value || v.channelId === $("channel").value) &&
       `${v.title} ${channels.get(v.channelId)}`
         .toLocaleLowerCase()
@@ -241,9 +242,12 @@ function openPlayer(id) {
   current = id;
   $("playing-title").textContent = video.title;
   $("official").href = `https://www.youtube.com/watch?v=${id}`;
+  stopSpeedController();
   const iframe = document.createElement("iframe");
+  iframe.id = "mytube-video-iframe";
   const params = new URLSearchParams({
     autoplay: "1",
+    enablejsapi: "1",
     rel: "0",
     playsinline: "1",
     origin: location.origin,
@@ -261,8 +265,10 @@ function openPlayer(id) {
   document.body.style.overflow = "hidden";
   $("close").focus();
   $("next").disabled = visible.length < 2;
+  attachSpeedController(iframe, id);
 }
 function closePlayer() {
+  stopSpeedController();
   const wasOpen = !$("player").hidden;
   if (document.fullscreenElement === $("frame")) {
     document.exitFullscreen().catch(() => {});
@@ -305,6 +311,7 @@ document.addEventListener("fullscreenchange", () => {
 });
 $("official").addEventListener("click", () => {
   // Stop embedded playback while allowing normal external link navigation.
+  stopSpeedController();
   $("frame").replaceChildren();
 });
 $("next").addEventListener("click", () => {
@@ -327,6 +334,7 @@ $("sort").addEventListener("change", () => {
 });
 $("thumbnails").addEventListener("change", render);
 document.addEventListener("keydown", (event) => {
+  if ($("category-editor")?.open) return;
   if (!$("player").hidden) {
     if (document.fullscreenElement) return;
     if (
@@ -346,6 +354,8 @@ document.addEventListener("keydown", (event) => {
         $("official"),
         $("next"),
         $("player-appearance"),
+        $("speed-preset"),
+        $("speed-slider"),
         $("close"),
       ].filter((el) => el && !el.disabled);
       if (event.shiftKey && document.activeElement === controls[0]) {
@@ -895,14 +905,14 @@ load();
 
 // Palette UI: validated names only; colors are defined in external style.css.
 (function initializeThemePicker() {
-  const themes = [{"id": "kimono", "ja": "着物", "name": "Kimono"}, {"id": "hanami", "ja": "花見", "name": "Hanami"}, {"id": "ukiyoe", "ja": "浮世絵", "name": "Ukiyo-e"}, {"id": "japandi", "ja": "和北欧", "name": "Japandi"}, {"id": "edo", "ja": "江戸", "name": "Edo"}, {"id": "wabisabi", "ja": "侘寂", "name": "Wabi-sabi"}, {"id": "nadeshiko", "ja": "撫子", "name": "Nadeshiko"}, {"id": "akabeni", "ja": "赤紅", "name": "Akabeni"}, {"id": "kaki", "ja": "柿", "name": "Kaki"}, {"id": "yamabuki", "ja": "山吹", "name": "Yamabuki"}, {"id": "karashi", "ja": "芥子", "name": "Karashi"}, {"id": "kihada", "ja": "黄檗", "name": "Kihada"}, {"id": "wakana", "ja": "若菜", "name": "Wakana"}, {"id": "moegi", "ja": "萌黄", "name": "Moegi"}, {"id": "matsuba", "ja": "松葉", "name": "Matsuba"}, {"id": "tokiwa", "ja": "常磐", "name": "Tokiwa"}, {"id": "seiji", "ja": "青磁", "name": "Seiji"}, {"id": "asagi", "ja": "浅葱", "name": "Asagi"}, {"id": "hanada", "ja": "縹", "name": "Hanada"}, {"id": "ruri", "ja": "瑠璃", "name": "Ruri"}, {"id": "kikyo", "ja": "桔梗", "name": "Kikyo"}, {"id": "fuji", "ja": "藤", "name": "Fuji"}, {"id": "ayame", "ja": "菖蒲", "name": "Ayame"}, {"id": "botan", "ja": "牡丹", "name": "Botan"}, {"id": "sakura", "ja": "桜", "name": "Sakura"}, {"id": "kohbai", "ja": "紅梅", "name": "Kohbai"}, {"id": "enji", "ja": "臙脂", "name": "Enji"}, {"id": "shu", "ja": "朱", "name": "Shu"}, {"id": "hiwada", "ja": "檜皮", "name": "Hiwada"}, {"id": "taisha", "ja": "代赭", "name": "Taisha"}, {"id": "kohaku", "ja": "琥珀", "name": "Kohaku"}, {"id": "kuchinashi", "ja": "梔子", "name": "Kuchinashi"}, {"id": "ukon", "ja": "鬱金", "name": "Ukon"}, {"id": "ominaeshi", "ja": "女郎花", "name": "Ominaeshi"}, {"id": "uguisu", "ja": "鶯", "name": "Uguisu"}, {"id": "yanagi", "ja": "柳", "name": "Yanagi"}, {"id": "byakuroku", "ja": "白緑", "name": "Byakuroku"}, {"id": "rokusho", "ja": "緑青", "name": "Rokusho"}, {"id": "aotake", "ja": "青竹", "name": "Aotake"}, {"id": "tokusa", "ja": "木賊", "name": "Tokusa"}, {"id": "sabiseiji", "ja": "錆青磁", "name": "Sabiseiji"}, {"id": "mizuasagi", "ja": "水浅葱", "name": "Mizuasagi"}, {"id": "sora", "ja": "空", "name": "Sora"}, {"id": "ai", "ja": "藍", "name": "Ai"}, {"id": "kon", "ja": "紺", "name": "Kon"}, {"id": "sumire", "ja": "菫", "name": "Sumire"}, {"id": "murasaki", "ja": "紫", "name": "Murasaki"}, {"id": "shion", "ja": "紫苑", "name": "Shion"}, {"id": "sumi", "ja": "墨", "name": "Sumi"}, {"id": "ginnezumi", "ja": "銀鼠", "name": "Ginnezumi"}];
+  const themes = [{"id": "yugure", "ja": "\u5915\u66ae\u308c", "name": "Yugure"}, {"id": "kimono", "ja": "\u7740\u7269", "name": "Kimono"}, {"id": "hanami", "ja": "\u82b1\u898b", "name": "Hanami"}, {"id": "ukiyoe", "ja": "\u6d6e\u4e16\u7d75", "name": "Ukiyo-e"}, {"id": "japandi", "ja": "\u548c\u5317\u6b27", "name": "Japandi"}, {"id": "edo", "ja": "\u6c5f\u6238", "name": "Edo"}, {"id": "wabisabi", "ja": "\u4f98\u5bc2", "name": "Wabi-sabi"}, {"id": "nadeshiko", "ja": "\u64ab\u5b50", "name": "Nadeshiko"}, {"id": "akabeni", "ja": "\u8d64\u7d05", "name": "Akabeni"}, {"id": "kaki", "ja": "\u67ff", "name": "Kaki"}, {"id": "yamabuki", "ja": "\u5c71\u5439", "name": "Yamabuki"}, {"id": "karashi", "ja": "\u82a5\u5b50", "name": "Karashi"}, {"id": "kihada", "ja": "\u9ec4\u6a97", "name": "Kihada"}, {"id": "wakana", "ja": "\u82e5\u83dc", "name": "Wakana"}, {"id": "moegi", "ja": "\u840c\u9ec4", "name": "Moegi"}, {"id": "matsuba", "ja": "\u677e\u8449", "name": "Matsuba"}, {"id": "tokiwa", "ja": "\u5e38\u78d0", "name": "Tokiwa"}, {"id": "seiji", "ja": "\u9752\u78c1", "name": "Seiji"}, {"id": "asagi", "ja": "\u6d45\u8471", "name": "Asagi"}, {"id": "hanada", "ja": "\u7e39", "name": "Hanada"}, {"id": "ruri", "ja": "\u7460\u7483", "name": "Ruri"}, {"id": "kikyo", "ja": "\u6854\u6897", "name": "Kikyo"}, {"id": "fuji", "ja": "\u85e4", "name": "Fuji"}, {"id": "ayame", "ja": "\u83d6\u84b2", "name": "Ayame"}, {"id": "botan", "ja": "\u7261\u4e39", "name": "Botan"}, {"id": "sakura", "ja": "\u685c", "name": "Sakura"}, {"id": "kohbai", "ja": "\u7d05\u6885", "name": "Kohbai"}, {"id": "enji", "ja": "\u81d9\u8102", "name": "Enji"}, {"id": "shu", "ja": "\u6731", "name": "Shu"}, {"id": "hiwada", "ja": "\u6a9c\u76ae", "name": "Hiwada"}, {"id": "taisha", "ja": "\u4ee3\u8d6d", "name": "Taisha"}, {"id": "kohaku", "ja": "\u7425\u73c0", "name": "Kohaku"}, {"id": "kuchinashi", "ja": "\u6894\u5b50", "name": "Kuchinashi"}, {"id": "ukon", "ja": "\u9b31\u91d1", "name": "Ukon"}, {"id": "ominaeshi", "ja": "\u5973\u90ce\u82b1", "name": "Ominaeshi"}, {"id": "uguisu", "ja": "\u9daf", "name": "Uguisu"}, {"id": "yanagi", "ja": "\u67f3", "name": "Yanagi"}, {"id": "byakuroku", "ja": "\u767d\u7dd1", "name": "Byakuroku"}, {"id": "rokusho", "ja": "\u7dd1\u9752", "name": "Rokusho"}, {"id": "aotake", "ja": "\u9752\u7af9", "name": "Aotake"}, {"id": "tokusa", "ja": "\u6728\u8cca", "name": "Tokusa"}, {"id": "sabiseiji", "ja": "\u9306\u9752\u78c1", "name": "Sabiseiji"}, {"id": "mizuasagi", "ja": "\u6c34\u6d45\u8471", "name": "Mizuasagi"}, {"id": "sora", "ja": "\u7a7a", "name": "Sora"}, {"id": "ai", "ja": "\u85cd", "name": "Ai"}, {"id": "kon", "ja": "\u7d3a", "name": "Kon"}, {"id": "sumire", "ja": "\u83eb", "name": "Sumire"}, {"id": "murasaki", "ja": "\u7d2b", "name": "Murasaki"}, {"id": "shion", "ja": "\u7d2b\u82d1", "name": "Shion"}, {"id": "sumi", "ja": "\u58a8", "name": "Sumi"}, {"id": "ginnezumi", "ja": "\u9280\u9f20", "name": "Ginnezumi"}];
   const scope = encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
   const themeKey = "approved-yt-theme-v2:" + scope;
   const modeKey = "approved-yt-appearance-v1:" + scope;
-  let selected = "fuji", mode = "light";
+  let selected = "yugure", mode = "light";
   const system = window.matchMedia("(prefers-color-scheme: dark)");
   function readPreferences() {
-    selected = "fuji"; mode = "light";
+    selected = "yugure"; mode = "light";
     try {
       const savedTheme = localStorage.getItem(themeKey);
       const savedMode = localStorage.getItem(modeKey);
@@ -918,14 +928,14 @@ load();
   const summary = element("summary"); summary.setAttribute("aria-label", "Choose color palette");
   const heading = element("span");
   const name = element("span", "palette-name");
-  heading.append(element("span", "palette-caption", "色のパレット · 50 palettes"), name);
+  heading.append(element("span", "palette-caption", "色のパレット · 51 palettes"), name);
   const trigger = element("span", "palette-trigger-colors");
   const arrow = element("span", "", "⌄"); arrow.setAttribute("aria-hidden", "true");
   summary.append(heading, trigger);
   const panel = element("section", "palette-panel"); panel.setAttribute("aria-label", "Available palettes");
   const panelHeading = element("div", "palette-panel-heading", "Find your atmosphere");
-  panelHeading.append(element("small", "", "50 palettes · Each available in light and dark mode."));
-  const list = element("div", "palette-list"); list.setAttribute("role", "group"); list.setAttribute("aria-label", "Choose one of 50 palettes");
+  panelHeading.append(element("small", "", "51 palettes · Each available in light and dark mode."));
+  const list = element("div", "palette-list"); list.setAttribute("role", "group"); list.setAttribute("aria-label", "Choose one of 51 palettes");
   const buttons = [];
   function swatches(id) {
     const el = element("span", "palette-swatches"); el.dataset.palette = id; el.setAttribute("aria-hidden", "true");
@@ -959,7 +969,7 @@ load();
     const b = element("button", "palette-option"); b.type = "button";
     const check = element("span", "palette-check"); check.setAttribute("aria-hidden", "true");
     b.append(element("span", "palette-option-name", theme.ja + " · " + theme.name),
-      element("span", "palette-option-note", (i < 6 ? "Signature palette" : "Traditional-color inspired") + " · Light + dark"), swatches(theme.id), check);
+      element("span", "palette-option-note", (i < 7 ? "Signature palette" : "Traditional-color inspired") + " · Light + dark"), swatches(theme.id), check);
     b.addEventListener("click", () => { selected = theme.id; apply(true, true); picker.open = false; summary.focus(); });
     b.addEventListener("keydown", event => {
       let next = i;
@@ -1174,7 +1184,7 @@ function renderRSSCatalogue() {
   const query = $("rss-search").value.trim().toLocaleLowerCase();
   const grouped = new Map();
 
-  feed.channels.filter((channel) => draftAllows(channel.id)).forEach((channel) => {
+  feed.channels.filter((channel) => draftAllows(channel.id) && categoryAllows(channel.id)).forEach((channel) => {
     grouped.set(channel.id, { channel, videos: [], latest: null });
   });
 
@@ -1301,3 +1311,542 @@ function renderRSSCatalogue() {
     `${rows.size} channels / ${videoCount} videos. Newest upload first. ` +
     `Feed refreshed ${dateLabel(feed.generatedAt)}.`;
 }
+
+
+// Personal categories: browser-local, independent of whitelist approval.
+function validateCategoryData(value) {
+  if (
+    !value || typeof value !== "object" || Array.isArray(value) ||
+    Object.keys(value).sort().join(",") !== "assignments,categories,version" ||
+    value.version !== 1 || !Array.isArray(value.categories) ||
+    value.categories.length > 50 ||
+    !value.assignments || typeof value.assignments !== "object" ||
+    Array.isArray(value.assignments) ||
+    Object.keys(value.assignments).length > 1000
+  ) throw new Error("Invalid category backup.");
+
+  const ids = new Set(), names = new Set();
+  for (const category of value.categories) {
+    if (
+      !category || typeof category !== "object" ||
+      Object.keys(category).sort().join(",") !== "id,name" ||
+      typeof category.id !== "string" ||
+      !/^cat-[A-Za-z0-9-]{1,64}$/.test(category.id) ||
+      typeof category.name !== "string" ||
+      !category.name.trim() || category.name !== category.name.trim() ||
+      category.name.length > 50 ||
+      /[\u0000-\u001f\u007f]/.test(category.name) ||
+      ids.has(category.id) ||
+      names.has(category.name.toLocaleLowerCase()) ||
+      ["all categories", "uncategorized"].includes(
+        category.name.toLocaleLowerCase()
+      )
+    ) throw new Error("Invalid or duplicate category.");
+    ids.add(category.id);
+    names.add(category.name.toLocaleLowerCase());
+  }
+
+  for (const [id, tags] of Object.entries(value.assignments)) {
+    if (
+      !/^UC[A-Za-z0-9_-]{22}$/.test(id) ||
+      !Array.isArray(tags) || tags.length > 50 ||
+      new Set(tags).size !== tags.length ||
+      tags.some(tag => !ids.has(tag))
+    ) throw new Error("Invalid channel assignments.");
+  }
+  return true;
+}
+
+function categoryState() {
+  if (categoryState.saved) return categoryState.saved;
+  const scope = encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
+  const key = "approved-yt-categories-v1:" + scope;
+  const defaults = [
+    "Data & AI", "IT & Cyber", "Travel", "Music",
+    "Skills", "News", "Talk Shows & Podcasts", "Entertainment",
+  ];
+  let model = {
+    version: 1,
+    categories: defaults.map((name, index) => ({id: "cat-" + index, name})),
+    assignments: {},
+  };
+  let warning = "";
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
+      if (raw.length > 2000000) throw new Error();
+      const parsed = JSON.parse(raw);
+      validateCategoryData(parsed);
+      model = parsed;
+    }
+  } catch {
+    warning = "Saved settings could not be loaded. Defaults are shown; export edits as a backup.";
+  }
+  return categoryState.saved = {key, model, warning, search: ""};
+}
+
+function categoryAllows(channelID) {
+  const selected = $("category-filter")?.value || "all";
+  const tags = categoryState().model.assignments[channelID] || [];
+  return selected === "all" ||
+    (selected === "uncategorized" ? tags.length === 0 : tags.includes(selected));
+}
+
+function updateCategoryFilter() {
+  const select = $("category-filter");
+  if (!select) return;
+  const previous = select.value;
+  select.replaceChildren(new Option("All categories", "all"));
+  for (const category of categoryState().model.categories) {
+    select.append(new Option(category.name, category.id));
+  }
+  select.append(new Option("Uncategorized", "uncategorized"));
+  select.value = Array.from(select.options).some(option => option.value === previous)
+    ? previous : "all";
+}
+
+function refreshCategoryViews() {
+  updateCategoryFilter();
+  page = 0;
+  if (feed) render();
+  renderRSSCatalogue();
+}
+
+function saveCategoryData() {
+  const state = categoryState();
+  validateCategoryData(state.model);
+  try {
+    const raw = JSON.stringify(state.model);
+    if (raw.length > 2000000) throw new Error();
+    localStorage.setItem(state.key, raw);
+    $("category-editor-status").textContent =
+      "Saved on this browser only. Export a backup for transfer.";
+  } catch {
+    $("category-editor-status").textContent =
+      "Storage unavailable or full. Changes last for this page; export a backup.";
+  }
+  refreshCategoryViews();
+}
+
+function renderCategoryEditor() {
+  const state = categoryState(), model = state.model;
+  const definitions = $("category-definitions");
+  definitions.replaceChildren();
+
+  for (const category of model.categories) {
+    const row = element("div", "category-edit-row");
+    const input = element("input");
+    input.value = category.name;
+    input.maxLength = 50;
+    input.setAttribute("aria-label", "Rename " + category.name);
+
+    const save = element("button", "", "Save name");
+    save.type = "button";
+    save.addEventListener("click", () => {
+      const old = category.name;
+      category.name = input.value.trim();
+      try {
+        validateCategoryData(model);
+      } catch {
+        category.name = old;
+        $("category-editor-status").textContent =
+          "Use a unique name of 1-50 characters. Built-in filter names are reserved.";
+        return;
+      }
+      saveCategoryData();
+      renderCategoryEditor();
+      $("category-menu").setAttribute("aria-expanded", "true");
+    });
+    input.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        save.click();
+      }
+    });
+
+    const remove = element("button", "", "Delete");
+    remove.type = "button";
+    remove.addEventListener("click", () => {
+      if (!confirm(
+        `Delete "${category.name}" and its assignments? No channels or videos will be deleted.`
+      )) return;
+      model.categories = model.categories.filter(item => item.id !== category.id);
+      for (const id of Object.keys(model.assignments)) {
+        model.assignments[id] = model.assignments[id].filter(
+          tag => tag !== category.id
+        );
+      }
+      saveCategoryData();
+      renderCategoryEditor();
+      $("category-new-name").focus();
+    });
+
+    row.append(input, save, remove);
+    definitions.append(row);
+  }
+
+  const list = $("category-channel-list");
+  list.replaceChildren();
+  if (!feed || !freshFeed(feed)) {
+    list.append(element("p", "", "Load a fresh feed to assign channel categories."));
+    return;
+  }
+  const query = state.search.toLocaleLowerCase();
+  const channels = feed.channels
+    .filter(channel =>
+      `${channel.title} ${channel.id}`.toLocaleLowerCase().includes(query)
+    )
+    .sort((a, b) => a.title.localeCompare(b.title));
+
+  for (const channel of channels) {
+    const field = element("fieldset", "category-assignment");
+    field.append(element("legend", "", channel.title));
+    const tags = new Set(model.assignments[channel.id] || []);
+
+    for (const category of model.categories) {
+      const label = element("label");
+      const checkbox = element("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = tags.has(category.id);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) tags.add(category.id);
+        else tags.delete(category.id);
+
+        const assignments = {...model.assignments};
+        const selectedTags = Array.from(tags);
+        if (selectedTags.length) assignments[channel.id] = selectedTags;
+        else delete assignments[channel.id];
+
+        try {
+          validateCategoryData({...model, assignments});
+        } catch {
+          checkbox.checked = !checkbox.checked;
+          if (checkbox.checked) tags.add(category.id);
+          else tags.delete(category.id);
+          $("category-editor-status").textContent =
+            "Assignment limit reached. Remove unused assignments from your backup.";
+          return;
+        }
+        model.assignments = assignments;
+        saveCategoryData();
+      });
+      label.append(checkbox, document.createTextNode(" " + category.name));
+      field.append(label);
+    }
+    if (!model.categories.length) {
+      field.append(element("span", "", "Add a category above to assign it."));
+    }
+    list.append(field);
+  }
+  if (!channels.length) list.append(element("p", "", "No matching channels."));
+}
+
+(function initializeCategories() {
+  updateCategoryFilter();
+  $("category-filter").addEventListener("change", () => {
+    page = 0;
+    if (feed) render();
+    renderRSSCatalogue();
+  });
+
+  const dialog = $("category-editor"), opener = $("category-menu");
+  opener.addEventListener("click", () => {
+    $("category-editor-status").textContent = categoryState().warning;
+    renderCategoryEditor();
+    dialog.showModal();
+    opener.setAttribute("aria-expanded", "true");
+  });
+  $("category-editor-close").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("close", () => {
+    opener.setAttribute("aria-expanded", "false");
+    opener.focus();
+  });
+  // Keep native Escape/dialog behavior, without triggering page shortcuts.
+  dialog.addEventListener("keydown", event => event.stopPropagation());
+
+  $("category-channel-search").addEventListener("input", () => {
+    categoryState().search = $("category-channel-search").value;
+    renderCategoryEditor();
+  });
+
+  $("category-add").addEventListener("click", () => {
+    const state = categoryState();
+    const id = "cat-" + Array.from(
+      crypto.getRandomValues(new Uint32Array(4)),
+      value => value.toString(16).padStart(8, "0")
+    ).join("");
+    const next = {
+      ...state.model,
+      categories: [
+        ...state.model.categories,
+        {id, name: $("category-new-name").value.trim()},
+      ],
+    };
+    try {
+      validateCategoryData(next);
+    } catch {
+      $("category-editor-status").textContent =
+        "Use a unique name of 1-50 characters, up to 50 categories. Built-in names are reserved.";
+      return;
+    }
+    state.model = next;
+    $("category-new-name").value = "";
+    saveCategoryData();
+    renderCategoryEditor();
+    $("category-new-name").focus();
+  });
+  $("category-new-name").addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      $("category-add").click();
+    }
+  });
+
+  $("category-export").addEventListener("click", () => {
+    const url = URL.createObjectURL(new Blob(
+      [JSON.stringify(categoryState().model, null, 2)],
+      {type: "application/json"}
+    ));
+    const anchor = element("a");
+    anchor.href = url;
+    anchor.download = "MyTube_categories.json";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  });
+
+  $("category-import").addEventListener("change", async () => {
+    try {
+      const file = $("category-import").files[0];
+      if (!file) return;
+      if (file.size > 2000000) throw new Error();
+      const value = JSON.parse(await file.text());
+      validateCategoryData(value);
+      if (!confirm(
+        "Replace this browser's categories and assignments with this backup?"
+      )) return;
+      categoryState().model = value;
+      saveCategoryData();
+      renderCategoryEditor();
+    } catch {
+      $("category-editor-status").textContent =
+        "Import rejected. Current categories were not changed.";
+    } finally {
+      $("category-import").value = "";
+    }
+  });
+})();
+
+
+// Preferred speed is browser-local; actual rate is confirmed by YouTube.
+function speedState() {
+  if (speedState.saved) return speedState.saved;
+  const key = "approved-yt-speed-v1:" +
+    encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
+  let preferred = 1;
+  try {
+    const raw = localStorage.getItem(key);
+    const value = Number(raw);
+    if (
+      raw !== null && Number.isFinite(value) &&
+      value >= 0.25 && value <= 3
+    ) preferred = Math.round(value * 100) / 100;
+  } catch {}
+  return speedState.saved = {
+    key, preferred, player: null, frame: null, ready: false,
+    timer: null, stored: true,
+  };
+}
+
+function updateSpeedControls() {
+  const value = speedState().preferred;
+  $("speed-slider").value = String(value);
+  $("speed-value").textContent = `${value}x`;
+  $("speed-preset").value = Number.isInteger(value * 4)
+    ? String(value) : "custom";
+}
+
+function setPreferredSpeed(value) {
+  if (!Number.isFinite(value) || value < 0.25 || value > 3) return;
+  const state = speedState();
+  state.preferred = Math.round(value * 100) / 100;
+  try {
+    localStorage.setItem(state.key, String(state.preferred));
+    state.stored = true;
+  } catch {
+    state.stored = false;
+  }
+  updateSpeedControls();
+  $("speed-status").textContent =
+    `Preferred ${state.preferred}x. Waiting for player confirmation.` +
+    (state.stored ? "" : " Storage unavailable; session only.");
+  clearTimeout(state.timer);
+  state.timer = setTimeout(applyPreferredSpeed, 180);
+}
+
+function stopSpeedController() {
+  const state = speedState();
+  clearTimeout(state.timer);
+  const player = state.player;
+  state.player = null;
+  state.frame = null;
+  state.ready = false;
+  if (player) {
+    try { player.destroy(); } catch {}
+  }
+}
+
+function loadSpeedAPI() {
+  if (window.YT && typeof window.YT.Player === "function") {
+    return Promise.resolve();
+  }
+  if (loadSpeedAPI.promise) return loadSpeedAPI.promise;
+  loadSpeedAPI.promise = new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error("Player API unavailable")), 15000
+    );
+    const previous = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof previous === "function") {
+        try { previous(); } catch {}
+      }
+      clearTimeout(timeout);
+      resolve();
+    };
+    const script = document.createElement("script");
+    script.src = "https://www.youtube.com/iframe_api";
+    script.referrerPolicy = "strict-origin-when-cross-origin";
+    script.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error("Player API unavailable"));
+    };
+    document.head.append(script);
+  });
+  return loadSpeedAPI.promise;
+}
+
+function attachSpeedController(iframe, id) {
+  const state = speedState();
+  state.frame = iframe;
+  $("speed-status").textContent =
+    `Preferred ${state.preferred}x. Waiting for player confirmation.`;
+
+  const valid = () =>
+    state.frame === iframe && iframe.isConnected &&
+    current === id && !$("player").hidden &&
+    feed && freshFeed(feed) &&
+    feed.videos.some(video =>
+      video.id === id && draftAllows(video.channelId) &&
+      feed.channels.some(channel => channel.id === video.channelId)
+    );
+
+  loadSpeedAPI().then(() => {
+    if (!valid()) return;
+    state.player = new window.YT.Player(iframe, {
+      events: {
+        onReady: () => {
+          if (!valid()) return;
+          state.ready = true;
+          applyPreferredSpeed();
+        },
+        onStateChange: event => {
+          if (valid() && event.data === 1) applyPreferredSpeed();
+        },
+        onPlaybackRateChange: () => {
+          if (valid()) reportPlaybackSpeed();
+        },
+        onError: () => {
+          if (valid()) {
+            $("speed-status").textContent =
+              "YouTube reported a playback error. Try Open in YouTube / App.";
+          }
+        },
+      },
+    });
+  }).catch(() => {
+    if (valid()) {
+      $("speed-status").textContent =
+        "Speed control API unavailable. Your preference is retained; " +
+        "use YouTube's native speed controls.";
+    }
+  });
+}
+
+function reportPlaybackSpeed() {
+  const state = speedState();
+  if (!state.ready || !state.player || !state.frame?.isConnected) return;
+  try {
+    const actual = state.player.getPlaybackRate();
+    if (!Number.isFinite(actual) || actual <= 0) return;
+    const same = Math.abs(actual - state.preferred) < 0.001;
+    $("speed-status").textContent = (
+      same
+        ? `Playing ${actual}x.`
+        : `Preferred ${state.preferred}x; playing ${actual}x. ` +
+          "YouTube may not support the preferred rate for this video."
+    ) + (state.stored ? "" : " Storage unavailable; session only.");
+  } catch {}
+}
+
+function applyPreferredSpeed() {
+  const state = speedState();
+  if (
+    !state.ready || !state.player ||
+    !state.frame?.isConnected || $("player").hidden
+  ) return;
+  if (!feed || !freshFeed(feed)) {
+    expireFeed();
+    return;
+  }
+  try {
+    const rates = state.player.getAvailablePlaybackRates()
+      .filter(rate => Number.isFinite(rate) && rate >= 0.25 && rate <= 3)
+      .sort((a, b) => a - b);
+    if (!rates.length) {
+      $("speed-status").textContent =
+        "No supported speed list available. Preferred speed retained.";
+      return;
+    }
+
+    const exact = rates.find(
+      rate => Math.abs(rate - state.preferred) < 0.001
+    );
+    // Unsupported preferences use the nearest supported rate not above
+    // the preference, or the minimum supported rate when none is lower.
+    const target = exact ??
+      rates.filter(rate => rate <= state.preferred).pop() ?? rates[0];
+
+    if (Math.abs(state.player.getPlaybackRate() - target) > 0.001) {
+      $("speed-status").textContent =
+        `Preferred ${state.preferred}x; requesting supported ${target}x.`;
+      state.player.setPlaybackRate(target);
+    } else {
+      reportPlaybackSpeed();
+    }
+    clearTimeout(state.timer);
+    state.timer = setTimeout(reportPlaybackSpeed, 700);
+  } catch {
+    $("speed-status").textContent =
+      "Unable to confirm playback speed. Your preference is retained.";
+  }
+}
+
+(function initializeSpeedControls() {
+  for (let index = 1; index <= 12; index++) {
+    const value = index / 4;
+    $("speed-preset").append(new Option(`${value}x`, String(value)));
+  }
+  $("speed-preset").append(new Option("Custom", "custom"));
+  updateSpeedControls();
+  $("speed-preset").addEventListener("change", () => {
+    if ($("speed-preset").value === "custom") {
+      $("speed-slider").focus();
+      return;
+    }
+    setPreferredSpeed(Number($("speed-preset").value));
+  });
+  $("speed-slider").addEventListener("input", () => {
+    setPreferredSpeed(Number($("speed-slider").value));
+  });
+})();
