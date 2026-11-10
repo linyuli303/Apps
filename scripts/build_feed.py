@@ -131,8 +131,12 @@ def build(config, key, request=api):
         seen.add(cid)
         channels.append({"id":cid,"title":channel["snippet"]["title"]})
         playlist = channel["contentDetails"]["relatedPlaylists"]["uploads"]
-        uploads = request("playlistItems", {"part":"contentDetails", "playlistId":playlist,
-                           "maxResults":config.get("max_videos_per_channel",30)}, key).get("items", [])
+        try:
+            uploads = request("playlistItems", {"part":"contentDetails", "playlistId":playlist,
+                               "maxResults":config.get("max_videos_per_channel",30)}, key).get("items", [])
+        except RuntimeError:
+            print("Uploads playlist request failed for approved channel ID:", cid)
+            raise
         candidates.extend(item.get("contentDetails",{}).get("videoId", "") for item in uploads)
     ids = list(dict.fromkeys(vid for vid in candidates if VIDEO_ID.fullmatch(vid)))
     approved = {c["id"] for c in channels}
