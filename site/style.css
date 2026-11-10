@@ -666,3 +666,10 @@ header{flex-wrap:wrap}.header-actions{display:flex;align-items:center;justify-co
 @media(min-width:1800px){body{font-size:20px}.grid{grid-template-columns:repeat(4,1fr)}button,input,select{min-height:58px}.card-title{font-size:22px}.meta{font-size:17px}}
 @media(max-width:600px){header,main{padding:20px}.grid{grid-template-columns:1fr}.toolbar label{flex:1;min-width:130px}.player{padding:12px}.player-bottom{align-items:flex-start;flex-direction:column}.frame{margin-top:25px}.header-actions{width:100%}.palette-picker{flex:1;min-width:200px}.palette-panel{left:0;right:auto;max-width:calc(100vw - 40px)}.palette-list{padding:8px;gap:6px}.palette-option-name{font-size:12px}}
 @media(max-width:430px){.palette-picker{flex-basis:100%;width:100%}.header-actions{gap:10px}.palette-panel{width:calc(100vw - 40px)}}
+
+/* Appearance controls are nested inside the palette dropdown. */
+.palette-panel-heading .appearance-label {
+ margin-top:14px; display:flex; flex-direction:row; align-items:center;
+ justify-content:space-between; gap:12px; font-size:12px; font-weight:400;
+}
+.palette-panel-heading .appearance-label select { min-width:130px; }
