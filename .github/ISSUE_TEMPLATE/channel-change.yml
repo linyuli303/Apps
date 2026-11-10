@@ -5,8 +5,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Automation is not enabled yet. Submitting this form does not change the whitelist.
-        Once implemented, automated processing will accept only authorized repository-owner requests.
+        Only requests opened by the authorized repository owner are eligible for automated processing.
+        Changes appear on the site only after a successful refresh and deployment. Check GitHub Actions for the result.
         This request and the channel ID are public. Never enter credentials here.
         Adding a channel approves its uploads, not videos from its curated playlists.
   - type: dropdown

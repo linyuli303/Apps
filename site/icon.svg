@@ -1,1 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#10141f"/><path d="M24 17v30l25-15z" fill="#82e8bc"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<title>MyTube — glossy Fuji button</title>
+<defs>
+ <linearGradient id="base" x1="0" y1="0" x2="0.8" y2="1"><stop stop-color="#FFFFFF"/><stop offset=".48" stop-color="#EEEBE8"/><stop offset="1" stop-color="#CDC9DC"/></linearGradient>
+ <linearGradient id="purple" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#B3A9E3"/><stop offset=".5" stop-color="#8B81C3"/><stop offset="1" stop-color="#655B9A"/></linearGradient>
+ <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#FFFFFF" stop-opacity=".7"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+</defs>
+<rect x="4" y="7" width="56" height="55" rx="15" fill="#AAA4BD" opacity=".6"/>
+<rect x="4" y="3" width="56" height="55" rx="15" fill="url(#base)" stroke="#D1CBDC" stroke-width="1"/>
+<rect x="7" y="6" width="50" height="23" rx="12" fill="url(#shine)"/>
+<path d="M25 19 Q24 18 24 21 V47 Q24 50 27 48 L47 36 Q50 34 47 32 Z" fill="#716494" opacity=".35"/>
+<path d="M25 17 Q24 16 24 19 V45 Q24 48 27 46 L47 34 Q50 32 47 30 Z" fill="url(#purple)" stroke="#7C70AE" stroke-width=".7"/>
+<path d="M11 20 V17 Q11 9 19 9 H43" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity=".85"/>
+</svg>
