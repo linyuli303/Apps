@@ -1,0 +1,10 @@
+OPTIONAL HOSTING/REVERSE-PROXY RESPONSE HEADERS (NOT APPLIED BY GITHUB PAGES)
+
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://i.ytimg.com; frame-src https://www.youtube-nocookie.com; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+Cache-Control: no-store
+
+Apply on the actual public origin using a trusted host/reverse proxy, then verify response headers. Do not add frame-ancestors as a meta policy; browsers do not enforce it there. No-store is especially important for index.html and data/feed.json. A dedicated custom domain isolates origins but does not automatically enable headers or authentication. Do not enable HSTS includeSubDomains/preload without a separate domain-wide assessment. This template does not configure authentication or make a public feed private.

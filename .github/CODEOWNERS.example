@@ -1,0 +1,6 @@
+# Copy to .github/CODEOWNERS and replace YOUR_GITHUB_USERNAME with a real maintainer.
+# Enforce code-owner review in branch protection/rulesets; this template alone does nothing.
+/.github/ @YOUR_GITHUB_USERNAME
+/scripts/ @YOUR_GITHUB_USERNAME
+/site/ @YOUR_GITHUB_USERNAME
+/channels.json @YOUR_GITHUB_USERNAME

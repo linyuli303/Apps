@@ -1,0 +1,30 @@
+# Personal exports: convert locally; never commit the raw Takeout files.
+*.csv
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.jsonl
+/Takeout/
+/takeout/
+/private/
+# Credentials and local configuration
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+client_secret*.json
+service-account*.json
+# Generated outputs
+/site/data/
+/_site/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
+Thumbs.db
