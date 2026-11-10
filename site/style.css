@@ -684,3 +684,7 @@ header{flex-wrap:wrap}.header-actions{display:flex;align-items:center;justify-co
   #whitelist-list li{align-items:stretch;flex-direction:column}
   .manager-row-actions{justify-content:flex-start}
 }
+
+/* Official YouTube channel links in the whitelist manager */
+.manager-channel-link{color:var(--label-accent);text-decoration:underline;text-underline-offset:3px}
+.manager-channel-link:focus-visible{outline:3px solid var(--accent);outline-offset:4px;border-radius:3px}

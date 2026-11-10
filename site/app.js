@@ -529,7 +529,20 @@ function renderManager() {
     const inDraft = draft.some((item) => entryKey(item) === key);
     const published = names.has(entry.id);
     const li = element("li");
-    const text = element("span", "manager-channel", title);
+    const text = element("span", "manager-channel");
+    if (typeof entry.id === "string" && /^UC[A-Za-z0-9_-]{22}$/.test(entry.id)) {
+      const channelLink = element("a", "manager-channel-link", title);
+      channelLink.href = `https://www.youtube.com/channel/${entry.id}`;
+      channelLink.target = "_blank";
+      channelLink.rel = "noopener noreferrer";
+      channelLink.setAttribute(
+        "aria-label",
+        `Open ${title} on YouTube (opens a new tab)`,
+      );
+      text.append(channelLink);
+    } else {
+      text.append(document.createTextNode(title));
+    }
     const state = published
       ? inDraft
         ? "Published; included in this local draft."
