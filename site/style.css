@@ -1067,3 +1067,160 @@ header{flex-wrap:wrap}.header-actions{display:flex;align-items:center;justify-co
   color:var(--label-accent);
   border-color:var(--border);
 }
+
+
+/* Kino and text-only front feed: preserve the active theme/appearance. */
+#player.player{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  height:100%;
+  height:100dvh;
+  box-sizing:border-box;
+}
+#player .frame{
+  flex-shrink:0;
+  width:min(100%,1450px);
+  aspect-ratio:16/9;
+  margin:0 auto;
+  background:#000;
+}
+#player .player-info{
+  flex-shrink:0;
+}
+#player .player-info h2{
+  font-size:17px;
+  line-height:1.4;
+  margin:4px 0;
+  overflow-wrap:anywhere;
+}
+#player .player-bottom{
+  display:flex;
+  flex-direction:row;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  flex-shrink:0;
+}
+#player .player-bottom button,
+#player .player-bottom .official{
+  padding:7px 11px;
+  min-height:36px;
+  font-size:12px;
+}
+#player .player-bottom>span{
+  font-size:11px;
+}
+#playback-mode-status{
+  font-size:11px;
+  color:var(--muted);
+  margin:0;
+}
+#playback-mode-status:empty{display:none}
+#player.player.kino{
+  padding:0;
+  gap:0;
+  overflow:auto;
+}
+#player.kino .frame{
+  width:100%;
+  flex:1 0 120px;
+  min-height:120px;
+  max-height:none;
+  aspect-ratio:auto;
+  margin:0;
+}
+#player.kino .player-info{
+  padding:6px 14px 0;
+}
+#player.kino .player-info h2{
+  margin:0;
+  font-size:14px;
+}
+#player.kino .player-bottom{
+  padding:5px 14px 8px;
+}
+#player.kino #playback-mode-status{
+  padding:0 14px 6px;
+}
+/* Fullscreen only contains the frame: all MyTube controls remain outside it. */
+#frame.frame:fullscreen{
+  width:100vw;
+  height:100vh;
+  height:100dvh;
+  max-width:none;
+  max-height:none;
+  margin:0;
+  padding:0;
+  border:0;
+  background:#000;
+  aspect-ratio:auto;
+}
+#frame.frame:fullscreen iframe{
+  display:block;
+  width:100%;
+  height:100%;
+}
+
+/* Unchecked thumbnails: genuine text rows, no placeholder images. */
+#grid.plain-feed{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  border:1px solid var(--border);
+  border-radius:9px;
+  overflow:hidden;
+  background:var(--surface);
+}
+#grid.plain-feed:empty{border:0}
+#grid.plain-feed .card{
+  display:grid;
+  grid-template-columns:95px 170px minmax(0,1fr) 100px;
+  align-items:center;
+  gap:12px;
+  padding:7px 12px;
+  min-height:35px;
+  border:0;
+  border-bottom:1px solid var(--divider);
+  border-radius:0;
+  color:var(--text);
+  font-size:12px;
+  line-height:1.4;
+}
+#grid.plain-feed .card:last-child{border-bottom:0}
+#grid.plain-feed .card:hover,
+#grid.plain-feed .card:focus-visible{
+  background:var(--hover);
+}
+.text-feed-date,
+.text-feed-channel,
+.text-feed-views{
+  font-size:11px;
+  color:var(--muted);
+}
+.text-feed-date{font-variant-numeric:tabular-nums}
+.text-feed-channel,
+.text-feed-title{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.text-feed-title{font-weight:400}
+.text-feed-views{text-align:right;font-variant-numeric:tabular-nums}
+@media(max-width:700px){
+  #grid.plain-feed .card{
+    grid-template-columns:74px minmax(0,1fr) 80px;
+    gap:7px;
+    padding:7px 9px;
+  }
+  .text-feed-channel{
+    grid-column:2;
+    grid-row:2;
+  }
+  .text-feed-title{grid-column:2;grid-row:1}
+  .text-feed-date{grid-column:1;grid-row:1 / span 2}
+  .text-feed-views{grid-column:3;grid-row:1 / span 2;font-size:10px}
+}
+@media(pointer:coarse){
+  #grid.plain-feed .card{min-height:44px}
+}

@@ -116,33 +116,68 @@ function render() {
         : b.publishedAt.localeCompare(a.publishedAt),
   );
   const fragment = document.createDocumentFragment();
+  const thumbnails = $("thumbnails").checked;
+  $("grid").classList.toggle("plain-feed", !thumbnails);
+  $("grid").setAttribute(
+    "aria-label",
+    thumbnails ? "Approved video cards" : "Approved videos: text feed",
+  );
   page = Math.min(page, Math.max(0, Math.ceil(visible.length / PAGE_SIZE) - 1));
   visible.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).forEach((v) => {
     const card = element("button", "card");
     card.type = "button";
     card.dataset.video = v.id;
-    const img = element("img");
-    img.alt = "";
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.src = $("thumbnails").checked
-      ? `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`
-      : "icon.svg";
-    const body = element("span", "card-body");
-    body.append(
-      element("span", "card-title", v.title),
-      element(
-        "span",
-        "meta",
-        `${channels.get(v.channelId)} · ${dateLabel(v.publishedAt)}`,
-      ),
-    );
-    card.append(img, body);
-    card.setAttribute(
-      "aria-label",
-      `${v.title} - Play inside MyTube`,
-    );
-    card.title = "Play inside MyTube";
+
+    if (thumbnails) {
+      const img = element("img");
+      img.alt = "";
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.src = `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`;
+      const body = element("span", "card-body");
+      body.append(
+        element("span", "card-title", v.title),
+        element(
+          "span",
+          "meta",
+          `${channels.get(v.channelId)} ? ${dateLabel(v.publishedAt)}`,
+        ),
+      );
+      card.append(img, body);
+    } else {
+      const date = element("time", "text-feed-date", dateLabel(v.publishedAt));
+      date.dateTime = v.publishedAt;
+      date.title = v.publishedAt;
+
+      let count = "Unavailable";
+      if (
+        typeof v.viewCount === "string" &&
+        /^[0-9]{1,20}$/.test(v.viewCount)
+      ) {
+        try {
+          count = BigInt(v.viewCount).toLocaleString();
+        } catch {
+          count = v.viewCount;
+        }
+      }
+      const views = element(
+        "span", "text-feed-views",
+        count === "Unavailable" ? count : `${count} views`,
+      );
+      views.title = count === "Unavailable"
+        ? "View count unavailable in this snapshot"
+        : `${count} views at the last successful refresh`;
+
+      card.append(
+        date,
+        element("span", "text-feed-channel", channels.get(v.channelId)),
+        element("span", "text-feed-title", v.title),
+        views,
+      );
+    }
+
+    card.setAttribute("aria-label", `${v.title} - Play inside MyTube`);
+    card.title = `${v.title} - Play inside MyTube`;
     card.addEventListener("click", () => openPlayer(v.id));
     fragment.append(card);
   });
@@ -180,6 +215,12 @@ function openOfficialVideo(id) {
     "noopener,noreferrer",
   );
 }
+function syncKinoControls() {
+  const kino = $("player").classList.contains("kino");
+  $("kino-toggle").textContent = kino ? "Exit Kino" : "Kino mode";
+  $("kino-toggle").setAttribute("aria-pressed", String(kino));
+}
+
 function openPlayer(id) {
   const video =
     feed &&
@@ -191,7 +232,12 @@ function openPlayer(id) {
     return;
   }
   if (!video || !safeID(id) || !draftAllows(video.channelId)) return;
-  if ($("player").hidden) returnFocus = document.activeElement;
+  if ($("player").hidden) {
+    returnFocus = document.activeElement;
+    $("player").classList.add("kino");
+  }
+  syncKinoControls();
+  $("playback-mode-status").textContent = "";
   current = id;
   $("playing-title").textContent = video.title;
   $("official").href = `https://www.youtube.com/watch?v=${id}`;
@@ -218,6 +264,9 @@ function openPlayer(id) {
 }
 function closePlayer() {
   const wasOpen = !$("player").hidden;
+  if (document.fullscreenElement === $("frame")) {
+    document.exitFullscreen().catch(() => {});
+  }
   $("frame").replaceChildren();
   $("player").hidden = true;
   current = null;
@@ -228,6 +277,32 @@ function closePlayer() {
   if (wasOpen && returnFocus && returnFocus.isConnected) returnFocus.focus();
 }
 $("close").addEventListener("click", closePlayer);
+$("kino-toggle").addEventListener("click", () => {
+  $("player").classList.toggle("kino");
+  syncKinoControls();
+});
+$("player-fullscreen").addEventListener("click", async () => {
+  const frame = $("frame");
+  const iframe = frame.querySelector("iframe");
+  if (!iframe) {
+    $("playback-mode-status").textContent =
+      "Select a video again before entering fullscreen.";
+    return;
+  }
+  try {
+    if (!frame.requestFullscreen) throw new Error("Unsupported");
+    await frame.requestFullscreen();
+    iframe.focus();
+  } catch {
+    $("playback-mode-status").textContent =
+      "Browser fullscreen is unavailable. Try the YouTube player's fullscreen control.";
+  }
+});
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement && !$("player").hidden) {
+    $("player-fullscreen").focus();
+  }
+});
 $("official").addEventListener("click", () => {
   // Stop embedded playback while allowing normal external link navigation.
   $("frame").replaceChildren();
@@ -253,6 +328,7 @@ $("sort").addEventListener("change", () => {
 $("thumbnails").addEventListener("change", render);
 document.addEventListener("keydown", (event) => {
   if (!$("player").hidden) {
+    if (document.fullscreenElement) return;
     if (
       event.key === "Escape" ||
       event.key === "BrowserBack" ||
@@ -264,10 +340,12 @@ document.addEventListener("keydown", (event) => {
     }
     if (event.key === "Tab") {
       const controls = [
-        $("close"),
         $("frame").querySelector("iframe"),
+        $("kino-toggle"),
+        $("player-fullscreen"),
         $("official"),
         $("next"),
+        $("close"),
       ].filter((el) => el && !el.disabled);
       if (event.shiftKey && document.activeElement === controls[0]) {
         event.preventDefault();

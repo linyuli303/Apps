@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=embedded-playback-2" />
-    <script src="app.js?v=embedded-playback-2" defer></script>
+    <link rel="stylesheet" href="style.css?v=kino-text-feed-1" />
+    <script src="app.js?v=kino-text-feed-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -247,26 +247,31 @@
       aria-labelledby="playing-title"
       hidden
     >
-      <div class="player-top">
-        <h2 id="playing-title"></h2>
-        <button id="close" type="button">Close / Esc</button>
-      </div>
       <div id="frame" class="frame"></div>
+      <div class="player-info">
+        <h2 id="playing-title"></h2>
+      </div>
       <div class="player-bottom">
+        <button id="kino-toggle" type="button" aria-pressed="true">
+          Exit Kino
+        </button>
+        <button id="player-fullscreen" type="button">Fullscreen</button>
         <a
           id="official"
           class="official"
           target="_blank"
           rel="noopener noreferrer"
           referrerpolicy="no-referrer"
-          >Open in YouTube / App &#8599;</a
-        ><button id="next" type="button">Next approved video</button
-        ><span
-          >Premium recognition in embeds is not guaranteed.
-          External links may open the YouTube app or browser depending
-          on your device settings.</span
-        >
+        >Open in YouTube / App &#8599;</a>
+        <button id="next" type="button">Next approved video</button>
+        <button id="close" type="button">Close / Esc</button>
+        <span>
+          Premium recognition in embeds is not guaranteed. App opening depends
+          on device settings. In fullscreen, press Escape to return.
+          YouTube may display its own player controls.
+        </span>
       </div>
+      <p id="playback-mode-status" role="status" aria-live="polite"></p>
     </section>
   </body>
 </html>
