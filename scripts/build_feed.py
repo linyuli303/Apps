@@ -100,6 +100,21 @@ def api(resource, params, key):
             if error.code in (429, 500, 502, 503, 504) and attempt < 2:
                 time.sleep(2 ** attempt)
                 continue
+            # Inspect a bounded error body, but never print its contents.
+            if resource == "playlistItems" and error.code == 404:
+                try:
+                    body = error.read(65_537)
+                    if len(body) <= 65_536:
+                        payload = json.loads(body)
+                        details = payload.get("error", {}) if isinstance(payload, dict) else {}
+                        errors = details.get("errors", []) if isinstance(details, dict) else []
+                        if isinstance(errors, list) and any(
+                            isinstance(item, dict) and item.get("reason") == "playlistNotFound"
+                            for item in errors
+                        ):
+                            print("API diagnostic: uploads playlist reported as playlistNotFound.")
+                except (ValueError, OSError):
+                    pass
             # Do not print response bodies, request headers, or credential-bearing errors.
             raise RuntimeError(f"YouTube API {resource} failed (HTTP {error.code}). Check API enablement, key restrictions, and quota.") from None
         except (urllib.error.URLError, TimeoutError):
