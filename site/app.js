@@ -138,7 +138,12 @@ function render() {
       ),
     );
     card.append(img, body);
-    card.addEventListener("click", () => openPlayer(v.id));
+    card.setAttribute(
+      "aria-label",
+      `${v.title} - Open on YouTube in a new tab`,
+    );
+    card.title = "Open on YouTube in a new tab";
+    card.addEventListener("click", () => openOfficialVideo(v.id));
     fragment.append(card);
   });
   $("grid").replaceChildren(fragment);
@@ -155,6 +160,25 @@ function render() {
       "No matching playable videos in this snapshot. Try another filter or wait for the next refresh.";
   $("status").textContent =
     `${visible.length} videos · ${feed.channels.filter((c) => draftAllows(c.id)).length} enabled published channels · Feed built ${dateLabel(feed.generatedAt)} ${new Date(feed.generatedAt).toLocaleTimeString()}`;
+}
+function openOfficialVideo(id) {
+  if (!feed || !freshFeed(feed)) {
+    expireFeed();
+    return;
+  }
+  if (!safeID(id)) return;
+  const video = feed.videos.find(
+    (v) =>
+      v.id === id &&
+      feed.channels.some((c) => c.id === v.channelId),
+  );
+  if (!video || !draftAllows(video.channelId)) return;
+
+  window.open(
+    `https://www.youtube.com/watch?v=${id}`,
+    "_blank",
+    "noopener,noreferrer",
+  );
 }
 function openPlayer(id) {
   const video =
