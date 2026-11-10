@@ -78,7 +78,9 @@ def read_config(path):
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
-
+    
+class UploadsPlaylistNotFound(RuntimeError):
+    pass
 
 def api(resource, params, key):
     if resource not in {"channels", "playlistItems", "videos"}:
@@ -112,7 +114,9 @@ def api(resource, params, key):
                             isinstance(item, dict) and item.get("reason") == "playlistNotFound"
                             for item in errors
                         ):
-                            print("API diagnostic: uploads playlist reported as playlistNotFound.")
+                            raise UploadsPlaylistNotFound(
+                                "Uploads playlist not found"
+                            ) from None
                 except (ValueError, OSError):
                     pass
             # Do not print response bodies, request headers, or credential-bearing errors.
@@ -149,6 +153,9 @@ def build(config, key, request=api):
         try:
             uploads = request("playlistItems", {"part":"contentDetails", "playlistId":playlist,
                                "maxResults":config.get("max_videos_per_channel",30)}, key).get("items", [])
+        except UploadsPlaylistNotFound:
+            print("Warning: uploads playlist unavailable for approved channel ID:", cid)
+            uploads = []
         except RuntimeError:
             print("Uploads playlist request failed for approved channel ID:", cid)
             raise
