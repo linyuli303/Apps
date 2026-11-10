@@ -1,39 +1,158 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark"><meta name="theme-color" content="#10141f">
-<meta name="referrer" content="strict-origin-when-cross-origin">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://i.ytimg.com; frame-src https://www.youtube-nocookie.com; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>My Channels</title><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
-<script src="app.js" defer></script>
-<meta name="robots" content="noindex,nofollow">
-</head>
-<body>
-<header><div><span class="eyebrow">YOUR CHANNELS. NOTHING ELSE IN THE FEED.</span><h1 id="title">My Channels</h1></div><button id="refresh" type="button">Refresh</button></header>
-<main>
-<details id="whitelist-manager" class="manager">
-<summary>Manage whitelist — add or remove channels</summary>
-<p>Edit a local draft here. Removing a channel hides its videos on this browser immediately. To update every device or fetch a new channel, export the draft, commit it as <code>channels.json</code> in GitHub, and wait for successful publication.</p>
-<p>No API keys or GitHub tokens are accepted here. Anyone using this browser can edit its local draft; this is not parental access control.</p>
-<div class="manager-input"><label for="new-channel">Immutable channel ID or /channel/ID URL</label><input id="new-channel" maxlength="240" autocomplete="off" placeholder="UC… or https://www.youtube.com/channel/UC…"><button id="add-channel" type="button">Add channel</button></div>
-<label><input id="remember-draft" type="checkbox"> Remember this draft on this browser (shared-origin storage is not private)</label><button id="forget-draft" type="button">Forget saved draft and repository</button>
-<p id="manager-status" role="status" aria-live="polite">Load the published feed to edit its whitelist.</p>
-<ul id="whitelist-list" aria-label="Draft whitelist"></ul>
-<div class="manager-actions"><button id="export-whitelist" type="button">Export channels.json</button><button id="reset-whitelist" type="button">Discard local draft</button></div>
-<label for="repo-name">GitHub repository (owner/repository; session only unless remembering is enabled)</label><input id="repo-name" maxlength="140" placeholder="yourname/yourrepo" autocomplete="off"><button id="github-edit" type="button">Open GitHub editor</button>
-<p>In GitHub, replace the whole <code>channels.json</code> with the exported file’s contents and review/commit. Sign in on GitHub itself. The editor assumes branch <code>main</code>. Handles must be resolved and reviewed locally before adding their immutable ID. Exported settings retain the published title; the recent-video limit is 15—adjust it in the JSON if desired.</p>
-</details>
-<section class="toolbar" aria-label="Feed filters"><label>Search your feed<input id="search" type="search" placeholder="Find a video…" autocomplete="off"></label><label>Channel<select id="channel"><option value="">All approved channels</option></select></label><label>Sort<select id="sort"><option value="new">Newest first</option><option value="old">Oldest first</option><option value="title">Title A–Z</option></select></label></section>
-<label class="thumbnail-option"><input id="thumbnails" type="checkbox"> Load YouTube thumbnails (contacts YouTube)</label>
-<p id="status" role="status">Loading your approved channels…</p>
-<section id="grid" class="grid" aria-label="Approved videos"></section>
-<nav class="pagination" aria-label="Video pages"><button id="page-prev" type="button">Previous page</button><span id="page-status" role="status"></span><button id="page-next" type="button">Next page</button></nav>
-<p id="empty" hidden>No matching videos. Try another filter.</p>
-<footer><p>Use arrows and Enter to browse. Escape closes the player. On a TV, use fullscreen for playback.</p><p>This public feed only lists approved channels. Thumbnails are off until you enable them. Opening a video contacts YouTube; its player controls ads and links. Premium is not guaranteed in embeds.</p></footer>
-</main>
-<section id="player" class="player" role="dialog" aria-modal="true" aria-labelledby="playing-title" hidden>
-<div class="player-top"><h2 id="playing-title"></h2><button id="close" type="button">Close / Esc</button></div>
-<div id="frame" class="frame"></div><div class="player-bottom"><a id="official" class="official" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Open in YouTube ↗</a><button id="next" type="button">Next approved video</button><span>Playback, embeds, and fullscreen support depend on your browser and YouTube.</span></div>
-</section>
-</body></html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#10141f" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://i.ytimg.com; frame-src https://www.youtube-nocookie.com; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <title>My Channels</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+    <meta name="robots" content="noindex,nofollow" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <span class="eyebrow">YOUR CHANNELS. NOTHING ELSE IN THE FEED.</span>
+        <h1 id="title">My Channels</h1>
+      </div>
+      <button id="refresh" type="button">Refresh</button>
+    </header>
+    <main>
+      <details id="whitelist-manager" class="manager">
+        <summary>Manage whitelist — add or remove channels</summary>
+        <p>
+          Edit a local draft here. Removing a channel hides its videos on this
+          browser immediately. To update every device or fetch a new channel,
+          export the draft, commit it as <code>channels.json</code> in GitHub,
+          and wait for successful publication.
+        </p>
+        <p>
+          No API keys or GitHub tokens are accepted here. Anyone using this
+          browser can edit its local draft; this is not parental access control.
+        </p>
+        <div class="manager-input">
+          <label for="new-channel"
+            >Immutable channel ID or /channel/ID URL</label
+          ><input
+            id="new-channel"
+            maxlength="240"
+            autocomplete="off"
+            placeholder="UC… or https://www.youtube.com/channel/UC…"
+          /><button id="add-channel" type="button">Add channel</button>
+        </div>
+        <label
+          ><input id="remember-draft" type="checkbox" /> Remember this draft on
+          this browser (shared-origin storage is not private)</label
+        ><button id="forget-draft" type="button">
+          Forget saved draft and repository
+        </button>
+        <p id="manager-status" role="status" aria-live="polite">
+          Load the published feed to edit its whitelist.
+        </p>
+        <ul id="whitelist-list" aria-label="Draft whitelist"></ul>
+        <div class="manager-actions">
+          <button id="export-whitelist" type="button">
+            Export channels.json</button
+          ><button id="reset-whitelist" type="button">
+            Discard local draft
+          </button>
+        </div>
+        <label for="repo-name"
+          >GitHub repository (owner/repository; session only unless remembering
+          is enabled)</label
+        ><input
+          id="repo-name"
+          maxlength="140"
+          placeholder="yourname/yourrepo"
+          autocomplete="off"
+        /><button id="github-edit" type="button">Open GitHub editor</button>
+        <p>
+          In GitHub, replace the whole <code>channels.json</code> with the
+          exported file’s contents and review/commit. Sign in on GitHub itself.
+          The editor assumes branch <code>main</code>. Handles must be resolved
+          and reviewed locally before adding their immutable ID. Exported
+          settings retain the published title; the recent-video limit is
+          15—adjust it in the JSON if desired.
+        </p>
+      </details>
+      <section class="toolbar" aria-label="Feed filters">
+        <label
+          >Search your feed<input
+            id="search"
+            type="search"
+            placeholder="Find a video…"
+            autocomplete="off" /></label
+        ><label
+          >Channel<select id="channel">
+            <option value="">All approved channels</option>
+          </select></label
+        ><label
+          >Sort<select id="sort">
+            <option value="new">Newest first</option>
+            <option value="old">Oldest first</option>
+            <option value="title">Title A–Z</option>
+          </select></label
+        >
+      </section>
+      <label class="thumbnail-option"
+        ><input id="thumbnails" type="checkbox" checked /> Load YouTube
+        thumbnails (contacts YouTube)</label
+      >
+      <p id="status" role="status">Loading your approved channels…</p>
+      <section id="grid" class="grid" aria-label="Approved videos"></section>
+      <nav class="pagination" aria-label="Video pages">
+        <button id="page-prev" type="button">Previous page</button
+        ><span id="page-status" role="status"></span
+        ><button id="page-next" type="button">Next page</button>
+      </nav>
+      <p id="empty" hidden>No matching videos. Try another filter.</p>
+      <footer>
+        <p>
+          Use arrows and Enter to browse. Escape closes the player. On a TV, use
+          fullscreen for playback.
+        </p>
+        <p>
+          This public feed only lists approved channels. Thumbnails load by
+          default and contact YouTube. Uncheck the thumbnail option to disable
+          them. Opening a video contacts YouTube; its player controls ads and
+          links. Premium is not guaranteed in embeds.
+        </p>
+      </footer>
+    </main>
+    <section
+      id="player"
+      class="player"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="playing-title"
+      hidden
+    >
+      <div class="player-top">
+        <h2 id="playing-title"></h2>
+        <button id="close" type="button">Close / Esc</button>
+      </div>
+      <div id="frame" class="frame"></div>
+      <div class="player-bottom">
+        <a
+          id="official"
+          class="official"
+          target="_blank"
+          rel="noopener noreferrer"
+          referrerpolicy="no-referrer"
+          >Open in YouTube ↗</a
+        ><button id="next" type="button">Next approved video</button
+        ><span
+          >Playback, embeds, and fullscreen support depend on your browser and
+          YouTube.</span
+        >
+      </div>
+    </section>
+  </body>
+</html>

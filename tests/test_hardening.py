@@ -24,7 +24,7 @@ class HardeningTests(unittest.TestCase):
         self.assertIn("environment: youtube-refresh",text)
         self.assertNotIn("pull_request_target",text)
     def test_paging_and_staleness(self):
-        text=(ROOT/"site/app.js").read_text()
+        text=(ROOT/"site/app.js").read_text(encoding="utf-8")
         self.assertIn("visible.slice(page * PAGE_SIZE",text)
         self.assertIn("enabledIDs.has(id)",text)
         self.assertIn("MAX_FEED_AGE_MS",text)
