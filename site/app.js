@@ -240,6 +240,8 @@ function openPlayer(id) {
   syncKinoControls();
   $("playback-mode-status").textContent = "";
   current = id;
+  closePlayerCategories(false);
+  renderPlayerCategories();
   $("playing-title").textContent = video.title;
   $("official").href = `https://www.youtube.com/watch?v=${id}`;
   stopSpeedController();
@@ -268,6 +270,7 @@ function openPlayer(id) {
   attachSpeedController(iframe, id);
 }
 function closePlayer() {
+  closePlayerCategories(false);
   stopSpeedController();
   const wasOpen = !$("player").hidden;
   if (document.fullscreenElement === $("frame")) {
@@ -295,6 +298,7 @@ $("player-fullscreen").addEventListener("click", async () => {
       "Select a video again before entering fullscreen.";
     return;
   }
+  closePlayerCategories(false);
   try {
     if (!frame.requestFullscreen) throw new Error("Unsupported");
     await frame.requestFullscreen();
@@ -338,6 +342,19 @@ document.addEventListener("keydown", (event) => {
   if (!$("player").hidden) {
     if (document.fullscreenElement) return;
     if (
+      !$("player-category-panel").hidden &&
+      (
+        event.key === "Escape" ||
+        event.key === "BrowserBack" ||
+        event.keyCode === 10009 ||
+        event.keyCode === 461
+      )
+    ) {
+      event.preventDefault();
+      closePlayerCategories(true);
+      return;
+    }
+    if (
       event.key === "Escape" ||
       event.key === "BrowserBack" ||
       event.keyCode === 10009 ||
@@ -356,6 +373,14 @@ document.addEventListener("keydown", (event) => {
         $("player-appearance"),
         $("speed-preset"),
         $("speed-slider"),
+        $("player-category-toggle"),
+        ...(
+          $("player-category-panel").hidden ? [] :
+          [
+            ...$("player-category-options").querySelectorAll("input"),
+            $("player-category-done"),
+          ]
+        ),
         $("close"),
       ].filter((el) => el && !el.disabled);
       if (event.shiftKey && document.activeElement === controls[0]) {
@@ -1848,5 +1873,140 @@ function applyPreferredSpeed() {
   });
   $("speed-slider").addEventListener("input", () => {
     setPreferredSpeed(Number($("speed-slider").value));
+  });
+})();
+
+
+// Categorize the playing channel using the shared category model.
+function closePlayerCategories(restoreFocus = false) {
+  const panel = $("player-category-panel");
+  if (!panel) return;
+  panel.hidden = true;
+  $("player-category-toggle").setAttribute("aria-expanded", "false");
+  if (restoreFocus && !$("player").hidden) {
+    $("player-category-toggle").focus();
+  }
+}
+
+function renderPlayerCategories() {
+  const options = $("player-category-options");
+  options.replaceChildren();
+  $("player-category-status").textContent = "";
+
+  const video = feed && feed.videos.find(item => item.id === current);
+  const channel = video && feed.channels.find(
+    item => item.id === video.channelId
+  );
+  const ready = Boolean(
+    feed && freshFeed(feed) && video && channel &&
+    draftAllows(channel.id)
+  );
+  $("player-category-toggle").disabled = !ready;
+
+  if (!ready) {
+    $("player-category-heading").textContent = "Channel unavailable";
+    $("player-category-toggle").textContent = "Channel categories";
+    return;
+  }
+
+  const channelID = channel.id;
+  $("player-category-heading").textContent = channel.title;
+  const model = categoryState().model;
+  const assigned = model.assignments[channelID] || [];
+  $("player-category-toggle").textContent =
+    "Channel categories" + (assigned.length ? ` (${assigned.length})` : "");
+
+  for (const category of model.categories) {
+    const label = element("label");
+    const checkbox = element("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = assigned.includes(category.id);
+    const text = element("span", "", category.name);
+
+    checkbox.addEventListener("change", () => {
+      // Recheck the playing channel and freshness before saving.
+      const playing = feed && feed.videos.find(item => item.id === current);
+      if (
+        !feed || !freshFeed(feed) || !playing ||
+        playing.channelId !== channelID || !draftAllows(channelID)
+      ) {
+        checkbox.checked = !checkbox.checked;
+        $("player-category-status").textContent =
+          "Channel or feed changed. Reopen this panel.";
+        return;
+      }
+
+      const state = categoryState();
+      const tags = new Set(state.model.assignments[channelID] || []);
+      if (checkbox.checked) tags.add(category.id);
+      else tags.delete(category.id);
+
+      const assignments = {...state.model.assignments};
+      if (tags.size) assignments[channelID] = Array.from(tags);
+      else delete assignments[channelID];
+
+      try {
+        validateCategoryData({...state.model, assignments});
+      } catch {
+        checkbox.checked = !checkbox.checked;
+        $("player-category-status").textContent =
+          "Unable to save this assignment. Check category limits.";
+        return;
+      }
+
+      state.model.assignments = assignments;
+      // Updates browsing filters without closing/reloading the player.
+      saveCategoryData();
+      $("player-category-toggle").textContent =
+        "Channel categories" + (tags.size ? ` (${tags.size})` : "");
+      $("player-category-status").textContent =
+        $("category-editor-status").textContent;
+      $("next").disabled = visible.length < 2;
+    });
+
+    label.append(checkbox, text);
+    options.append(label);
+  }
+
+  if (!model.categories.length) {
+    options.append(element(
+      "p", "",
+      "No categories yet. Add one using the landing-page category menu."
+    ));
+  }
+}
+
+(function initializePlayerCategories() {
+  const panel = $("player-category-panel");
+  const toggle = $("player-category-toggle");
+
+  toggle.addEventListener("click", () => {
+    if (!panel.hidden) {
+      closePlayerCategories(false);
+      return;
+    }
+    renderPlayerCategories();
+    if (toggle.disabled) return;
+    panel.hidden = false;
+    toggle.setAttribute("aria-expanded", "true");
+    const first = $("player-category-options").querySelector("input");
+    (first || $("player-category-done")).focus();
+  });
+
+  $("player-category-done").addEventListener("click", () => {
+    closePlayerCategories(true);
+  });
+
+  // Allow native checkbox/Done keyboard behavior inside this panel.
+  panel.addEventListener("keydown", event => {
+    if (
+      ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
+    ) event.stopPropagation();
+  });
+
+  document.addEventListener("pointerdown", event => {
+    if (!panel.contains(event.target) && !toggle.contains(event.target)) {
+      closePlayerCategories(false);
+    }
   });
 })();

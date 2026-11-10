@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=categories-speed-yugure-1" />
-    <script src="app.js?v=categories-speed-yugure-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=player-channel-categories-1" />
+    <script src="app.js?v=player-channel-categories-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -293,13 +293,28 @@
             min="0.25" max="3" step="0.01" value="1" />
           <output id="speed-value" for="speed-slider">1x</output>
         </label>
+        <button id="player-category-toggle" type="button"
+          aria-expanded="false" aria-controls="player-category-panel">
+          Channel categories
+        </button>
         <button id="close" type="button">Close / Esc</button>
-        <span>
+      </div>
+      <p class="player-explanation">
           Premium recognition in embeds is not guaranteed. App opening depends
           on device settings. In fullscreen, press Escape to return.
           YouTube may display its own player controls.
-        </span>
-      </div>
+        </p>
+      <section id="player-category-panel"
+        aria-labelledby="player-category-heading" hidden>
+        <strong id="player-category-heading">Channel categories</strong>
+        <p class="player-category-help">
+          Applies to every video from this channel.<br />
+          Saved on this browser only.
+        </p>
+        <div id="player-category-options"></div>
+        <p id="player-category-status" role="status" aria-live="polite"></p>
+        <button id="player-category-done" type="button">Done</button>
+      </section>
       <p id="speed-status" role="status" aria-live="polite"></p>
       <p id="playback-mode-status" role="status" aria-live="polite"></p>
     </section>
