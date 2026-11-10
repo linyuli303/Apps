@@ -12,7 +12,7 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=rss-view-counts-1" />
+    <link rel="stylesheet" href="style.css?v=rss-spacious-tinted-1" />
     <script src="app.js?v=rss-view-counts-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
@@ -147,6 +147,21 @@
         Videos open on official YouTube in a new tab. Sign in there with
         your active YouTube Premium account to use its playback benefits.
         MyTube does not access your Google login or membership.
+      </p>
+      <p class="refresh-schedule-notice">
+        Scheduled feed refreshes: 09:00, 12:00, 18:00 and 22:00 UTC.
+        Updates appear after successful refresh and deployment;
+        scheduled runs may be delayed.
+      </p>
+      <p class="api-quota-notice">
+        API quota: this project's configured daily allowance is 10,000
+        YouTube API units, shared across refreshes, resetting at midnight
+        Pacific Time. Browsing MyTube uses no YouTube Data API quota.
+        Failed refreshes publish no new feed. View counts reflect the last
+        successful refresh and may be outdated or show &ldquo;Unavailable&rdquo;
+        if the previous feed did not include them. MyTube blocks playback
+        when the feed is over 24 hours old.
+        This allowance is not a live remaining-quota counter.
       </p>
       <section id="grid" class="grid" aria-label="Approved videos"></section>
       <nav class="pagination" aria-label="Video pages">
