@@ -6,6 +6,14 @@ Browse approved channels through a searchable video grid or a text-only RSS-styl
 
 **The repository, approved channel IDs, published feed, and channel-request issues are public. Never commit API keys, tokens, cookies, passwords, or raw Takeout exports.**
 
+## View MyTube
+
+Open the live MyTube viewer:
+
+https://linyuli303.github.io/MyTube/
+
+This public viewer uses the owner’s published channel whitelist. To create your own feed, follow the fork setup instructions below.
+
 ## Features
 
 ### Video browsing
