@@ -14,6 +14,16 @@ https://linyuli303.github.io/MyTube/
 
 This public viewer uses the owner’s published channel whitelist. To create your own feed, follow the fork setup instructions below.
 
+## Next Release — A Smoother Signed-In Experience
+
+Explore ways to make playback more seamless for users already signed in to YouTube, while preserving their privacy and Premium benefits.
+
+- Investigate whether supported YouTube integrations can recognize an existing signed-in session during playback.
+- Keep official YouTube playback as the reliable fallback.
+- Never collect passwords, copy session cookies, or expose authentication tokens.
+
+**Status:** Research planned. MyTube currently does not authenticate users with YouTube. Signing in through Google alone does not guarantee Premium recognition in embedded players; support depends on YouTube and browser restrictions.
+
 ## Features
 
 ### Video browsing
