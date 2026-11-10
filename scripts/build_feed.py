@@ -169,9 +169,35 @@ def main():
         temporary.replace(out / "feed.json")
         print(f"Built {len(feed['videos'])} videos from {len(feed['channels'])} approved channels.")
     except Exception as exc:
-        # Known errors intentionally contain neither request URLs nor keys.
-        # Avoid leaking even unusual errors that include user-controlled input.
-        print("Build failed. Check channels.json, API key configuration, channel availability, API quota, and network access. No new deployment was published.")
+        print("Build failed. No new deployment was published.")
+        print("Error category:", type(exc).__name__)
+
+        safe_messages = {
+            "Set the YOUTUBE_API_KEY repository Actions secret first":
+                "The API key is missing from this workflow step.",
+            "Invalid API key configuration":
+                "The API key is empty or contains a newline.",
+            "A configured channel could not be resolved; no partial feed was published":
+                "One configured channel could not be resolved.",
+            "YouTube API connection failed":
+                "The connection to Google's API failed.",
+            "YouTube API response exceeds size limit":
+                "The API response exceeded the safety limit.",
+        }
+
+        message = str(exc)
+        if message in safe_messages:
+            print(safe_messages[message])
+
+        match = re.fullmatch(
+            r"YouTube API (channels|playlistItems|videos) failed "
+            r"\(HTTP ([0-9]{3})\)\. Check API enablement, key restrictions, and quota\.",
+            message,
+        )
+        if match:
+            print("API operation:", match.group(1))
+            print("HTTP status:", match.group(2))
+
         raise SystemExit(1)
 
 if __name__ == "__main__":
