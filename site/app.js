@@ -1,5 +1,6 @@
 // For enforced anti-framing, use the documented HTTP response headers on a capable host.
 "use strict";
+const SHARED_CATEGORY_SNAPSHOT = null; // Replaced only in the published artifact.
 const $ = (id) => document.getElementById(id);
 let feed = null,
   visible = [],
@@ -338,7 +339,7 @@ $("sort").addEventListener("change", () => {
 });
 $("thumbnails").addEventListener("change", render);
 document.addEventListener("keydown", (event) => {
-  if ($("category-editor")?.open) return;
+  if ($("category-editor")?.open || $("category-review")?.open) return;
   if (!$("player").hidden) {
     if (document.fullscreenElement) return;
     if (
@@ -378,6 +379,7 @@ document.addEventListener("keydown", (event) => {
           $("player-category-panel").hidden ? [] :
           [
             ...$("player-category-options").querySelectorAll("input"),
+            $("player-category-save"),
             $("player-category-done"),
           ]
         ),
@@ -1385,29 +1387,38 @@ function validateCategoryData(value) {
 function categoryState() {
   if (categoryState.saved) return categoryState.saved;
   const scope = encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
-  const key = "approved-yt-categories-v1:" + scope;
-  const defaults = [
-    "Data & AI", "IT & Cyber", "Travel", "Music",
-    "Skills", "News", "Talk Shows & Podcasts", "Entertainment",
-  ];
-  let model = {
-    version: 1,
-    categories: defaults.map((name, index) => ({id: "cat-" + index, name})),
-    assignments: {},
-  };
-  let warning = "";
+  const key = "approved-yt-category-draft-v2:" + scope;
+  const legacyKey = "approved-yt-categories-v1:" + scope;
+  const fallback = {version:1, categories:[
+    "Data & AI", "IT & Cyber", "Travel", "Music", "Skills", "News",
+    "Talk Shows & Podcasts", "Entertainment"
+  ].map((name,index)=>({id:"cat-"+index,name})), assignments:{}};
+  const snapshot = SHARED_CATEGORY_SNAPSHOT;
+  const published = snapshot ? snapshot.model : fallback;
+  validateCategoryData(published);
+  const revision = snapshot ? snapshot.revision : null;
+  let model = JSON.parse(JSON.stringify(published)), baseRevision = revision;
+  let warning = snapshot ? "" : "Local source preview: shared saving requires a published snapshot.";
   try {
     const raw = localStorage.getItem(key);
     if (raw !== null) {
       if (raw.length > 2000000) throw new Error();
-      const parsed = JSON.parse(raw);
-      validateCategoryData(parsed);
-      model = parsed;
+      const draft = JSON.parse(raw);
+      if (!draft || Object.keys(draft).sort().join(",") !== "baseRevision,model" ||
+          !(draft.baseRevision === null || /^[0-9a-f]{40}$/.test(draft.baseRevision))) throw new Error();
+      validateCategoryData(draft.model);
+      // A matching newly published model means this draft was published.
+      if (JSON.stringify(draft.model) === JSON.stringify(published)) {
+        localStorage.removeItem(key);
+      } else {
+        model = draft.model;
+        baseRevision = draft.baseRevision;
+        warning = "Local draft restored; not necessarily published.";
+      }
     }
-  } catch {
-    warning = "Saved settings could not be loaded. Defaults are shown; export edits as a backup.";
-  }
-  return categoryState.saved = {key, model, warning, search: ""};
+  } catch { warning = "Draft storage unavailable or invalid. Export a backup before leaving."; }
+  return categoryState.saved = {key, legacyKey, model, published,
+    revision, baseRevision, warning, search:""};
 }
 
 function categoryAllows(channelID) {
@@ -1440,20 +1451,19 @@ function refreshCategoryViews() {
 function saveCategoryData() {
   const state = categoryState();
   validateCategoryData(state.model);
+  let message = "Local draft saved. Submit a GitHub Issue to share it.";
   try {
-    const raw = JSON.stringify(state.model);
+    const raw = JSON.stringify({baseRevision:state.baseRevision,model:state.model});
     if (raw.length > 2000000) throw new Error();
     localStorage.setItem(state.key, raw);
-    $("category-editor-status").textContent =
-      "Saved on this browser only. Export a backup for transfer.";
-  } catch {
-    $("category-editor-status").textContent =
-      "Storage unavailable or full. Changes last for this page; export a backup.";
-  }
+  } catch { message = "Draft storage unavailable. Export a backup before leaving."; }
+  $("category-editor-status").textContent = message;
   refreshCategoryViews();
+  updateSharedCategoryStatus();
 }
 
 function renderCategoryEditor() {
+  updateSharedCategoryStatus();
   const state = categoryState(), model = state.model;
   const definitions = $("category-definitions");
   definitions.replaceChildren();
@@ -1900,6 +1910,7 @@ function renderPlayerCategories() {
   const options = $("player-category-options");
   options.replaceChildren();
   $("player-category-status").textContent = "";
+  updateSharedCategoryStatus();
 
   const video = feed && feed.videos.find(item => item.id === current);
   const channel = video && feed.channels.find(
@@ -2017,4 +2028,103 @@ function renderPlayerCategories() {
       closePlayerCategories(false);
     }
   });
+})();
+
+
+// Repository-backed categories: drafts never imply successful publication.
+function categoryDraftDirty() {
+  const state = categoryState();
+  return JSON.stringify(state.model) !== JSON.stringify(state.published);
+}
+function updateSharedCategoryStatus() {
+  const state = categoryState();
+  const stale = state.baseRevision !== state.revision;
+  const dirty = categoryDraftDirty();
+  const status = !state.revision ? "Source preview: shared snapshot unavailable." :
+    stale ? "Stale local draft. Export a backup, reload published categories, then reapply edits." :
+    dirty ? "Local draft - not synced. GitHub submission and publication required." :
+    "Published categories loaded. No unsaved changes.";
+  if ($("category-sync-status")) $("category-sync-status").textContent = status;
+  for (const id of ["category-save-shared", "player-category-save"]) {
+    if ($(id)) $(id).disabled = !state.revision || !dirty || stale;
+  }
+}
+function prepareSharedCategoryRequest() {
+  const state = categoryState();
+  const message = $("category-review-message");
+  try {
+    validateCategoryData(state.model);
+    if (!state.revision || state.baseRevision !== state.revision || !categoryDraftDirty()) {
+      throw new Error("Reload published categories before submitting; export any draft first.");
+    }
+    if (!feed || !freshFeed(feed)) throw new Error("Load a fresh feed before reviewing assignments.");
+    const allowed = new Set(feed.channels.map(channel => channel.id));
+    const filtered = JSON.parse(JSON.stringify(state.model));
+    const removed = Object.keys(filtered.assignments).filter(id => !allowed.has(id));
+    if (removed.length) {
+      if (!confirm("Remove assignments for " + removed.length + " channels absent from the current feed? This does not modify the whitelist.")) return;
+      for (const id of removed) delete filtered.assignments[id];
+      state.model = filtered;
+      saveCategoryData();
+      renderCategoryEditor();
+    }
+    // ASCII-escaped payload is safe inside the fixed Markdown code fence.
+    const ascii = value => JSON.stringify(value).replace(/[\u007f-\uffff<>`&]/g,
+      ch => "\\u" + ch.charCodeAt(0).toString(16).padStart(4,"0"));
+    if (ascii(state.model).length > 48000) throw new Error("Request too large for the Issue transport. Export a backup and reduce the draft; nothing submitted.");
+    const payload = "```json\n" + ascii({baseRevision:state.baseRevision,model:state.model}) + "\n```";
+    $("category-request-text").value = payload;
+    const url = new URL("https://github.com/linyuli303/MyTube/issues/new");
+    url.searchParams.set("template", "category-change.yml");
+    url.searchParams.set("title", "[MyTube] Category change");
+    url.searchParams.set("category_request", payload);
+    const large = url.href.length > 6500;
+    if (large) url.searchParams.delete("category_request");
+    $("category-open-issue").href = url.href;
+    message.textContent = large ? "Large request: copy the text below and paste it into Category request on GitHub, including both code fences." : "Review your draft below. The GitHub form will be prefilled. Nothing has been submitted yet.";
+    $("category-review").showModal();
+  } catch (error) {
+    $("category-editor-status").textContent = error.message;
+    $("player-category-status").textContent = error.message;
+  }
+}
+(function initializeSharedCategoryControls() {
+  for (const id of ["category-save-shared", "player-category-save"]) {
+    $(id).addEventListener("click", prepareSharedCategoryRequest);
+  }
+  $("category-reload-published").addEventListener("click", () => {
+    if (!confirm("Discard this browser's draft and reload the published page? Export a backup first if needed.")) return;
+    try { localStorage.removeItem(categoryState().key); }
+    catch { $("category-editor-status").textContent = "Cannot clear draft storage. No reload performed."; return; }
+    location.reload();
+  });
+  $("category-migrate-local").addEventListener("click", () => {
+    try {
+      const state = categoryState(), raw = localStorage.getItem(state.legacyKey);
+      if (!raw || raw.length > 2000000) throw new Error();
+      const value = JSON.parse(raw);
+      validateCategoryData(value);
+      if (!confirm("Replace this local draft with the previous browser categories? Existing backup storage stays unchanged. Review and save through GitHub to share.")) return;
+      state.model = value;
+      saveCategoryData();
+      renderCategoryEditor();
+    } catch { $("category-editor-status").textContent = "No valid previous browser categories found. You can import your exported JSON backup instead."; }
+  });
+  $("category-review-close").addEventListener("click", () => $("category-review").close());
+  $("category-review").addEventListener("keydown", event => event.stopPropagation());
+  $("category-copy-request").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText($("category-request-text").value);
+      $("category-review-message").textContent = "Copied. Paste into Category request on GitHub if the form is not prefilled. Still not submitted.";
+    } catch {
+      $("category-request-text").focus(); $("category-request-text").select();
+      $("category-review-message").textContent = "Select and copy the request manually, including its code fences.";
+    }
+  });
+  $("category-review").addEventListener("close", () => {
+    const target = $("category-editor").open ? $("category-save-shared") :
+      !$("player").hidden && !$("player-category-panel").hidden ? $("player-category-save") : $("category-menu");
+    if (!target.disabled) target.focus();
+  });
+  updateSharedCategoryStatus();
 })();

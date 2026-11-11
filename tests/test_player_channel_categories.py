@@ -27,7 +27,7 @@ class PlayerChannelCategoryTests(unittest.TestCase):
         self.assertRegex(
             self.html,
             r"Applies to every video from this channel\.<br\s*/>"
-            r"\s*Saved on this browser only\.",
+            r"\s*Local draft; save through GitHub to share\.",
         )
 
     def test_panel_controls_in_focus_trap(self):

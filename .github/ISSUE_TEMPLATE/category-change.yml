@@ -1,0 +1,25 @@
+name: Change MyTube categories
+description: Save reviewed frontend category edits for all devices.
+title: "[MyTube] Category change"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Owner-only automation. All category names and assignments in this Issue are public.
+        Paste the request exported by the frontend, including its json code fence.
+        Submission does not guarantee publication. Check both processing and publication workflows.
+        Never enter credentials.
+  - type: textarea
+    id: category_request
+    attributes:
+      label: Category request
+      description: Paste the complete request, including the opening and closing code fences.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I reviewed these public categories and assignments and want to save them for all devices.
+          required: true

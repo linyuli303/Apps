@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "cat-0",
+      "name": "Data & AI"
+    },
+    {
+      "id": "cat-1",
+      "name": "IT & Cyber"
+    },
+    {
+      "id": "cat-2",
+      "name": "Travel"
+    },
+    {
+      "id": "cat-3",
+      "name": "Music"
+    },
+    {
+      "id": "cat-4",
+      "name": "Skills"
+    },
+    {
+      "id": "cat-5",
+      "name": "News"
+    },
+    {
+      "id": "cat-6",
+      "name": "Talk Shows & Podcasts"
+    },
+    {
+      "id": "cat-7",
+      "name": "Entertainment"
+    }
+  ],
+  "assignments": {}
+}

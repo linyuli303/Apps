@@ -1,0 +1,41 @@
+name: Apply owner category request
+on:
+  issues:
+    types: [opened]
+permissions: {}
+concurrency:
+  group: owner-category-requests
+  cancel-in-progress: false
+jobs:
+  apply:
+    if: >-
+      github.repository == 'linyuli303/MyTube' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor_id == '42029941' &&
+      github.event.issue.user.id == 42029941 &&
+      github.event.repository.owner.id == 42029941 &&
+      github.event.issue.title == '[MyTube] Category change'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: read
+      actions: write
+    steps:
+      - name: Checkout trusted main only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Check tracked files
+        run: python scripts/security_check.py
+      - name: Run offline tests without write token in environment
+        run: python -m unittest discover -s tests -v
+      - name: Validate live category request and request reuse-only publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/process_category_request.py

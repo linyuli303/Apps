@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=standard-speed-025-2-1" />
-    <script src="app.js?v=standard-speed-025-2-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=shared-categories-1" />
+    <script src="app.js?v=shared-categories-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -59,7 +59,7 @@
             id="new-channel"
             maxlength="240"
             autocomplete="off"
-            placeholder="UC? or https://www.youtube.com/channel/UC?"
+            placeholder="Channel ID or https://www.youtube.com/channel/CHANNEL_ID"
           />
           <button id="add-channel" type="button">Add locally</button>
           <button id="request-add-channel" type="button">
@@ -309,10 +309,11 @@
         <strong id="player-category-heading">Channel categories</strong>
         <p class="player-category-help">
           Applies to every video from this channel.<br />
-          Saved on this browser only.
+          Local draft; save through GitHub to share.
         </p>
         <div id="player-category-options"></div>
         <p id="player-category-status" role="status" aria-live="polite"></p>
+        <button id="player-category-save" type="button">Save to GitHub...</button>
         <button id="player-category-done" type="button">Done</button>
       </section>
       <p id="speed-status" role="status" aria-live="polite"></p>
@@ -323,8 +324,14 @@
         <h2 id="category-editor-title">Manage categories</h2>
         <button id="category-editor-close" type="button">Close / Esc</button>
       </div>
-      <p>Saved on this browser only. Export a backup for another device.
-        Categories do not change your approved whitelist.</p>
+      <p>Edit locally, then review and submit an owner GitHub Issue to save for all devices.
+        Categories and requests are public. Categories do not change your approved whitelist.</p>
+      <p id="category-sync-status" role="status" aria-live="polite"></p>
+      <div class="category-edit-row">
+        <button id="category-save-shared" type="button">Save to GitHub...</button>
+        <button id="category-reload-published" type="button">Discard draft / Reload published</button>
+        <button id="category-migrate-local" type="button">Import existing browser categories</button>
+      </div>
       <div class="category-edit-row">
         <label for="category-new-name">New category</label>
         <input id="category-new-name" maxlength="50" autocomplete="off" />
@@ -341,6 +348,20 @@
         <button id="category-export" type="button">Export categories</button>
         <label for="category-import">Import categories</label>
         <input id="category-import" type="file" accept=".json,application/json" />
+      </div>
+    </dialog>
+    <dialog id="category-review" aria-labelledby="category-review-title">
+      <h2 id="category-review-title">Review shared category change</h2>
+      <p id="category-review-message" role="status"></p>
+      <p>Opening this form does not save anything. On GitHub, review the public request,
+        check the confirmation and submit as the repository owner. Check both the category
+        processing workflow and its separate publication run. Other devices need a page reload.</p>
+      <label for="category-request-text">Request backup / copy-paste fallback</label>
+      <textarea id="category-request-text" readonly rows="10" spellcheck="false"></textarea>
+      <div class="category-edit-row">
+        <button id="category-copy-request" type="button">Copy request</button>
+        <a id="category-open-issue" target="_blank" rel="noopener noreferrer">Open GitHub Issue form</a>
+        <button id="category-review-close" type="button">Close</button>
       </div>
     </dialog>
   </body>

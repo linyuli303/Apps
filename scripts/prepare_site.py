@@ -4,6 +4,12 @@ import json
 from pathlib import Path
 import re
 import shutil
+import sys
+
+_scripts_path = str(Path(__file__).resolve().parent)
+if _scripts_path not in sys.path:
+    sys.path.insert(0, _scripts_path)
+from shared_categories_public import package as package_categories
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location("security",ROOT/"scripts/security_check.py")
@@ -54,12 +60,24 @@ def prepare():
         if path.stat().st_size>25_000_000 or security.sensitive(path.read_bytes()):
             raise ValueError("Website asset failed size/credential checks")
     validate_feed(json.loads((source/"data/feed.json").read_text()),json.loads((ROOT/"channels.json").read_text()))
+    public_js, category_revision = package_categories(ROOT, (source/"app.js").read_text(encoding="utf-8"))
+    if security.sensitive(public_js.encode("utf-8")) or len(public_js.encode("utf-8")) > 25_000_000:
+        raise ValueError("Packaged script failed safety checks")
     if output.exists():shutil.rmtree(output)
     output.mkdir()
     for name in ASSETS:
         target=output/name
         target.parent.mkdir(parents=True,exist_ok=True)
-        shutil.copyfile(source/name,target)
+        if name == "app.js":
+            target.write_text(public_js, encoding="utf-8", newline="\n")
+        elif name == "index.html":
+            html = (source/name).read_text(encoding="utf-8")
+            html, count = re.subn(r'app\.js\?v=[^"\s]+', "app.js?v=shared-categories-" + category_revision, html)
+            if count != 1:
+                raise ValueError("Missing application cache version")
+            target.write_text(html, encoding="utf-8", newline="\n")
+        else:
+            shutil.copyfile(source/name,target)
     print("Staged exactly five public assets; raw exports, repository configuration, and credentials are excluded.")
 
 if __name__=="__main__":
