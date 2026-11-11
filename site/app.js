@@ -1037,7 +1037,7 @@ load();
   panelHeading.append(modeLabel);
   panel.append(panelHeading, list, element("div", "palette-footnote", "Selection remembered on this browser. No account or external service needed."));
   picker.append(summary, panel);
-  actions.append(picker, refresh, announce); header.append(actions);
+  actions.append(picker, announce); header.append(actions);
   function changeAppearance(value) {
     if (!["light", "dark", "system"].includes(value)) return;
     mode = value;

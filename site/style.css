@@ -1583,3 +1583,63 @@ header{flex-wrap:wrap}.header-actions{display:flex;align-items:center;justify-co
 #configuration-dialog button,#whitelist-dialog button,.category-toolbar-actions button{background:var(--surface);color:var(--text);border:1px solid var(--border)}
 .category-tabs button:focus-visible,.category-toolbar-actions button:focus-visible,#configuration-dialog button:focus-visible,#whitelist-dialog :is(button,input,a):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @media(max-width:600px){.category-tabs-toolbar{gap:5px}.category-toolbar-actions{gap:4px}.category-toolbar-actions button{padding:7px;font-size:11px}#configuration-dialog,#whitelist-dialog{padding:15px}}
+
+/* Consistent configuration and management typography. */
+:is(#configuration-dialog, #category-editor, #whitelist-dialog){
+  font-size:13px;
+  line-height:1.5;
+}
+:is(#configuration-dialog, #category-editor, #whitelist-dialog) h2{
+  font-size:21px;
+  line-height:1.3;
+}
+:is(#configuration-dialog, #category-editor, #whitelist-dialog) h3{
+  font-size:15px;
+  line-height:1.4;
+}
+:is(#configuration-dialog, #category-editor, #whitelist-dialog)
+:is(p, label, legend, li, a, code, strong){
+  font-size:13px;
+}
+:is(#configuration-dialog, #category-editor, #whitelist-dialog)
+:is(button, input, select, textarea){
+  font-family:inherit;
+  font-size:13px;
+  line-height:1.4;
+  box-sizing:border-box;
+}
+:is(#configuration-dialog, #category-editor, #whitelist-dialog)
+:is(button, input:not([type=checkbox]):not([type=radio]), select){
+  min-height:36px;
+  padding:8px 10px;
+}
+:is(#configuration-dialog, #category-editor, #whitelist-dialog)
+:is(input[type=checkbox], input[type=radio]){
+  width:17px;
+  height:17px;
+  min-height:0;
+  padding:0;
+  flex-shrink:0;
+}
+:is(#configuration-dialog, #category-editor, #whitelist-dialog)
+:is(small, [role=status], [role=status] p){
+  font-size:12px;
+  line-height:1.5;
+}
+#category-editor > p,
+#whitelist-dialog .manager > p{
+  font-size:12px;
+  line-height:1.5;
+}
+#configuration-dialog #category-menu,
+#configuration-dialog #configuration-whitelist{
+  font-size:13px;
+  min-height:40px;
+  padding:12px;
+}
+#whitelist-dialog #whitelist-list small{
+  font-size:12px;
+}
+#whitelist-dialog #whitelist-list li{
+  font-size:13px;
+}
