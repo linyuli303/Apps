@@ -101,15 +101,22 @@ Thumbnails contact YouTube’s image servers; the image-free text feed and RSS c
 The current repository variable is:
 
 ```text
-YOUTUBE_REFRESH_HOURS_UTC=09,18
+YOUTUBE_REFRESH_HOURS_UTC=08,11,15,19
 ```
 
 Set it under **Settings → Secrets and variables → Actions → Variables**. Enter two-digit UTC hours separated by commas, **without spaces**.
 
 | UTC | Germany: winter (CET) | Germany: summer (CEST) |
 |---|---|---|
-| 09:00 | 10:00 | 11:00 |
-| 18:00 | 19:00 | 20:00 |
+| 08:00 | 09:00 | 10:00 |
+| 11:00 | 12:00 | 13:00 |
+| 15:00 | 16:00 | 17:00 |
+| 19:00 | 20:00 | 21:00 |
+
+The intended German refresh times are **09:00, 12:00, 16:00 and 20:00**.
+The winter setting above uses fixed UTC hours and does not adjust automatically.
+To keep those local times during summer (CEST), change the variable to
+`07,10,14,18` and update the frontend notice accordingly.
 
 The workflow has 24 hourly schedule entries. Only selected schedule hours proceed; other entries can appear as **Skipped**, without executing the feed builder. Selection uses the intended cron hour, not a delayed actual start time.
 
