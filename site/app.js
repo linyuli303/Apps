@@ -371,6 +371,7 @@ document.addEventListener("keydown", (event) => {
         $("player-fullscreen"),
         $("official"),
         $("next"),
+        $("auto-next"),
         $("player-appearance"),
         $("speed-preset"),
         $("speed-slider"),
@@ -1782,6 +1783,7 @@ function attachSpeedController(iframe, id) {
       feed.channels.some(channel => channel.id === video.channelId)
     );
 
+  let endedHandled = false;
   loadSpeedAPI().then(() => {
     if (!valid()) return;
     state.player = new window.YT.Player(iframe, {
@@ -1792,7 +1794,27 @@ function attachSpeedController(iframe, id) {
           applyPreferredSpeed();
         },
         onStateChange: event => {
-          if (valid() && event.data === 1) applyPreferredSpeed();
+          if (!valid()) return;
+          if (event.data === 1) {
+            endedHandled = false;
+            applyPreferredSpeed();
+          }
+          if (event.data === 0 && !endedHandled) {
+            endedHandled = true;
+            if (!autoNextState().enabled) return;
+            // Defer destruction of the old player until its callback returns.
+            setTimeout(() => {
+              if (!valid() || !autoNextState().enabled) return;
+              try {
+                if (state.player.getPlayerState() !== 0) return;
+              } catch { return; }
+              advanceAutoNext();
+            }, 0);
+          }
+        },
+        onAutoplayBlocked: () => {
+          if (valid()) $("playback-mode-status").textContent =
+            "Autoplay blocked. Press Play in the video.";
         },
         onPlaybackRateChange: () => {
           if (valid()) reportPlaybackSpeed();
@@ -2166,4 +2188,49 @@ function prepareSharedCategoryRequest() {
     if (!target.disabled) target.focus();
   });
   updateSharedCategoryStatus();
+})();
+
+
+// Browser-local auto-next preference; never changes channel approval.
+function autoNextState() {
+  if (autoNextState.saved) return autoNextState.saved;
+  const scope = encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
+  const key = "approved-yt-autonext-v1:" + scope;
+  let enabled = false;
+  try { enabled = localStorage.getItem(key) === "true"; } catch {}
+  return autoNextState.saved = {key, enabled};
+}
+function nextAutoVideoID(items, playing, eligible) {
+  const index = items.findIndex(video => video.id === playing);
+  if (index < 0) return null;
+  for (let offset = index + 1; offset < items.length; offset++) {
+    const video = items[offset];
+    if (video.id !== playing && eligible(video)) return video.id;
+  }
+  return null;
+}
+function advanceAutoNext() {
+  if (!autoNextState().enabled || $("player").hidden || !current) return;
+  if (!feed || !freshFeed(feed)) {
+    expireFeed();
+    return;
+  }
+  const nextID = nextAutoVideoID(visible, current, video =>
+    safeID(video.id) && draftAllows(video.channelId) && categoryAllows(video.channelId) &&
+    feed.channels.some(channel => channel.id === video.channelId) &&
+    feed.videos.some(item => item.id === video.id && item.channelId === video.channelId)
+  );
+  if (nextID) openPlayer(nextID);
+}
+(function initializeAutoNext() {
+  const toggle = $("auto-next"), state = autoNextState();
+  toggle.checked = state.enabled;
+  toggle.addEventListener("change", () => {
+    state.enabled = toggle.checked;
+    try { localStorage.setItem(state.key, String(state.enabled)); }
+    catch {
+      $("playback-mode-status").textContent =
+        "Cannot save auto-play preference; using it for this session.";
+    }
+  });
 })();

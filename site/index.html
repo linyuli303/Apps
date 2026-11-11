@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=compact-categories-1" />
-    <script src="app.js?v=compact-categories-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=autonext-1" />
+    <script src="app.js?v=autonext-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -276,6 +276,11 @@
           referrerpolicy="no-referrer"
         >Open in YouTube / App &#8599;</a>
         <button id="next" type="button">Next approved video</button>
+        <label class="auto-next-control" for="auto-next">
+          Auto-play next
+          <input id="auto-next" type="checkbox" role="switch" />
+          <span class="auto-next-track" aria-hidden="true"></span>
+        </label>
         <label class="player-appearance-label" for="player-appearance">
           Appearance
           <select id="player-appearance">

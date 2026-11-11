@@ -1513,3 +1513,13 @@ header{flex-wrap:wrap}.header-actions{display:flex;align-items:center;justify-co
 #category-review-changes{padding-left:22px;font-size:14px;line-height:1.7}
 #category-review-details{border-top:1px solid var(--border);margin-top:16px;padding-top:12px}
 #category-review-details summary{cursor:pointer;font-size:12px;color:var(--muted)}
+
+/* Compact accessible auto-next switch; inherits the current palette. */
+#player .auto-next-control{display:inline-flex;align-items:center;gap:7px;position:relative;flex-shrink:0;font-size:11px;color:var(--text);cursor:pointer;min-height:32px}
+#player .auto-next-control input{position:absolute;width:1px;height:1px;min-height:0;margin:0;padding:0;opacity:0}
+#player .auto-next-track{display:inline-block;position:relative;width:34px;height:20px;flex-shrink:0;border-radius:20px;background:var(--muted)}
+#player .auto-next-track::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--surface);transition:transform .15s}
+#player #auto-next:checked+.auto-next-track{background:var(--accent)}
+#player #auto-next:checked+.auto-next-track::after{transform:translateX(14px)}
+#player #auto-next:focus-visible+.auto-next-track{outline:3px solid var(--accent);outline-offset:3px}
+@media(prefers-reduced-motion:reduce){#player .auto-next-track::after{transition:none}}
