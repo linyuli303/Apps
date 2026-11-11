@@ -345,7 +345,8 @@ $("sort").addEventListener("change", () => {
 });
 $("thumbnails").addEventListener("change", render);
 document.addEventListener("keydown", (event) => {
-  if ($("category-editor")?.open || $("category-review")?.open) return;
+  if ($("category-editor")?.open || $("category-review")?.open ||
+      $("configuration-dialog")?.open || $("whitelist-dialog")?.open) return;
   if (!$("player").hidden) {
     if (document.fullscreenElement) return;
     if (!$("player-feed-panel").hidden &&
@@ -1455,13 +1456,14 @@ function updateCategoryFilter() {
   const select = $("category-filter");
   if (!select) return;
   const previous = select.value;
-  select.replaceChildren(new Option("All categories", "all"));
+  select.replaceChildren(new Option("All", "all"));
   for (const category of categoryState().model.categories) {
     select.append(new Option(category.name, category.id));
   }
   select.append(new Option("Uncategorized", "uncategorized"));
   select.value = Array.from(select.options).some(option => option.value === previous)
     ? previous : "all";
+  renderCategoryTabs();
 }
 
 function refreshCategoryViews() {
@@ -1609,6 +1611,7 @@ function renderCategoryEditor() {
 
   const dialog = $("category-editor"), opener = $("category-menu");
   opener.addEventListener("click", () => {
+    $("configuration-dialog").close();
     $("category-editor-status").textContent = categoryState().warning;
     renderCategoryEditor();
     dialog.showModal();
@@ -1617,7 +1620,7 @@ function renderCategoryEditor() {
   $("category-editor-close").addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => {
     opener.setAttribute("aria-expanded", "false");
-    opener.focus();
+    $("configuration-toggle").focus();
   });
   // Keep native Escape/dialog behavior, without triggering page shortcuts.
   dialog.addEventListener("keydown", event => event.stopPropagation());
@@ -2221,7 +2224,7 @@ function prepareSharedCategoryRequest() {
   });
   $("category-review").addEventListener("close", () => {
     const target = $("category-editor").open ? $("category-save-shared") :
-      !$("player").hidden && !$("player-category-panel").hidden ? $("player-category-save") : $("category-menu");
+      !$("player").hidden && !$("player-category-panel").hidden ? $("player-category-save") : $("configuration-toggle");
     if (!target.disabled) target.focus();
   });
   updateSharedCategoryStatus();
@@ -2452,4 +2455,68 @@ function navigateApprovedVideo(direction) {
     state.loop = !state.loop;
     $("loop-video").setAttribute("aria-pressed",String(state.loop));
   });
+})();
+
+
+// Category buttons retain the existing filter and its change-event pipeline.
+function renderCategoryTabs() {
+  const select = $("category-filter"), tabs = $("category-tabs");
+  if (!select || !tabs) return;
+  const activeID = tabs.contains(document.activeElement)
+    ? document.activeElement.dataset.category : null;
+  const scroll = tabs.scrollLeft;
+  tabs.replaceChildren();
+  for (const option of Array.from(select.options)) {
+    const button = element("button", "category-tab");
+    button.type = "button";
+    button.dataset.category = option.value;
+    button.textContent = option.value === "all" ? "All" : option.textContent;
+    button.setAttribute("aria-pressed", String(option.value === select.value));
+    button.addEventListener("click", () => {
+      select.value = option.value;
+      select.dispatchEvent(new Event("change", {bubbles:true}));
+      renderCategoryTabs();
+      const chosen = Array.from(tabs.children).find(item => item.dataset.category === select.value);
+      if (chosen) chosen.focus({preventScroll:true});
+    });
+    tabs.append(button);
+  }
+  tabs.scrollLeft = scroll;
+  if (activeID !== null) {
+    const replacement = Array.from(tabs.children).find(item => item.dataset.category === activeID);
+    if (replacement) replacement.focus({preventScroll:true});
+  }
+}
+(function initializeConfiguration() {
+  const config = $("configuration-dialog"), toggle = $("configuration-toggle");
+  const whitelistDialog = $("whitelist-dialog"), manager = $("whitelist-manager");
+  // Move the existing node, not a copy: IDs, controls and listeners are preserved.
+  $("whitelist-dialog-content").append(manager);
+  manager.open = true;
+  toggle.addEventListener("click", () => {
+    if (config.open) return;
+    config.showModal();
+    toggle.setAttribute("aria-expanded", "true");
+  });
+  $("configuration-close").addEventListener("click", () => config.close());
+  config.addEventListener("close", () => {
+    toggle.setAttribute("aria-expanded", "false");
+    // A management dialog may have opened in the same interaction.
+    queueMicrotask(() => {
+      if (!$("category-editor").open && !whitelistDialog.open && !config.open) toggle.focus();
+    });
+  });
+  $("configuration-whitelist").addEventListener("click", () => {
+    config.close();
+    manager.open = true;
+    renderManager();
+    whitelistDialog.showModal();
+  });
+  $("whitelist-dialog-close").addEventListener("click", () => whitelistDialog.close());
+  whitelistDialog.addEventListener("close", () => toggle.focus());
+  for (const dialog of [config, whitelistDialog]) {
+    dialog.addEventListener("keydown", event => event.stopPropagation());
+  }
+  $("category-filter").addEventListener("change", renderCategoryTabs);
+  renderCategoryTabs();
 })();
