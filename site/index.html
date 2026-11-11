@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=autonext-1" />
-    <script src="app.js?v=autonext-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=player-feed-menu-1" />
+    <script src="app.js?v=player-feed-menu-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -302,6 +302,15 @@
           aria-expanded="false" aria-controls="player-category-panel">
           Channel categories
         </button>
+        <button id="player-feed-toggle" type="button"
+          aria-expanded="false" aria-controls="player-feed-panel"
+          aria-label="Show feed" title="Show feed">
+          <svg class="player-feed-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M3 5h14v2H3zm0 5h14v2H3zm0 5h8v2H3zm12-1 7 4-7 4z" />
+          </svg>
+          <span class="player-feed-button-label">Feed</span>
+          <span class="player-feed-chevron" aria-hidden="true">&#9650;</span>
+        </button>
         <button id="close" type="button">Close / Esc</button>
       </div>
       <p class="player-explanation">
@@ -309,6 +318,15 @@
           on device settings. In fullscreen, press Escape to return.
           YouTube may display its own player controls.
         </p>
+      <section id="player-feed-panel" aria-labelledby="player-feed-heading" hidden>
+        <h3 id="player-feed-heading">Feed preview</h3>
+        <div id="player-feed-list"></div>
+        <nav class="player-feed-pagination" aria-label="Playback feed pages">
+          <button id="player-feed-prev-page" type="button">Previous page</button>
+          <span id="player-feed-page"></span>
+          <button id="player-feed-next-page" type="button">Next page</button>
+        </nav>
+      </section>
       <section id="player-category-panel"
         aria-labelledby="player-category-heading" hidden>
         <strong id="player-category-heading">Channel categories</strong>

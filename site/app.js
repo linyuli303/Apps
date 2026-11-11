@@ -197,6 +197,7 @@ function render() {
       "No matching playable videos in this snapshot. Try another filter or wait for the next refresh.";
   $("status").textContent =
     `${visible.length} videos · ${feed.channels.filter((c) => draftAllows(c.id)).length} enabled published channels · Feed built ${dateLabel(feed.generatedAt)} ${new Date(feed.generatedAt).toLocaleTimeString()}`;
+  renderPlayerFeed();
 }
 function openOfficialVideo(id) {
   if (!feed || !freshFeed(feed)) {
@@ -224,6 +225,7 @@ function syncKinoControls() {
 }
 
 function openPlayer(id) {
+  closePlayerFeed(false);
   const video =
     feed &&
     feed.videos.find(
@@ -271,6 +273,7 @@ function openPlayer(id) {
   attachSpeedController(iframe, id);
 }
 function closePlayer() {
+  closePlayerFeed(false);
   closePlayerCategories(false);
   stopSpeedController();
   const wasOpen = !$("player").hidden;
@@ -292,6 +295,7 @@ $("kino-toggle").addEventListener("click", () => {
   syncKinoControls();
 });
 $("player-fullscreen").addEventListener("click", async () => {
+  closePlayerFeed(false);
   const frame = $("frame");
   const iframe = frame.querySelector("iframe");
   if (!iframe) {
@@ -315,6 +319,7 @@ document.addEventListener("fullscreenchange", () => {
   }
 });
 $("official").addEventListener("click", () => {
+  closePlayerFeed(false);
   // Stop embedded playback while allowing normal external link navigation.
   stopSpeedController();
   $("frame").replaceChildren();
@@ -342,6 +347,13 @@ document.addEventListener("keydown", (event) => {
   if ($("category-editor")?.open || $("category-review")?.open) return;
   if (!$("player").hidden) {
     if (document.fullscreenElement) return;
+    if (!$("player-feed-panel").hidden &&
+        (event.key === "Escape" || event.key === "BrowserBack" ||
+         event.keyCode === 10009 || event.keyCode === 461)) {
+      event.preventDefault();
+      closePlayerFeed(true);
+      return;
+    }
     if (
       !$("player-category-panel").hidden &&
       (
@@ -384,8 +396,13 @@ document.addEventListener("keydown", (event) => {
             $("player-category-done"),
           ]
         ),
+        $("player-feed-toggle"),
         $("close"),
-      ].filter((el) => el && !el.disabled);
+        ...($("player-feed-panel").hidden ? [] :
+          Array.from($("player-feed-panel").querySelectorAll("button"))),
+      ].filter((el) => el && !el.disabled).sort((a, b) =>
+        a === b ? 0 : a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+      );
       if (event.shiftKey && document.activeElement === controls[0]) {
         event.preventDefault();
         controls[controls.length - 1].focus();
@@ -2026,6 +2043,7 @@ function renderPlayerCategories() {
       closePlayerCategories(false);
       return;
     }
+    closePlayerFeed(false);
     renderPlayerCategories();
     if (toggle.disabled) return;
     panel.hidden = false;
@@ -2231,6 +2249,125 @@ function advanceAutoNext() {
     catch {
       $("playback-mode-status").textContent =
         "Cannot save auto-play preference; using it for this session.";
+    }
+  });
+})();
+
+
+// Playback Feed menu: reads the existing filtered list; no network requests.
+function playerFeedState() {
+  if (!playerFeedState.saved) playerFeedState.saved = {page: 0};
+  return playerFeedState.saved;
+}
+function playbackDurationSeconds(value) {
+  if (typeof value !== "string" || value.length > 100) return null;
+  const match = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(value);
+  if (!match || !match.slice(1).some(part => part !== undefined)) return null;
+  const seconds = Number(match[1] || 0) * 86400 + Number(match[2] || 0) * 3600 +
+    Number(match[3] || 0) * 60 + Number(match[4] || 0);
+  return Number.isFinite(seconds) && seconds >= 0 && seconds <= 315360000 ? seconds : null;
+}
+function playbackDurationLabel(value) {
+  const seconds = playbackDurationSeconds(value);
+  if (seconds === null) return "Unavailable";
+  const whole = Math.floor(seconds), hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  const tail = String(whole % 60).padStart(2, "0");
+  return hours ? hours + ":" + String(minutes).padStart(2, "0") + ":" + tail : minutes + ":" + tail;
+}
+function playbackFeedItems() {
+  if (!feed || !freshFeed(feed) || $("player").hidden) return [];
+  const approved = new Set(feed.channels.map(channel => channel.id));
+  const membership = new Map(feed.videos.map(video => [video.id, video.channelId]));
+  return visible.filter(video => safeID(video.id) && approved.has(video.channelId) &&
+    membership.get(video.id) === video.channelId && draftAllows(video.channelId) &&
+    categoryAllows(video.channelId));
+}
+function closePlayerFeed(restoreFocus = false) {
+  const panel = $("player-feed-panel"), toggle = $("player-feed-toggle");
+  if (!panel || !toggle) return;
+  panel.hidden = true;
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.setAttribute("aria-label", "Show feed");
+  toggle.title = "Show feed";
+  if (restoreFocus && !$("player").hidden) toggle.focus();
+}
+function renderPlayerFeed() {
+  const panel = $("player-feed-panel");
+  if (!panel || panel.hidden) return;
+  const items = playbackFeedItems(), state = playerFeedState();
+  const pages = Math.max(1, Math.ceil(items.length / 48));
+  state.page = Math.max(0, Math.min(state.page, pages - 1));
+  const names = new Map((feed?.channels || []).map(channel => [channel.id, channel.title]));
+  const list = $("player-feed-list");
+  list.replaceChildren();
+  for (const video of items.slice(state.page * 48, (state.page + 1) * 48)) {
+    const button = element("button", "player-feed-row");
+    button.type = "button";
+    button.setAttribute("aria-current", String(video.id === current));
+    button.setAttribute("aria-label", video.title + " - " + (names.get(video.channelId) || "") +
+      " - " + playbackDurationLabel(video.duration));
+    const title = element("span", "player-feed-title", video.title);
+    const duration = element("span", "player-feed-duration", playbackDurationLabel(video.duration));
+    duration.title = "Video duration";
+    let count = "Views unavailable";
+    if (typeof video.viewCount === "string" && /^[0-9]{1,20}$/.test(video.viewCount)) {
+      try { count = BigInt(video.viewCount).toLocaleString() + " views"; }
+      catch { count = video.viewCount + " views"; }
+    }
+    const meta = element("span", "player-feed-meta",
+      (names.get(video.channelId) || "") + " | " + dateLabel(video.publishedAt) + " | " + count);
+    button.append(title, duration, meta);
+    button.addEventListener("click", () => {
+      // Revalidate the current list, snapshot and approval at click time.
+      if (!playbackFeedItems().some(item => item.id === video.id)) {
+        renderPlayerFeed();
+        return;
+      }
+      openPlayer(video.id);
+    });
+    list.append(button);
+  }
+  if (!items.length) list.append(element("p", "", "No eligible videos in the current filtered list."));
+  $("player-feed-page").textContent = "Page " + (state.page + 1) + " of " + pages;
+  $("player-feed-prev-page").disabled = state.page === 0;
+  $("player-feed-next-page").disabled = state.page + 1 >= pages;
+}
+(function initializePlayerFeed() {
+  const panel = $("player-feed-panel"), toggle = $("player-feed-toggle");
+  toggle.addEventListener("click", () => {
+    if (!panel.hidden) { closePlayerFeed(false); return; }
+    if ($("player").hidden || !feed || !freshFeed(feed)) {
+      if (feed && !freshFeed(feed)) expireFeed();
+      return;
+    }
+    closePlayerCategories(false);
+    const items = playbackFeedItems(), index = items.findIndex(video => video.id === current);
+    playerFeedState().page = index < 0 ? 0 : Math.floor(index / 48);
+    panel.hidden = false;
+    toggle.setAttribute("aria-expanded", "true");
+    toggle.setAttribute("aria-label", "Hide feed");
+    toggle.title = "Hide feed";
+    renderPlayerFeed();
+  });
+  for (const [id, direction] of [["player-feed-prev-page", -1], ["player-feed-next-page", 1]]) {
+    $(id).addEventListener("click", () => {
+      playerFeedState().page += direction;
+      renderPlayerFeed();
+      $(direction < 0 ? "player-feed-next-page" : "player-feed-prev-page").focus();
+    });
+  }
+  panel.addEventListener("keydown", event => {
+    if (event.key === "Escape" || event.key === "BrowserBack" ||
+        event.keyCode === 10009 || event.keyCode === 461) {
+      event.preventDefault(); event.stopPropagation(); closePlayerFeed(true);
+    } else if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+      event.stopPropagation();
+    }
+  });
+  document.addEventListener("pointerdown", event => {
+    if (!panel.hidden && !panel.contains(event.target) && !toggle.contains(event.target)) {
+      closePlayerFeed(panel.contains(document.activeElement));
     }
   });
 })();
