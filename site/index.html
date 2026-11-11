@@ -12,32 +12,32 @@
     />
     <title>MyTube</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=config-consistency-1" />
-    <script src="app.js?v=config-consistency-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=compact-landing-1" />
+    <script src="app.js?v=compact-landing-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
-    <header>
-      <div>
-        <span class="eyebrow">YOUR CHANNELS. NOTHING ELSE IN THE FEED.</span>
-        <h1 id="title">MyTube</h1>
-      </div>
-    </header>
-    <main>
+<main>
 
-      <section class="toolbar" aria-label="Feed filters">
+      <section class="toolbar landing-toolbar" aria-label="Feed filters">
+        <div class="landing-brand">
+          <img class="landing-icon" src="icon.svg" width="42" height="42" alt="" />
+          <div class="landing-wordmark">
+            <h1 id="title">MyTube</h1><sup>Yuli</sup>
+          </div>
+        </div>
         <label
-          >Search your feed<input
+          ><span class="sr-only">Search your feed</span><input
             id="search"
             type="search"
             placeholder="Find a video…"
             autocomplete="off" /></label
         ><label
-          >Channel<select id="channel">
+          ><span class="sr-only">Channel</span><select id="channel">
             <option value="">All approved channels</option>
           </select></label
         ><label
-          >Sort<select id="sort">
+          ><span class="sr-only">Sort</span><select id="sort">
             <option value="new">Newest first</option>
             <option value="old">Oldest first</option>
             <option value="title">Title A–Z</option>
@@ -65,14 +65,24 @@
         ><input id="thumbnails" type="checkbox" checked /> Load YouTube
         thumbnails (contacts YouTube)</label
       >
-      <p id="status" role="status">Loading your approved channels…</p>
-      <p class="playback-notice">
+      <details class="feed-information">
+        <summary>
+          <span id="status" role="status">Loading your approved channels…</span>
+          <span class="feed-information-label">
+            <span class="feed-information-arrow" aria-hidden="true">&#9660;</span>
+            Playback, refresh schedule &amp; API quota
+          </span>
+        </summary>
+        <div class="feed-information-content">
+<p class="playback-notice">
+        <strong>Playback &amp; Premium.</strong>
         Videos play inside MyTube. For external playback, use Open in YouTube / App;
         app opening depends on your device settings. Embedded playback may not
         recognize Premium. For Premium benefits, open official YouTube while
         signed in. MyTube does not access your Google login or membership.
       </p>
       <p class="refresh-schedule-notice">
+        <strong>Refresh schedule.</strong>
         Scheduled feed refreshes: 08:00, 11:00, 15:00 and 19:00 UTC
         (09:00, 12:00, 16:00 and 20:00 in Germany during winter/CET).
         Fixed UTC hours do not adjust automatically for daylight saving time.
@@ -81,6 +91,7 @@
         it does not request new YouTube data.
       </p>
       <p class="api-quota-notice">
+        <strong>API quota &amp; freshness.</strong>
         This project's configured YouTube Data API allowance is 10,000 units per day,
         resetting at midnight Pacific Time. Browsing and editing category drafts
         use no Data API quota; category-only publication reuses the existing feed.
@@ -88,6 +99,8 @@
         refresh and may be outdated or unavailable. Playback is blocked when the
         feed is over 24 hours old. This notice is not a live quota counter.
       </p>
+        </div>
+      </details>
       <section id="grid" class="grid" aria-label="Approved videos"></section>
       <nav class="pagination" aria-label="Video pages">
         <button id="page-prev" type="button">Previous page</button

@@ -971,12 +971,12 @@ load();
     } catch {}
   }
   readPreferences();
-  const header = document.querySelector("header"), refresh = $("refresh");
+  const header = document.querySelector(".category-toolbar-actions"), refresh = $("refresh");
   if (!header || !refresh || $("mytube-theme-picker")) return;
-  const actions = element("div", "header-actions");
+  const actions = element("div", "landing-palette-actions");
   const picker = element("details", "palette-picker"); picker.id = "mytube-theme-picker";
   const summary = element("summary"); summary.setAttribute("aria-label", "Choose color palette");
-  const heading = element("span");
+  const heading = element("span", "sr-only");
   const name = element("span", "palette-name");
   heading.append(element("span", "palette-caption", "色のパレット · 51 palettes"), name);
   const trigger = element("span", "palette-trigger-colors");
@@ -1037,7 +1037,7 @@ load();
   panelHeading.append(modeLabel);
   panel.append(panelHeading, list, element("div", "palette-footnote", "Selection remembered on this browser. No account or external service needed."));
   picker.append(summary, panel);
-  actions.append(picker, announce); header.append(actions);
+  actions.append(picker, announce); header.prepend(actions);
   function changeAppearance(value) {
     if (!["light", "dark", "system"].includes(value)) return;
     mode = value;

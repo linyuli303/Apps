@@ -19,10 +19,41 @@ class CategoryConfigurationTests(unittest.TestCase):
         self.assertEqual(len(parser.ids),len(set(parser.ids)))
         for name in ('category-tabs','category-filter','category-menu','configuration-toggle','configuration-dialog','whitelist-dialog','refresh','whitelist-manager'):
             self.assertIn(name,parser.ids)
-        header=self.html.split('<header>',1)[1].split('</header>',1)[0]
-        self.assertNotIn('id="refresh"',header)
+        toolbar=self.html.split('<section class="toolbar landing-toolbar"',1)[1].split('</section>',1)[0]
+        self.assertIn('class="landing-brand"',toolbar)
+        for name in ('title','search','channel','sort'):
+            self.assertIn(f'id="{name}"',toolbar)
+        self.assertNotIn('id="refresh"',toolbar)
+        actions=self.html.split('<div class="category-toolbar-actions">',1)[1].split('</div>',1)[0]
+        self.assertIn('id="configuration-toggle"',actions)
+        self.assertIn('id="refresh"',actions)
+        self.assertIn('document.querySelector(".category-toolbar-actions")',self.js)
+        self.assertIn('actions.append(picker, announce); header.prepend(actions);',self.js)
         self.assertLess(self.html.index('id="category-tabs"'),self.html.index('id="configuration-toggle"'))
         self.assertLess(self.html.index('id="configuration-toggle"'),self.html.index('id="refresh"'))
+    def test_compact_branding_and_filter_labels(self):
+        toolbar=self.html.split('<section class="toolbar landing-toolbar"',1)[1].split('</section>',1)[0]
+        self.assertIn('src="icon.svg" width="42" height="42"',toolbar)
+        self.assertIn('<h1 id="title">MyTube</h1><sup>Yuli</sup>',toolbar)
+        for caption in ('Search your feed','Channel','Sort'):
+            self.assertIn(f'<span class="sr-only">{caption}</span>',toolbar)
+        css=(ROOT/'site/style.css').read_text(encoding='utf-8')
+        compact=css.split('/* Approved compact landing layout. */',1)[1]
+        self.assertIn('gap: 1px;',compact)
+        self.assertIn('font-family: inherit;',compact)
+        self.assertIn('const heading = element("span", "sr-only");',self.js)
+
+    def test_feed_notices_collapsed_and_preserved(self):
+        opening='<details class="feed-information">'
+        self.assertIn(opening,self.html)
+        details=self.html.split(opening,1)[1].split('</details>',1)[0]
+        summary=details.split('<summary>',1)[1].split('</summary>',1)[0]
+        self.assertIn('id="status" role="status"',summary)
+        self.assertIn('Playback, refresh schedule &amp; API quota',summary)
+        for name in ('playback-notice','refresh-schedule-notice','api-quota-notice'):
+            self.assertIn(f'class="{name}"',details)
+            self.assertNotIn(f'class="{name}"',summary)
+
     def test_existing_nodes_and_saving_preserved(self):
         self.assertIn('$("whitelist-dialog-content").append(manager)',self.js)
         self.assertIn('manager.open = true',self.js)
