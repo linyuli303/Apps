@@ -21,7 +21,11 @@ class PlaybackSpeedTests(unittest.TestCase):
             "getAvailablePlaybackRates", "getPlaybackRate", "setPlaybackRate"
         ):
             self.assertIn(method, self.js)
-        self.assertIn("approved-yt-speed-v1:", self.js)
+        speed = self.js.split("function speedState()", 1)[1].split(
+            "function updateSpeedControls()", 1
+        )[0]
+        self.assertIn("preferred: 1", speed)
+        self.assertNotIn("localStorage", speed)
         self.assertIn("Selected speed unavailable; playing", self.js)
         self.assertNotIn("Waiting for player confirmation.", self.js)
         report = self.js.split("function reportPlaybackSpeed()", 1)[1].split(

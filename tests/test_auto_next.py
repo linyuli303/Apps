@@ -15,9 +15,12 @@ class AutoNextTests(unittest.TestCase):
         trap=self.js.split('const controls = [',1)[1].split('];',1)[0]
         self.assertIn('$("auto-next")',trap)
     def test_default_off_and_private_preference(self):
-        self.assertIn('approved-yt-autonext-v1:',self.js)
-        self.assertIn('let enabled = false;',self.js)
-        self.assertIn('localStorage.getItem(key) === "true"',self.js)
+        block=self.js.split('function autoNextState()',1)[1].split('function nextAutoVideoID(',1)[0]
+        self.assertIn('enabled:false',block)
+        self.assertNotIn('localStorage',block)
+        initializer=self.js.split('(function initializeAutoNext()',1)[1].split('})();',1)[0]
+        self.assertIn('state.enabled = toggle.checked',initializer)
+        self.assertNotIn('localStorage',initializer)
     def test_end_event_and_stale_frame_guards(self):
         block=self.js.split('function attachSpeedController(',1)[1].split('function reportPlaybackSpeed(',1)[0]
         self.assertIn('event.data === 0 && !endedHandled',block)

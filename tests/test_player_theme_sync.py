@@ -35,7 +35,11 @@ class PlayerThemeSyncTests(unittest.TestCase):
 
     def test_no_separate_player_theme_storage(self):
         self.assertNotIn('localStorage.setItem("player-', self.js)
-        self.assertIn('localStorage.setItem(modeKey, mode)', self.js)
+        palette = self.js.split('const themeKey =', 1)[1].split(
+            '// RSS-style catalogue.', 1
+        )[0]
+        self.assertNotIn('localStorage', palette)
+        self.assertIn('Selection lasts until this page reloads.', palette)
         self.assertIn('id="player-appearance"', self.html)
         self.assertIn('#frame.frame:fullscreen', self.css)
 

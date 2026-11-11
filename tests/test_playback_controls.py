@@ -15,7 +15,9 @@ class PlaybackControlsTests(unittest.TestCase):
         self.assertLess(self.html.index('id="skip-short-videos"'),self.html.index('id="player-category-toggle"'))
         self.assertIn('aria-pressed="false"',self.html)
     def test_default_and_filter_coverage(self):
-        self.assertIn('let skipShort = true;',self.js)
+        options=self.js.split('function playbackOptions()',1)[1].split('function shortVideoAllows(',1)[0]
+        self.assertIn('skipShort:true',options)
+        self.assertNotIn('localStorage',options)
         self.assertIn('seconds === null || seconds >= 60',self.js)
         self.assertIn('visible = visible.filter(shortVideoAllows);',self.js)
         self.assertIn('group && shortVideoAllows(video)',self.js)

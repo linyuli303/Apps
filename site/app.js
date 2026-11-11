@@ -1,3 +1,4 @@
+// Privacy default: page-memory preferences.
 // For enforced anti-framing, use the documented HTTP response headers on a capable host.
 "use strict";
 const SHARED_CATEGORY_SNAPSHOT = null; // Replaced only in the published artifact.
@@ -32,7 +33,7 @@ async function load() {
   $("refresh").disabled = true;
   $("status").textContent = "Loading approved feed…";
   try {
-    const response = await fetch("data/feed.json", { cache: "no-store" });
+    const response = await fetch("data/feed.json", { cache: "no-store", credentials: "omit" });
     if (!response.ok) throw new Error("Feed unavailable");
     const raw = await response.text();
     if (raw.length > 25000000) throw new Error("Feed too large");
@@ -961,12 +962,6 @@ load();
   const system = window.matchMedia("(prefers-color-scheme: dark)");
   function readPreferences() {
     selected = "yugure"; mode = "light";
-    try {
-      const savedTheme = localStorage.getItem(themeKey);
-      const savedMode = localStorage.getItem(modeKey);
-      if (themes.some(t => t.id === savedTheme)) selected = savedTheme;
-      if (["light", "dark", "system"].includes(savedMode)) mode = savedMode;
-    } catch {}
   }
   readPreferences();
   const header = document.querySelector(".category-toolbar-actions"), refresh = $("refresh");
@@ -1010,7 +1005,6 @@ load();
     });
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue("--page").trim();
-    if (persist) try { localStorage.setItem(themeKey, selected); localStorage.setItem(modeKey, mode); } catch {}
     if (speak) announce.textContent = theme.name + " theme applied in " + (dark ? "dark" : "light") + " mode.";
   }
   themes.forEach((theme, i) => {
@@ -1033,7 +1027,7 @@ load();
     buttons.push(b); list.append(b);
   });
   panelHeading.append(modeLabel);
-  panel.append(panelHeading, list, element("div", "palette-footnote", "Selection remembered on this browser. No account or external service needed."));
+  panel.append(panelHeading, list, element("div", "palette-footnote", "Selection lasts until this page reloads. Nothing is saved to browser storage."));
   picker.append(summary, panel);
   actions.append(picker, announce); header.prepend(actions);
   function changeAppearance(value) {
@@ -1052,9 +1046,6 @@ load();
   function systemChanged() { if (mode === "system") apply(); }
   if (system.addEventListener) system.addEventListener("change", systemChanged);
   else system.addListener(systemChanged);
-  window.addEventListener("storage", event => {
-    if (event.key === themeKey || event.key === modeKey || event.key === null) { readPreferences(); apply(); }
-  });
   apply();
 })();
 
@@ -1421,24 +1412,6 @@ function categoryState() {
   const revision = snapshot ? snapshot.revision : null;
   let model = JSON.parse(JSON.stringify(published)), baseRevision = revision;
   let warning = snapshot ? "" : "Local source preview: shared saving requires a published snapshot.";
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw !== null) {
-      if (raw.length > 2000000) throw new Error();
-      const draft = JSON.parse(raw);
-      if (!draft || Object.keys(draft).sort().join(",") !== "baseRevision,model" ||
-          !(draft.baseRevision === null || /^[0-9a-f]{40}$/.test(draft.baseRevision))) throw new Error();
-      validateCategoryData(draft.model);
-      // A matching newly published model means this draft was published.
-      if (JSON.stringify(draft.model) === JSON.stringify(published)) {
-        localStorage.removeItem(key);
-      } else {
-        model = draft.model;
-        baseRevision = draft.baseRevision;
-        warning = "Local draft restored; not necessarily published.";
-      }
-    }
-  } catch { warning = "Draft storage unavailable or invalid. Export a backup before leaving."; }
   return categoryState.saved = {key, legacyKey, model, published,
     revision, baseRevision, warning, search:""};
 }
@@ -1474,13 +1447,10 @@ function refreshCategoryViews() {
 function saveCategoryData() {
   const state = categoryState();
   validateCategoryData(state.model);
-  let message = "Local draft saved. Submit a GitHub Issue to share it.";
-  try {
-    const raw = JSON.stringify({baseRevision:state.baseRevision,model:state.model});
-    if (raw.length > 2000000) throw new Error();
-    localStorage.setItem(state.key, raw);
-  } catch { message = "Draft storage unavailable. Export a backup before leaving."; }
-  $("category-editor-status").textContent = message;
+  const raw = JSON.stringify({baseRevision:state.baseRevision,model:state.model});
+  if (raw.length > 2000000) throw new Error("Category draft too large.");
+  $("category-editor-status").textContent =
+    "Draft kept in page memory only. Reloading loses edits; export or publish before leaving.";
   refreshCategoryViews();
   updateSharedCategoryStatus();
 }
@@ -1698,7 +1668,7 @@ function renderCategoryEditor() {
 })();
 
 
-// Preferred speed is browser-local; actual rate is confirmed by YouTube.
+// Preferred speed lasts until reload; actual rate is confirmed by YouTube.
 function normalizePlaybackSpeed(value) {
   if (!Number.isFinite(value)) return 1;
   return Math.max(0.25, Math.min(2, Math.round(value * 4) / 4));
@@ -1706,24 +1676,9 @@ function normalizePlaybackSpeed(value) {
 
 function speedState() {
   if (speedState.saved) return speedState.saved;
-  const key = "approved-yt-speed-v1:" +
-    encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
-  let preferred = 1;
-  let stored = true;
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw !== null && raw.trim() !== "" && Number.isFinite(Number(raw))) {
-      preferred = normalizePlaybackSpeed(Number(raw));
-      if (Number(raw) !== preferred) {
-        localStorage.setItem(key, String(preferred));
-      }
-    }
-  } catch {
-    stored = false;
-  }
   return speedState.saved = {
-    key, preferred, player: null, frame: null, ready: false,
-    timer: null, stored,
+    preferred: 1, player: null, frame: null, ready: false,
+    timer: null, stored: true,
   };
 }
 
@@ -1738,15 +1693,8 @@ function setPreferredSpeed(value) {
   if (!Number.isFinite(value) || value < 0.25 || value > 2) return;
   const state = speedState();
   state.preferred = normalizePlaybackSpeed(value);
-  try {
-    localStorage.setItem(state.key, String(state.preferred));
-    state.stored = true;
-  } catch {
-    state.stored = false;
-  }
   updateSpeedControls();
-  $("speed-status").textContent = state.stored
-    ? "" : "Cannot save speed; using it for this session.";
+  $("speed-status").textContent = "";
   clearTimeout(state.timer);
   state.timer = setTimeout(applyPreferredSpeed, 180);
 }
@@ -2102,7 +2050,7 @@ function updateSharedCategoryStatus() {
   const dirty = categoryDraftDirty();
   const status = !state.revision ? "Source preview: shared snapshot unavailable." :
     stale ? "Stale local draft. Export a backup, reload published categories, then reapply edits." :
-    dirty ? "Local draft - not synced. GitHub submission and publication required." :
+    dirty ? "Memory-only draft. Reloading loses edits; export or submit through GitHub and wait for publication." :
     "Published categories loaded. No unsaved changes.";
   if ($("category-sync-status")) $("category-sync-status").textContent = status;
   for (const id of ["category-save-shared", "player-category-save"]) {
@@ -2193,18 +2141,26 @@ function prepareSharedCategoryRequest() {
   }
   $("category-reload-published").addEventListener("click", () => {
     if (!confirm("Discard this browser's draft and reload the published page? Export a backup first if needed.")) return;
-    try { localStorage.removeItem(categoryState().key); }
-    catch { $("category-editor-status").textContent = "Cannot clear draft storage. No reload performed."; return; }
     location.reload();
   });
   $("category-migrate-local").addEventListener("click", () => {
     try {
-      const state = categoryState(), raw = localStorage.getItem(state.legacyKey);
+      const state = categoryState();
+      const savedDraft = localStorage.getItem(state.key);
+      const raw = savedDraft === null
+        ? localStorage.getItem(state.legacyKey) : savedDraft;
       if (!raw || raw.length > 2000000) throw new Error();
-      const value = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      const value = savedDraft === null ? parsed : parsed.model;
+      const baseRevision = savedDraft === null ? state.revision : parsed.baseRevision;
+      if (!(baseRevision === null ||
+          (typeof baseRevision === "string" && /^[0-9a-f]{40}$/.test(baseRevision)))) {
+        throw new Error();
+      }
       validateCategoryData(value);
-      if (!confirm("Replace this local draft with the previous browser categories? Existing backup storage stays unchanged. Review and save through GitHub to share.")) return;
+      if (!confirm("Restore old browser categories into page memory? Reloading loses these edits. Existing storage stays unchanged; export a backup before leaving.")) return;
       state.model = value;
+      state.baseRevision = baseRevision;
       saveCategoryData();
       renderCategoryEditor();
     } catch { $("category-editor-status").textContent = "No valid previous browser categories found. You can import your exported JSON backup instead."; }
@@ -2229,15 +2185,12 @@ function prepareSharedCategoryRequest() {
 })();
 
 
-// Browser-local auto-next preference; never changes channel approval.
+// Page-memory auto-next preference; never changes channel approval.
 function autoNextState() {
   if (autoNextState.saved) return autoNextState.saved;
-  const scope = encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
-  const key = "approved-yt-autonext-v1:" + scope;
-  let enabled = false;
-  try { enabled = localStorage.getItem(key) === "true"; } catch {}
-  return autoNextState.saved = {key, enabled};
+  return autoNextState.saved = {enabled:false};
 }
+
 function nextAutoVideoID(items, playing, eligible) {
   const index = items.findIndex(video => video.id === playing);
   if (index < 0) return null;
@@ -2265,11 +2218,6 @@ function advanceAutoNext() {
   toggle.checked = state.enabled;
   toggle.addEventListener("change", () => {
     state.enabled = toggle.checked;
-    try { localStorage.setItem(state.key, String(state.enabled)); }
-    catch {
-      $("playback-mode-status").textContent =
-        "Cannot save auto-play preference; using it for this session.";
-    }
   });
 })();
 
@@ -2396,12 +2344,9 @@ function renderPlayerFeed() {
 // Navigation/short-duration preferences do not modify the approved whitelist.
 function playbackOptions() {
   if (playbackOptions.saved) return playbackOptions.saved;
-  const scope = encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
-  const key = "approved-yt-skip-short-v1:" + scope;
-  let skipShort = true;
-  try { const value = localStorage.getItem(key); if (value === "false") skipShort = false; } catch {}
-  return playbackOptions.saved = {key, skipShort, loop:false};
+  return playbackOptions.saved = {skipShort:true, loop:false};
 }
+
 function shortVideoAllows(video) {
   const seconds = playbackDurationSeconds(video.duration);
   return !playbackOptions().skipShort || seconds === null || seconds >= 60;
@@ -2440,8 +2385,6 @@ function navigateApprovedVideo(direction) {
   $("skip-short-videos").checked = state.skipShort;
   $("skip-short-videos").addEventListener("change", () => {
     state.skipShort = $("skip-short-videos").checked;
-    try { localStorage.setItem(state.key,String(state.skipShort)); }
-    catch { $("playback-mode-status").textContent = "Cannot save skip preference; using it for this session."; }
     page = 0;
     playerFeedState().page = 0;
     if (feed) render();
