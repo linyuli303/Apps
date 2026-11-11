@@ -19,8 +19,16 @@ The public viewer uses the owner’s approved channels and published categories.
 - Search, channel/category filters, sorting, and 48-card pagination.
 - Optional thumbnails; turn them off for a compact text feed without placeholder images.
 - Embedded playback with **Kino mode**, video-only fullscreen, and **Open in YouTube / App**.
-- Remembered preferred speed from **0.25× to 2×**, in **0.25 increments** for both the dropdown and slider. No custom-rate option. YouTube determines supported rates; MyTube uses a supported fallback and reports application failures or mismatches rather than claiming an unsupported rate worked.
-- The current configuration requests **15 recent uploads per channel**, not full history. Private, unavailable, upcoming, or non-embeddable videos may be excluded.
+- **Previous / Next** icon buttons navigate the current filtered, sorted list, wrapping at its ends.
+- **Auto-play next** advances when a video ends and stops at the end of the list. It is off by default, with the preference remembered on that browser.
+- **Loop** repeats the current video and takes priority over Auto-play next. It is off initially and lasts for the page session.
+- **Skip videos <60s** is enabled by default, with the preference remembered on that browser. It filters the grid, text feed, RSS catalogue, playback Feed menu, and navigation. Videos exactly 60 seconds long and videos with unknown durations remain included. Changing the setting does not interrupt the current video.
+- The skip rule uses duration, not YouTube’s official Shorts classification. It does not fetch older videos to replace skipped uploads.
+- A collapsible **Feed** menu beside **Channel categories** previews the current filtered list, highlights the playing video, and shows channel, publication date, views, and duration. Select a row to play it. Click the menu again, click outside, or press Escape to collapse it. The panel uses 48-row pagination and overlays the player without resizing the video window.
+- Video durations appear in the grid, text feed, RSS catalogue, and playback Feed menu. Missing or unsupported durations display **Unavailable**.
+- Remembered preferred speed from **0.25× to 2×**, in **0.25 increments** for both the dropdown and slider. No custom-rate option. YouTube determines supported rates; MyTube uses a supported fallback and reports failures or mismatches rather than claiming an unsupported rate worked.
+- The current configuration requests **15 recent uploads per channel**, not full history. Skipping short videos can leave fewer than 15 visible videos per channel. Private, unavailable, upcoming, or non-embeddable videos may also be excluded.
+- Playback controls, duration display, and short-video filtering use the existing snapshot and official iframe API; they do not make additional YouTube Data API requests. Browser autoplay restrictions can still require pressing Play manually.
 
 ### RSS-style catalogue
 
@@ -76,13 +84,13 @@ Channel approvals live in **`channels.json`**. Category labels do not approve ch
 
 ## How storage and hosting work
 
-| Component | Responsibility |
-|---|---|
-| `channels.json` | Shared approved-channel configuration |
-| `categories.json` | Shared category definitions and channel assignments |
-| GitHub Issues and Actions | Owner-authorized validation, repository updates, and publication |
-| GitHub Pages | Static website hosting |
-| Browser storage | Local category drafts, optional whitelist drafts, and playback/appearance preferences |
+| Component                 | Responsibility                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| `channels.json`           | Shared approved-channel configuration                                                 |
+| `categories.json`         | Shared category definitions and channel assignments                                   |
+| GitHub Issues and Actions | Owner-authorized validation, repository updates, and publication                      |
+| GitHub Pages              | Static website hosting                                                                |
+| Browser storage           | Local category drafts, optional whitelist drafts, and playback/appearance preferences |
 
 The Issue processors use GitHub’s REST API and workflow-provided token. The public frontend contains no repository-write token. There is **no application database, continuously running backend, or direct authenticated frontend save API**.
 
@@ -106,12 +114,12 @@ YOUTUBE_REFRESH_HOURS_UTC=08,11,15,19
 
 Set it under **Settings → Secrets and variables → Actions → Variables**. Enter two-digit UTC hours separated by commas, **without spaces**.
 
-| UTC | Germany: winter (CET) | Germany: summer (CEST) |
-|---|---|---|
-| 08:00 | 09:00 | 10:00 |
-| 11:00 | 12:00 | 13:00 |
-| 15:00 | 16:00 | 17:00 |
-| 19:00 | 20:00 | 21:00 |
+| UTC   | Germany: winter (CET) | Germany: summer (CEST) |
+| ----- | --------------------- | ---------------------- |
+| 08:00 | 09:00                 | 10:00                  |
+| 11:00 | 12:00                 | 13:00                  |
+| 15:00 | 16:00                 | 17:00                  |
+| 19:00 | 20:00                 | 21:00                  |
 
 The intended German refresh times are **09:00, 12:00, 16:00 and 20:00**.
 The winter setting above uses fixed UTC hours and does not adjust automatically.
@@ -124,19 +132,19 @@ The workflow has 24 hourly schedule entries. Only selected schedule hours procee
 
 ### What triggers YouTube requests?
 
-| Event | Fetches new YouTube data? |
-|---|---|
-| Selected scheduled hour | Yes |
-| Unselected scheduled hour | No—build skipped |
-| Ordinary manual run, reuse unchecked | Yes |
-| Accepted owner channel request, including removal or no-op | Yes |
-| Push changing `channels.json`, `scripts/build_feed.py`, or `scripts/prepare_site.py` | Yes |
-| Other pushes, including category-data-only changes | No—reuse validated public feed |
-| Accepted owner category request | No—explicit reuse-only dispatch |
-| Manual run with reuse checked | No—reuse validated public feed |
-| Browsing, searching, editing labels, or expanding RSS panels | No |
-| Refresh button inside MyTube | No—reload published snapshot |
-| Local Git commit without pushing | No—no GitHub workflow triggered |
+| Event                                                                                | Fetches new YouTube data?       |
+| ------------------------------------------------------------------------------------ | ------------------------------- |
+| Selected scheduled hour                                                              | Yes                             |
+| Unselected scheduled hour                                                            | No—build skipped                |
+| Ordinary manual run, reuse unchecked                                                 | Yes                             |
+| Accepted owner channel request, including removal or no-op                           | Yes                             |
+| Push changing `channels.json`, `scripts/build_feed.py`, or `scripts/prepare_site.py` | Yes                             |
+| Other pushes, including category-data-only changes                                   | No—reuse validated public feed  |
+| Accepted owner category request                                                      | No—explicit reuse-only dispatch |
+| Manual run with reuse checked                                                        | No—reuse validated public feed  |
+| Browsing, searching, editing labels, or expanding RSS panels                         | No                              |
+| Refresh button inside MyTube                                                         | No—reload published snapshot    |
+| Local Git commit without pushing                                                     | No—no GitHub workflow triggered |
 
 If Git cannot reliably determine changed files, the selector conservatively chooses a full refresh. A push containing multiple commits is evaluated for its overall changes, not just the final commit message.
 
@@ -207,18 +215,18 @@ Review the source and workflows before enabling automation. **Adding an API key 
 
 ### 2. Replace repository and owner references
 
-| File | Configuration to review |
-|---|---|
-| `site/app.js` | Channel/category request-form destinations |
-| `scripts/reuse_public_feed.py` | Fixed public feed URL |
-| `scripts/select_feed_mode.py` | Runner repository identity |
-| `scripts/channel_request.py` | Repository and personal-owner authorization |
-| `scripts/process_channel_request.py` | Repository and immutable numeric owner ID |
-| `scripts/category_request.py` | Category authorization and numeric owner guard; reuses channel authorization |
-| `scripts/process_category_request.py` | Imported repository/owner constants and category processing |
-| `.github/workflows/channel-change.yml` | Channel-request repository, actor, author, and owner guards |
-| `.github/workflows/category-change.yml` | Category-request repository, actor, author, and owner guards |
-| Tests, documentation, and optional templates | Installation-specific expectations |
+| File                                         | Configuration to review                                                      |
+| -------------------------------------------- | ---------------------------------------------------------------------------- |
+| `site/app.js`                                | Channel/category request-form destinations                                   |
+| `scripts/reuse_public_feed.py`               | Fixed public feed URL                                                        |
+| `scripts/select_feed_mode.py`                | Runner repository identity                                                   |
+| `scripts/channel_request.py`                 | Repository and personal-owner authorization                                  |
+| `scripts/process_channel_request.py`         | Repository and immutable numeric owner ID                                    |
+| `scripts/category_request.py`                | Category authorization and numeric owner guard; reuses channel authorization |
+| `scripts/process_category_request.py`        | Imported repository/owner constants and category processing                  |
+| `.github/workflows/channel-change.yml`       | Channel-request repository, actor, author, and owner guards                  |
+| `.github/workflows/category-change.yml`      | Category-request repository, actor, author, and owner guards                 |
+| Tests, documentation, and optional templates | Installation-specific expectations                                           |
 
 Search tracked files for the original repository name, username, and numeric account ID. Update references and their tests consistently; do not weaken authorization checks merely to make a fork run.
 
@@ -232,9 +240,7 @@ Review or replace **both** `channels.json` and `categories.json`. A fork inherit
 {
   "title": "MyTube",
   "max_videos_per_channel": 15,
-  "channels": [
-    {"id": "UCVuR4hBxX3zWY_xUCZeIc3A"}
-  ]
+  "channels": [{ "id": "UCVuR4hBxX3zWY_xUCZeIc3A" }]
 }
 ```
 
@@ -247,7 +253,7 @@ Shared category data uses this structure:
 ```json
 {
   "version": 1,
-  "categories": [{"id": "cat-0", "name": "Music"}],
+  "categories": [{ "id": "cat-0", "name": "Music" }],
   "assignments": {}
 }
 ```
@@ -267,10 +273,10 @@ Google OAuth and a browser-side GitHub personal access token are not required by
 
 ### 5. Configure environments and request permissions
 
-| Environment | Configuration |
-|---|---|
+| Environment       | Configuration                                           |
+| ----------------- | ------------------------------------------------------- |
 | `youtube-refresh` | Allow `main` only; environment secret `YOUTUBE_API_KEY` |
-| `github-pages` | Allow `main` only |
+| `github-pages`    | Allow `main` only                                       |
 
 For unattended operation, leave required reviewers and wait timers disabled unless intentional. Keep the API key in the **environment secret**, not frontend files, variables, or duplicate repository secrets. It is injected only into the feed-building step.
 
