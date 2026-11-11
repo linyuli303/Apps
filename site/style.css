@@ -1545,3 +1545,15 @@ header{flex-wrap:wrap}.header-actions{display:flex;align-items:center;justify-co
 #player-feed-panel button:focus-visible,#player-feed-toggle:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 @media(max-width:600px){#player .player-feed-button-label,#player .player-feed-chevron{display:none}#player #player-feed-toggle{min-width:34px}}
 @media(max-height:450px){#player-feed-panel{bottom:85px;max-height:calc(100dvh - 100px)}}
+
+/* Additional playback controls; original frame/Kino dimensions are untouched. */
+#player .player-bottom .playback-icon{display:inline-flex;align-items:center;justify-content:center;width:33px;padding:5px;flex-shrink:0}
+#player .playback-icon svg{width:18px;height:18px;fill:currentColor}
+#player .player-bottom #loop-video[aria-pressed="true"]{background:var(--accent);color:var(--page);border-color:var(--accent)}
+#player #skip-short-videos:checked+.auto-next-track{background:var(--accent)}
+#player #skip-short-videos:checked+.auto-next-track::after{transform:translateX(14px)}
+#player #skip-short-videos:focus-visible+.auto-next-track{outline:3px solid var(--accent);outline-offset:3px}
+.feed-duration{font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--muted)}
+#grid.plain-feed .text-feed-views{white-space:normal}
+.rss-catalogue .rss-video,.rss-catalogue .rss-column-head{grid-template-columns:92px minmax(0,1fr) 145px}
+@media(max-width:750px){.rss-catalogue .rss-video,.rss-catalogue .rss-column-head{grid-template-columns:70px minmax(0,1fr) 110px}}

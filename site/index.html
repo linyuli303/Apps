@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=player-feed-menu-1" />
-    <script src="app.js?v=player-feed-menu-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=playback-controls-1" />
+    <script src="app.js?v=playback-controls-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -275,7 +275,9 @@
           rel="noopener noreferrer"
           referrerpolicy="no-referrer"
         >Open in YouTube / App &#8599;</a>
-        <button id="next" type="button">Next approved video</button>
+        <button id="previous" class="playback-icon" type="button" aria-label="Previous video" title="Previous video"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zm3 7 10-7v14z" /></svg></button>
+        <button id="next" class="playback-icon" type="button" aria-label="Next video" title="Next video"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM5 5l10 7-10 7z" /></svg></button>
+        <button id="loop-video" class="playback-icon" type="button" aria-label="Repeat current video" title="Repeat current video" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10V1l5 5-5 5V8H7v3H3V8a4 4 0 0 1 4-4zm10 16H7v3l-5-5 5-5v3h10v-3h4v3a4 4 0 0 1-4 4z" /></svg></button>
         <label class="auto-next-control" for="auto-next">
           Auto-play next
           <input id="auto-next" type="checkbox" role="switch" />
@@ -297,6 +299,11 @@
           <input id="speed-slider" type="range"
             min="0.25" max="2" step="0.25" value="1" />
           <output id="speed-value" for="speed-slider">1x</output>
+        </label>
+        <label class="auto-next-control" for="skip-short-videos">
+          Skip videos &lt;60s
+          <input id="skip-short-videos" type="checkbox" role="switch" checked />
+          <span class="auto-next-track" aria-hidden="true"></span>
         </label>
         <button id="player-category-toggle" type="button"
           aria-expanded="false" aria-controls="player-category-panel">

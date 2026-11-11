@@ -117,6 +117,9 @@ function render() {
         ? a.publishedAt.localeCompare(b.publishedAt)
         : b.publishedAt.localeCompare(a.publishedAt),
   );
+  render.navigationVideos = visible.slice();
+  visible = visible.filter(shortVideoAllows);
+  updatePlaybackNavigation();
   const fragment = document.createDocumentFragment();
   const thumbnails = $("thumbnails").checked;
   $("grid").classList.toggle("plain-feed", !thumbnails);
@@ -178,6 +181,8 @@ function render() {
       );
     }
 
+    const durationHost = thumbnails ? card.querySelector(".meta") : viewsForDuration(card);
+    if (durationHost) durationHost.append(element("span", "feed-duration", " | " + playbackDurationLabel(v.duration)));
     card.setAttribute("aria-label", `${v.title} - Play inside MyTube`);
     card.title = `${v.title} - Play inside MyTube`;
     card.addEventListener("click", () => openPlayer(v.id));
@@ -269,7 +274,7 @@ function openPlayer(id) {
   $("rss-catalogue").inert = true;
   document.body.style.overflow = "hidden";
   $("close").focus();
-  $("next").disabled = visible.length < 2;
+  updatePlaybackNavigation();
   attachSpeedController(iframe, id);
 }
 function closePlayer() {
@@ -324,11 +329,7 @@ $("official").addEventListener("click", () => {
   stopSpeedController();
   $("frame").replaceChildren();
 });
-$("next").addEventListener("click", () => {
-  if (!visible.length) return;
-  const index = visible.findIndex((v) => v.id === current);
-  openPlayer(visible[(index + 1) % visible.length].id);
-});
+$("next").addEventListener("click", () => navigateApprovedVideo(1));
 $("refresh").addEventListener("click", load);
 $("search").addEventListener("input", () => {
   page = 0;
@@ -382,11 +383,14 @@ document.addEventListener("keydown", (event) => {
         $("kino-toggle"),
         $("player-fullscreen"),
         $("official"),
+        $("previous"),
         $("next"),
+        $("loop-video"),
         $("auto-next"),
         $("player-appearance"),
         $("speed-preset"),
         $("speed-slider"),
+        $("skip-short-videos"),
         $("player-category-toggle"),
         ...(
           $("player-category-panel").hidden ? [] :
@@ -1146,7 +1150,7 @@ function renderRSSCatalogue() {
     headings.append(
       element("span", "", "PUBLISHED"),
       element("span", "", "VIDEO TITLE"),
-      element("span", "rss-views", "VIEWS"),
+      element("span", "rss-views", "VIEWS | TIME"),
     );
     fragment.append(headings);
 
@@ -1183,6 +1187,7 @@ function renderRSSCatalogue() {
         ? "View count unavailable in this snapshot"
         : `${countLabel} views at the last feed refresh`;
 
+      views.append(element("span", "feed-duration", " | " + playbackDurationLabel(video.duration)));
       row.append(date, title, views);
       fragment.append(row);
     });
@@ -1236,7 +1241,7 @@ function renderRSSCatalogue() {
   feed.videos.forEach((video) => {
     const group = grouped.get(video.channelId);
     if (
-      group &&
+      group && shortVideoAllows(video) &&
       safeID(video.id) &&
       Number.isFinite(Date.parse(video.publishedAt))
     ) {
@@ -1818,10 +1823,24 @@ function attachSpeedController(iframe, id) {
           }
           if (event.data === 0 && !endedHandled) {
             endedHandled = true;
+            if (playbackOptions().loop) {
+              setTimeout(() => {
+                if (!valid() || !playbackOptions().loop) return;
+                try {
+                  if (state.player.getPlayerState() !== 0) return;
+                  state.player.seekTo(0, true);
+                  state.player.playVideo();
+                } catch {
+                  $("playback-mode-status").textContent = "Cannot repeat this video. Press Play.";
+                }
+              }, 0);
+              return;
+            }
             if (!autoNextState().enabled) return;
             // Defer destruction of the old player until its callback returns.
             setTimeout(() => {
               if (!valid() || !autoNextState().enabled) return;
+              if (playbackOptions().loop) return;
               try {
                 if (state.player.getPlayerState() !== 0) return;
               } catch { return; }
@@ -2019,7 +2038,7 @@ function renderPlayerCategories() {
         "Channel categories" + (tags.size ? ` (${tags.size})` : "");
       $("player-category-status").textContent =
         $("category-editor-status").textContent;
-      $("next").disabled = visible.length < 2;
+      updatePlaybackNavigation();
     });
 
     label.append(checkbox, text);
@@ -2233,8 +2252,8 @@ function advanceAutoNext() {
     expireFeed();
     return;
   }
-  const nextID = nextAutoVideoID(visible, current, video =>
-    safeID(video.id) && draftAllows(video.channelId) && categoryAllows(video.channelId) &&
+  const nextID = nextAutoVideoID(render.navigationVideos || visible, current, video =>
+    shortVideoAllows(video) && safeID(video.id) && draftAllows(video.channelId) && categoryAllows(video.channelId) &&
     feed.channels.some(channel => channel.id === video.channelId) &&
     feed.videos.some(item => item.id === video.id && item.channelId === video.channelId)
   );
@@ -2279,7 +2298,7 @@ function playbackFeedItems() {
   if (!feed || !freshFeed(feed) || $("player").hidden) return [];
   const approved = new Set(feed.channels.map(channel => channel.id));
   const membership = new Map(feed.videos.map(video => [video.id, video.channelId]));
-  return visible.filter(video => safeID(video.id) && approved.has(video.channelId) &&
+  return visible.filter(video => shortVideoAllows(video) && safeID(video.id) && approved.has(video.channelId) &&
     membership.get(video.id) === video.channelId && draftAllows(video.channelId) &&
     categoryAllows(video.channelId));
 }
@@ -2369,5 +2388,68 @@ function renderPlayerFeed() {
     if (!panel.hidden && !panel.contains(event.target) && !toggle.contains(event.target)) {
       closePlayerFeed(panel.contains(document.activeElement));
     }
+  });
+})();
+
+
+// Navigation/short-duration preferences do not modify the approved whitelist.
+function playbackOptions() {
+  if (playbackOptions.saved) return playbackOptions.saved;
+  const scope = encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
+  const key = "approved-yt-skip-short-v1:" + scope;
+  let skipShort = true;
+  try { const value = localStorage.getItem(key); if (value === "false") skipShort = false; } catch {}
+  return playbackOptions.saved = {key, skipShort, loop:false};
+}
+function shortVideoAllows(video) {
+  const seconds = playbackDurationSeconds(video.duration);
+  return !playbackOptions().skipShort || seconds === null || seconds >= 60;
+}
+function viewsForDuration(card) { return card.querySelector(".text-feed-views"); }
+function eligibleNavigationVideo(video) {
+  return feed && freshFeed(feed) && safeID(video.id) && shortVideoAllows(video) &&
+    draftAllows(video.channelId) && categoryAllows(video.channelId) &&
+    feed.channels.some(channel => channel.id === video.channelId) &&
+    feed.videos.some(item => item.id === video.id && item.channelId === video.channelId);
+}
+function adjacentApprovedID(items, playing, direction, eligible) {
+  if (!items.length) return null;
+  const index = items.findIndex(video => video.id === playing);
+  for (let step = 1; step <= items.length; step++) {
+    const offset = index < 0 ? (direction > 0 ? step - 1 : items.length - step) :
+      (index + direction * step + items.length * 2) % items.length;
+    const video = items[offset];
+    if (video.id !== playing && eligible(video)) return video.id;
+  }
+  return null;
+}
+function updatePlaybackNavigation() {
+  const items = render.navigationVideos || visible;
+  for (const [id,direction] of [["previous",-1],["next",1]]) {
+    if ($(id)) $(id).disabled = !adjacentApprovedID(items,current,direction,eligibleNavigationVideo);
+  }
+}
+function navigateApprovedVideo(direction) {
+  if (!feed || !freshFeed(feed)) { expireFeed(); return; }
+  const id = adjacentApprovedID(render.navigationVideos || visible,current,direction,eligibleNavigationVideo);
+  if (id) openPlayer(id);
+}
+(function initializePlaybackOptions() {
+  const state = playbackOptions();
+  $("skip-short-videos").checked = state.skipShort;
+  $("skip-short-videos").addEventListener("change", () => {
+    state.skipShort = $("skip-short-videos").checked;
+    try { localStorage.setItem(state.key,String(state.skipShort)); }
+    catch { $("playback-mode-status").textContent = "Cannot save skip preference; using it for this session."; }
+    page = 0;
+    playerFeedState().page = 0;
+    if (feed) render();
+    renderRSSCatalogue();
+    updatePlaybackNavigation();
+  });
+  $("previous").addEventListener("click", () => navigateApprovedVideo(-1));
+  $("loop-video").addEventListener("click", () => {
+    state.loop = !state.loop;
+    $("loop-video").setAttribute("aria-pressed",String(state.loop));
   });
 })();
