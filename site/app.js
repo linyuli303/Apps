@@ -269,7 +269,6 @@ function openPlayer(id) {
   iframe.referrerPolicy = "strict-origin-when-cross-origin";
   $("frame").replaceChildren(iframe);
   $("player").hidden = false;
-  document.querySelector("header").inert = true;
   document.querySelector("main").inert = true;
   $("rss-catalogue").inert = true;
   document.body.style.overflow = "hidden";
@@ -288,7 +287,6 @@ function closePlayer() {
   $("frame").replaceChildren();
   $("player").hidden = true;
   current = null;
-  document.querySelector("header").inert = false;
   document.querySelector("main").inert = false;
   $("rss-catalogue").inert = false;
   document.body.style.overflow = "";

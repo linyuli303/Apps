@@ -54,6 +54,14 @@ class CategoryConfigurationTests(unittest.TestCase):
             self.assertIn(f'class="{name}"',details)
             self.assertNotIn(f'class="{name}"',summary)
 
+    def test_player_background_uses_existing_main_not_removed_header(self):
+        self.assertNotIn('document.querySelector("header")',self.js)
+        for value in ('true','false'):
+            self.assertIn(f'document.querySelector("main").inert = {value};',self.js)
+            self.assertIn(f'$("rss-catalogue").inert = {value};',self.js)
+        main=self.html.split('<main>',1)[1].split('</main>',1)[0]
+        self.assertIn('class="landing-brand"',main)
+
     def test_existing_nodes_and_saving_preserved(self):
         self.assertIn('$("whitelist-dialog-content").append(manager)',self.js)
         self.assertIn('manager.open = true',self.js)
