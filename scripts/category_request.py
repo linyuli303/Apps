@@ -62,12 +62,84 @@ def parse_request(body):
     if not match:
         raise ValueError("Use reviewed category request form")
     request = json.loads(match.group(1), object_pairs_hook=unique_object)
-    if not isinstance(request, dict) or set(request) != {"baseRevision", "model"}:
+    if not isinstance(request, dict) or set(request) not in (
+        {"baseRevision", "model"}, {"baseRevision", "operations"}
+    ):
         raise ValueError("Invalid request schema")
     if not isinstance(request["baseRevision"], str) or not re.fullmatch(r"[0-9a-f]{40}", request["baseRevision"]):
         raise ValueError("Invalid base revision")
-    validate_model(request["model"])
+    if "model" in request:
+        # Previously reviewed full-model Issues remain supported.
+        validate_model(request["model"])
+    else:
+        validate_operations(request["operations"])
     return request
+
+
+def validate_operations(operations):
+    if not isinstance(operations, list) or not 1 <= len(operations) <= 1001:
+        raise ValueError("Invalid change list")
+    seen = set()
+    for operation in operations:
+        if not isinstance(operation, dict):
+            raise ValueError("Invalid change")
+        kind = operation.get("op")
+        if kind == "setCategories" and set(operation) == {"op", "categories"}:
+            validate_model({"version": 1, "categories": operation["categories"], "assignments": {}})
+            target = "definitions"
+        elif kind == "setChannelCategories" and set(operation) == {"op", "channelId", "categoryIds"}:
+            cid, tags = operation["channelId"], operation["categoryIds"]
+            if (not isinstance(cid, str) or not re.fullmatch(r"UC[A-Za-z0-9_-]{22}", cid)
+                    or not isinstance(tags, list) or len(tags) > 50
+                    or any(not isinstance(tag, str) or not re.fullmatch(r"cat-[A-Za-z0-9-]{1,64}", tag) for tag in tags)
+                    or len(set(tags)) != len(tags)):
+                raise ValueError("Invalid assignment change")
+            target = cid
+        else:
+            raise ValueError("Unsupported change schema")
+        if target in seen:
+            raise ValueError("Duplicate change target")
+        seen.add(target)
+    if len(json.dumps(operations, ensure_ascii=True).encode("utf-8")) > MAX_BYTES:
+        raise ValueError("Change list too large")
+    return operations
+
+
+def apply_request(current, request, approved):
+    validate_model(current)
+    if "operations" not in request:
+        validate_model(request["model"], approved)
+        return copy.deepcopy(request["model"])
+    operations = validate_operations(request["operations"])
+    result = copy.deepcopy(current)
+    # Definitions are resolved first. Deleted categories lose their assignments.
+    for operation in operations:
+        if operation["op"] == "setCategories":
+            result["categories"] = copy.deepcopy(operation["categories"])
+    ids = {category["id"] for category in result["categories"]}
+    for cid in list(result["assignments"]):
+        tags = [tag for tag in result["assignments"][cid] if tag in ids]
+        if tags:
+            result["assignments"][cid] = tags
+        else:
+            del result["assignments"][cid]
+    for operation in operations:
+        if operation["op"] != "setChannelCategories":
+            continue
+        cid, tags = operation["channelId"], operation["categoryIds"]
+        if cid not in approved:
+            raise ValueError("Changed channel is not approved")
+        if any(tag not in ids for tag in tags):
+            raise ValueError("Changed category does not exist")
+        if tags:
+            result["assignments"][cid] = list(tags)
+        else:
+            result["assignments"].pop(cid, None)
+    # Preserve unrelated legacy assignments, including removed channels. Public
+    # packaging filters them; this request cannot create new unapproved ones.
+    validate_model(result)
+    return result
+
 
 def authorize_event(event):
     if not isinstance(event, dict) or not isinstance(event.get("issue"), dict):

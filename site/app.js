@@ -2049,31 +2049,70 @@ function updateSharedCategoryStatus() {
     if ($(id)) $(id).disabled = !state.revision || !dirty || stale;
   }
 }
+function compactCategoryOperations(published, model) {
+  const operations = [];
+  if (JSON.stringify(published.categories) !== JSON.stringify(model.categories)) {
+    operations.push({op:"setCategories", categories:model.categories});
+  }
+  const categoryIDs = new Set(model.categories.map(category => category.id));
+  const channels = new Set([...Object.keys(published.assignments), ...Object.keys(model.assignments)]);
+  for (const channelId of channels) {
+    const before = (published.assignments[channelId] || []).filter(id => categoryIDs.has(id));
+    const after = model.assignments[channelId] || [];
+    if (JSON.stringify([...before].sort()) !== JSON.stringify([...after].sort())) {
+      operations.push({op:"setChannelCategories",channelId,categoryIds:after});
+    }
+  }
+  return operations;
+}
+function categoryChangeSummary(published, model) {
+  const lines = [];
+  const before = new Map(published.categories.map(category => [category.id,category.name]));
+  const after = new Map(model.categories.map(category => [category.id,category.name]));
+  for (const [id,name] of before) {
+    if (!after.has(id)) lines.push("Delete category: " + name + " (remove its assignments only)");
+    else if (after.get(id) !== name) lines.push("Rename category: " + name + " -> " + after.get(id));
+  }
+  for (const [id,name] of after) if (!before.has(id)) lines.push("Add category: " + name);
+  if (!lines.length && JSON.stringify(published.categories) !== JSON.stringify(model.categories)) {
+    lines.push("Update category order");
+  }
+  const names = new Map((feed?.channels || []).map(channel => [channel.id,channel.title]));
+  for (const operation of compactCategoryOperations(published,model)) {
+    if (operation.op !== "setChannelCategories") continue;
+    const previous = (published.assignments[operation.channelId] || []).map(id => before.get(id)).filter(Boolean);
+    const next = operation.categoryIds.map(id => after.get(id));
+    lines.push((names.get(operation.channelId) || operation.channelId) + ": " +
+      (previous.join(", ") || "Uncategorized") + " -> " + (next.join(", ") || "Uncategorized"));
+  }
+  return lines;
+}
 function prepareSharedCategoryRequest() {
   const state = categoryState();
-  const message = $("category-review-message");
   try {
     validateCategoryData(state.model);
     if (!state.revision || state.baseRevision !== state.revision || !categoryDraftDirty()) {
       throw new Error("Reload published categories before submitting; export any draft first.");
     }
     if (!feed || !freshFeed(feed)) throw new Error("Load a fresh feed before reviewing assignments.");
+    const operations = compactCategoryOperations(state.published,state.model);
+    if (!operations.length) throw new Error("No effective changes to submit.");
     const allowed = new Set(feed.channels.map(channel => channel.id));
-    const filtered = JSON.parse(JSON.stringify(state.model));
-    const removed = Object.keys(filtered.assignments).filter(id => !allowed.has(id));
-    if (removed.length) {
-      if (!confirm("Remove assignments for " + removed.length + " channels absent from the current feed? This does not modify the whitelist.")) return;
-      for (const id of removed) delete filtered.assignments[id];
-      state.model = filtered;
-      saveCategoryData();
-      renderCategoryEditor();
+    if (operations.some(operation => operation.op === "setChannelCategories" && !allowed.has(operation.channelId))) {
+      throw new Error("A changed channel is outside the current approved feed. Export a backup and remove that edit before submitting.");
     }
-    // ASCII-escaped payload is safe inside the fixed Markdown code fence.
     const ascii = value => JSON.stringify(value).replace(/[\u007f-\uffff<>`&]/g,
       ch => "\\u" + ch.charCodeAt(0).toString(16).padStart(4,"0"));
-    if (ascii(state.model).length > 48000) throw new Error("Request too large for the Issue transport. Export a backup and reduce the draft; nothing submitted.");
-    const payload = "```json\n" + ascii({baseRevision:state.baseRevision,model:state.model}) + "\n```";
+    const encoded = ascii({baseRevision:state.baseRevision,operations});
+    if (encoded.length > 47000) throw new Error("Too many changes for one Issue. Export a backup and submit smaller groups.");
+    const payload = "```json\n" + encoded + "\n```";
     $("category-request-text").value = payload;
+    const list = $("category-review-changes");
+    list.replaceChildren();
+    const lines = categoryChangeSummary(state.published,state.model);
+    for (const line of lines) list.append(element("li", "", line));
+    $("category-review-count").textContent = lines.length + (lines.length === 1 ? " change to share" : " changes to share");
+    $("category-review-details").open = false;
     const url = new URL("https://github.com/linyuli303/MyTube/issues/new");
     url.searchParams.set("template", "category-change.yml");
     url.searchParams.set("title", "[MyTube] Category change");
@@ -2081,7 +2120,7 @@ function prepareSharedCategoryRequest() {
     const large = url.href.length > 6500;
     if (large) url.searchParams.delete("category_request");
     $("category-open-issue").href = url.href;
-    message.textContent = large ? "Large request: copy the text below and paste it into Category request on GitHub, including both code fences." : "Review your draft below. The GitHub form will be prefilled. Nothing has been submitted yet.";
+    $("category-review-message").textContent = large ? "Copy the compact request under Technical details and paste it into Category request on GitHub, including both code fences." : "Only your changes will be prefilled on GitHub. Nothing has been submitted yet.";
     $("category-review").showModal();
   } catch (error) {
     $("category-editor-status").textContent = error.message;

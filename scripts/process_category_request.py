@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import re
 import sys
-from category_request import authorize_event, validate_model, unique_object
+from category_request import authorize_event, validate_model, unique_object, apply_request
 from channel_request import validate_config
 from process_channel_request import github, REPO, OWNER_ID
 
@@ -39,9 +39,9 @@ def process(event, call=github):
     _, config = read_file(call, "channels.json", 200000)
     approved = validate_config(config)
     validate_model(current)
-    validate_model(request["model"], approved)
-    if current != request["model"]:
-        content = (json.dumps(request["model"], ensure_ascii=True, indent=2) + "\n").encode("utf-8")
+    updated = apply_request(current, request, approved)
+    if current != updated:
+        content = (json.dumps(updated, ensure_ascii=True, indent=2) + "\n").encode("utf-8")
         call("PUT", f"/repos/{REPO}/contents/categories.json", {
             "message": f"Apply owner category request #{number}",
             "content": base64.b64encode(content).decode("ascii"),

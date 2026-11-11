@@ -12,8 +12,8 @@
     />
     <title>My Channels</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=shared-categories-1" />
-    <script src="app.js?v=shared-categories-1" defer></script>
+    <link rel="stylesheet" href="style.css?v=compact-categories-1" />
+    <script src="app.js?v=compact-categories-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -356,13 +356,20 @@
       <p>Opening this form does not save anything. On GitHub, review the public request,
         check the confirmation and submit as the repository owner. Check both the category
         processing workflow and its separate publication run. Other devices need a page reload.</p>
-      <label for="category-request-text">Request backup / copy-paste fallback</label>
-      <textarea id="category-request-text" readonly rows="10" spellcheck="false"></textarea>
+      <h3 id="category-review-count"></h3>
+      <ul id="category-review-changes"></ul>
+      <p>Other category definitions and channel assignments remain unchanged, except assignments
+        removed by any category deletions listed above.</p>
       <div class="category-edit-row">
-        <button id="category-copy-request" type="button">Copy request</button>
-        <a id="category-open-issue" target="_blank" rel="noopener noreferrer">Open GitHub Issue form</a>
-        <button id="category-review-close" type="button">Close</button>
+        <a id="category-open-issue" target="_blank" rel="noopener noreferrer">Review on GitHub...</a>
+        <button id="category-review-close" type="button">Back to editing</button>
       </div>
+      <details id="category-review-details">
+        <summary>Technical details / Copy fallback</summary>
+        <label for="category-request-text">Compact change request</label>
+        <textarea id="category-request-text" readonly rows="6" spellcheck="false"></textarea>
+        <button id="category-copy-request" type="button">Copy request</button>
+      </details>
     </dialog>
   </body>
 </html>

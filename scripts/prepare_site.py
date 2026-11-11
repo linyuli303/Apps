@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import hashlib
 import sys
 
 _scripts_path = str(Path(__file__).resolve().parent)
@@ -63,6 +64,7 @@ def prepare():
     public_js, category_revision = package_categories(ROOT, (source/"app.js").read_text(encoding="utf-8"))
     if security.sensitive(public_js.encode("utf-8")) or len(public_js.encode("utf-8")) > 25_000_000:
         raise ValueError("Packaged script failed safety checks")
+    app_revision = hashlib.sha256(public_js.encode("utf-8")).hexdigest()[:20]
     if output.exists():shutil.rmtree(output)
     output.mkdir()
     for name in ASSETS:
@@ -72,7 +74,7 @@ def prepare():
             target.write_text(public_js, encoding="utf-8", newline="\n")
         elif name == "index.html":
             html = (source/name).read_text(encoding="utf-8")
-            html, count = re.subn(r'app\.js\?v=[^"\s]+', "app.js?v=shared-categories-" + category_revision, html)
+            html, count = re.subn(r'app\.js\?v=[^"\s]+', "app.js?v=shared-categories-" + app_revision, html)
             if count != 1:
                 raise ValueError("Missing application cache version")
             target.write_text(html, encoding="utf-8", newline="\n")
