@@ -133,6 +133,50 @@ def inspection_feedback(result):
     ])
     return "\n".join(lines)
 
+
+def diagnostic_fetch(url, hosts):
+    """Preserve fetch behavior; log only fixed diagnostic categories."""
+    import socket
+    import ssl
+    import http.client
+    from build_podcasts import fetch_feed
+
+    try:
+        return fetch_feed(url, hosts)
+    except Exception as error:
+        stage = (
+            "Apple directory"
+            if hosts == ["itunes.apple.com"]
+            else "RSS"
+        )
+        if isinstance(error, ssl.SSLCertVerificationError):
+            category = "TLS certificate verification failed"
+        elif isinstance(error, ssl.SSLError):
+            category = "TLS connection failed"
+        elif isinstance(error, socket.gaierror):
+            category = "DNS lookup failed"
+        elif isinstance(error, TimeoutError):
+            category = "Network timeout"
+        elif isinstance(error, http.client.HTTPException):
+            category = "HTTP protocol failure"
+        elif isinstance(error, OSError):
+            category = "Network connection failure"
+        elif isinstance(error, ValueError):
+            # Match only known collector messages; never print raw errors.
+            category = {
+                "Non-public feed destination": "Public-IP safety check failed",
+                "Invalid or unapproved HTTPS URL": "HTTPS URL or redirect-host check failed",
+                "Invalid or excessive feed redirect": "Redirect limit or missing location",
+                "Feed HTTP request failed": "Server returned a non-200 HTTP response",
+                "Unexpected compressed response": "Unsupported response compression",
+                "Feed exceeds size limit": "RSS size limit exceeded",
+                "Feed time budget exceeded": "Retrieval time budget exceeded",
+            }.get(str(error), "Retrieval validation failed")
+        else:
+            category = "Unexpected retrieval failure"
+        print(stage + " retrieval diagnostic: " + category)
+        raise
+
 def digest(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode()).hexdigest()
 
@@ -200,7 +244,7 @@ def main():
     config=json.loads((root/'podcasts.json').read_text(encoding='utf-8'))
     from functools import partial
     from podcast_media_inspection import inspect_chain
-    envelope=prepare(event,config,partial(resolve, inspector=inspect_chain))
+    envelope=prepare(event,config,partial(resolve, fetcher=diagnostic_fetch, inspector=inspect_chain))
     encoded=base64.b64encode(json.dumps(envelope,ensure_ascii=True,separators=(',',':')).encode()).decode()
     if len(encoded)>64000:raise ValueError('Oversized resolution')
     with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as stream:stream.write('resolution='+encoded+'\n')
