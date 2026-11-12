@@ -2713,3 +2713,127 @@ body.podcast-player-open main{padding-bottom:220px}
     grid-column:7 / 13
   }
 }
+
+/* Contained RSS split catalogue v1: all device layouts. */
+:root #rss-catalogue{
+  --rss-region-left:4vw;
+  --rss-region-top:120px;
+  --rss-region-width:92vw;
+  --rss-region-height:calc(100vh - 132px);
+  --rss-width:calc(var(--rss-region-width) / 3);
+  position:fixed;
+  left:var(--rss-region-left);
+  top:var(--rss-region-top);
+  bottom:auto;
+  width:0;
+  height:var(--rss-region-height)
+}
+:root #rss-catalogue.rss-open{
+  width:var(--rss-width)
+}
+:root #rss-catalogue .rss-panel{
+  width:100%;
+  height:100%;
+  border:1px solid var(--border);
+  border-radius:12px 0 0 12px
+}
+:root #rss-catalogue .rss-detail{
+  position:absolute;
+  left:100%;
+  top:0;
+  bottom:0;
+  width:calc(var(--rss-region-width) - var(--rss-width));
+  height:100%;
+  border:1px solid var(--border);
+  border-left:0;
+  border-radius:0 12px 12px 0;
+  z-index:2
+}
+:root #rss-catalogue:not(.rss-wide) .rss-panel{
+  border-radius:12px
+}
+:root #rss-catalogue .rss-channel-button{
+  min-width:0;
+  align-items:flex-start;
+  flex-wrap:wrap
+}
+:root #rss-catalogue .rss-channel-name{
+  overflow-wrap:anywhere
+}
+:root #rss-catalogue .rss-channels,
+:root #rss-catalogue .rss-detail-body{
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden
+}
+
+/* Keep the same split on phones; compact the contents, not the panels. */
+:root[data-device-layout="phone"] #rss-catalogue .rss-heading,
+:root[data-device-layout="phone"] #rss-catalogue .rss-detail-heading{
+  padding:10px 6px;
+  flex-wrap:wrap;
+  gap:6px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-heading h2{
+  font-size:16px;
+  overflow-wrap:anywhere
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-heading small{
+  display:none
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-search-label{
+  padding:8px 6px 0;
+  font-size:11px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-search-label input{
+  padding:8px 4px;
+  min-height:44px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-status{
+  margin:8px 6px;
+  overflow-wrap:anywhere
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-channels{
+  padding:0 4px 10px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-channel-button{
+  padding:10px 3px;
+  min-height:44px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-channel-name{
+  flex-basis:100%;
+  font-size:12px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-updated{
+  white-space:normal;
+  font-size:9px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-footnote{
+  display:none
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-column-head{
+  display:none
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-video{
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:5px;
+  padding:10px 3px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-video-title{
+  grid-column:1 / -1;
+  grid-row:1;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  font-size:12px;
+  min-height:44px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-date{
+  grid-column:1;
+  grid-row:2
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-views{
+  grid-column:2;
+  grid-row:2;
+  white-space:normal;
+  overflow-wrap:anywhere
+}

@@ -3173,6 +3173,45 @@ function detectMyAppsLayout(userAgent, width, coarsePointer) {
     preference = select.value;
     applyLayout();
   });
+  // Measure the real shared header and content edges, not device guesses.
+  function measureRSSCatalogue() {
+    const catalogue = $("rss-catalogue");
+    const main = document.querySelector("main");
+    const header = document.querySelector(".myapps-header");
+    if (!catalogue || !main || !header) return;
+
+    const bounds = main.getBoundingClientRect();
+    const headerBounds = header.getBoundingClientRect();
+    const style = getComputedStyle(main);
+    const paddingLeft = parseFloat(style.paddingLeft) || 0;
+    const paddingRight = parseFloat(style.paddingRight) || 0;
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight;
+    const left = Math.max(8, bounds.left + paddingLeft);
+    const right = Math.min(
+      viewportWidth - 8, bounds.right - paddingRight
+    );
+    const top = Math.max(8, headerBounds.bottom + 12);
+
+    catalogue.style.setProperty("--rss-region-left", left + "px");
+    catalogue.style.setProperty("--rss-region-top", top + "px");
+    catalogue.style.setProperty(
+      "--rss-region-width", Math.max(0, right - left) + "px"
+    );
+    catalogue.style.setProperty(
+      "--rss-region-height",
+      Math.max(0, viewportHeight - top - 12) + "px"
+    );
+  }
+
+  window.addEventListener("resize", measureRSSCatalogue);
+  window.addEventListener("scroll", measureRSSCatalogue, {passive:true});
+  if (typeof ResizeObserver === "function") {
+    const catalogueGeometryObserver = new ResizeObserver(measureRSSCatalogue);
+    catalogueGeometryObserver.observe(document.querySelector(".myapps-header"));
+    catalogueGeometryObserver.observe(document.querySelector("main"));
+  }
+  measureRSSCatalogue();
   window.addEventListener("resize", applyLayout);
   applyLayout();
 })();
