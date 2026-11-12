@@ -56,6 +56,35 @@ class FetchDiagnosticTests(unittest.TestCase):
                 self.assertNotIn("PRIVATE-URL", output.getvalue())
                 self.assertEqual(fetch.call_count, 1)
 
+    def test_numeric_network_errors_are_safely_classified(self):
+        import errno
+        cases = (
+            (errno.ENETUNREACH, "Network unreachable"),
+            (errno.EHOSTUNREACH, "Host unreachable"),
+            (errno.ECONNREFUSED, "Connection refused"),
+            (errno.ECONNRESET, "Connection reset"),
+            (errno.ECONNABORTED, "Connection aborted"),
+            (errno.ETIMEDOUT, "Network timeout"),
+        )
+        for code, expected in cases:
+            with self.subTest(category=expected):
+                error = OSError(code, "PRIVATE-ERROR-MARKER")
+                output = io.StringIO()
+                with patch("build_podcasts.fetch_feed", side_effect=error) as fetch:
+                    with contextlib.redirect_stdout(output):
+                        with self.assertRaises(OSError) as caught:
+                            diagnostic_fetch(
+                                "https://feeds.example.org/PRIVATE-URL",
+                                ["feeds.example.org"],
+                            )
+                self.assertIs(caught.exception, error)
+                self.assertEqual(
+                    output.getvalue().strip(),
+                    "RSS retrieval diagnostic: " + expected,
+                )
+                self.assertNotIn("PRIVATE", output.getvalue())
+                self.assertEqual(fetch.call_count, 1)
+
     def test_directory_stage_has_no_raw_error(self):
         output = io.StringIO()
         with patch("build_podcasts.fetch_feed",

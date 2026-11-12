@@ -160,7 +160,15 @@ def diagnostic_fetch(url, hosts):
         elif isinstance(error, http.client.HTTPException):
             category = "HTTP protocol failure"
         elif isinstance(error, OSError):
-            category = "Network connection failure"
+            import errno
+            category = {
+                errno.ENETUNREACH: "Network unreachable",
+                errno.EHOSTUNREACH: "Host unreachable",
+                errno.ECONNREFUSED: "Connection refused",
+                errno.ECONNRESET: "Connection reset",
+                errno.ECONNABORTED: "Connection aborted",
+                errno.ETIMEDOUT: "Network timeout",
+            }.get(error.errno, "Network connection failure")
         elif isinstance(error, ValueError):
             # Match only known collector messages; never print raw errors.
             category = {
