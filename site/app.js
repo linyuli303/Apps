@@ -2617,6 +2617,8 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
     top:["M5 4h14M12 20V8M6 14l6-6 6 6"],
     up:["M6 14l6-6 6 6"], down:["M6 10l6 6 6-6"], close:["M6 6l12 12M18 6L6 18"],
     repeat:["M4 10V8a3 3 0 0 1 3-3h13m-4-4 4 4-4 4M20 14v2a3 3 0 0 1-3 3H4m4-4-4 4 4 4"],
+    speaker:["M11 5 6 9H3v6h3l5 4V5Z","M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"],
+    muted:["M11 5 6 9H3v6h3l5 4V5Z","M16 9l6 6M22 9l-6 6"],
     queue:["M4 6h16M4 11h16M4 16h8M16 15l5 3-5 3z"]
   };
   function icon(name) {
@@ -2731,7 +2733,59 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   const rate=element("select");rate.setAttribute("aria-label","Podcast playback speed");
   for(const n of [.5,.75,1,1.25,1.5,1.75,2])rate.append(new Option(n+"x",String(n)));rate.value="1";
   rate.addEventListener("change",()=>{speed=Number(rate.value);audio.playbackRate=speed;});
-  transport.append(previous,button("back","Back 15 seconds",()=>skip(-15)),play,button("forward","Forward 15 seconds",()=>skip(15)),next,rate);
+  // Volume is page-memory only; controls never start playback or set a source.
+  let lastAudibleVolume = 1;
+  const volumeGroup = element("div", "podcast-volume");
+  volumeGroup.setAttribute("role", "group");
+  volumeGroup.setAttribute("aria-label", "Volume controls");
+  const mute = button("speaker", "Mute podcast", () => {
+    const silent = audio.muted || audio.volume === 0;
+    setVolume(silent ? lastAudibleVolume : 0);
+  });
+  mute.id = "podcast-mute";
+  const volumeLabel = element("label", "sr-only", "Podcast volume");
+  volumeLabel.htmlFor = "podcast-volume";
+  const volume = element("input");
+  volume.id = "podcast-volume";
+  volume.type = "range";
+  volume.min = "0";
+  volume.max = "100";
+  volume.step = "1";
+  volume.value = "100";
+  volume.autocomplete = "off";
+  const volumeValue = element("output", "podcast-volume-value");
+  volumeValue.id = "podcast-volume-value";
+  volumeValue.setAttribute("for", "podcast-volume");
+  function syncVolume() {
+    const silent = audio.muted || audio.volume === 0;
+    if (!silent) lastAudibleVolume = audio.volume;
+    const percent = silent ? 0 : Math.round(audio.volume * 100);
+    volume.value = String(percent);
+    volume.setAttribute("aria-valuetext", percent + " percent");
+    volumeValue.value = percent + "%";
+    decorate(mute, silent ? "muted" : "speaker",
+      silent ? "Unmute podcast" : "Mute podcast");
+    mute.setAttribute("aria-pressed", String(silent));
+  }
+  function setVolume(level) {
+    if (!Number.isFinite(level) || level < 0 || level > 1) return;
+    if (!audio.muted && audio.volume > 0) lastAudibleVolume = audio.volume;
+    try {
+      audio.volume = level;
+      audio.muted = level === 0;
+      if (Math.abs(audio.volume - level) > 0.001) {
+        message("This browser requires device volume controls.");
+      }
+    } catch {
+      message("Volume adjustment unavailable. Use device volume controls.");
+    }
+    syncVolume();
+  }
+  volume.addEventListener("input", () => setVolume(Number(volume.value) / 100));
+  audio.addEventListener("volumechange", syncVolume);
+  volumeGroup.append(mute, volumeLabel, volume, volumeValue);
+  transport.append(previous,button("back","Back 15 seconds",()=>skip(-15)),play,button("forward","Forward 15 seconds",()=>skip(15)),next,rate,volumeGroup);
+  syncVolume();
   $("podcast-seek").addEventListener("input",()=>{if(Number.isFinite(audio.duration))audio.currentTime=Math.min(audio.duration,Number($("podcast-seek").value));sync();});
   $("podcast-repeat").addEventListener("click",()=>{repeat=repeat==="off"?"all":repeat==="all"?"one":"off";$("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode(repeat==="one"?"One":repeat==="all"?"List":"Off"));$("podcast-repeat").setAttribute("aria-label","Repeat "+repeat+"; click to change mode");$("podcast-repeat").dataset.mode=repeat;});
   $("podcast-queue-toggle").addEventListener("click",()=>{showQueue($("podcast-queue").hidden);renderQueue();});
