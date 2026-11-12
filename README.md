@@ -8,7 +8,7 @@ Browse approved channels through a searchable video grid, an image-free text fee
 
 ## View MyTube
 
-https://linyuli303.github.io/MyTube/
+https://linyuli303.github.io/Apps/
 
 The public viewer uses the owner’s approved channels and published categories. To create your own feed, follow the fork setup below.
 
