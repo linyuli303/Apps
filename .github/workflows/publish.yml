@@ -40,6 +40,33 @@ concurrency:
   group: github-pages
   cancel-in-progress: false
 jobs:
+  schedule-diagnostics:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    env:
+      SCHEDULE_CRON: ${{ github.event.schedule }}
+      CONFIGURED_HOURS: ${{ vars.YOUTUBE_REFRESH_HOURS_UTC }}
+      RUN_REF: ${{ github.ref }}
+    steps:
+      - name: Explain scheduled hour selection
+        shell: python
+        run: |
+          import json
+          import os
+          cron = os.environ["SCHEDULE_CRON"]
+          configured = os.environ.get("CONFIGURED_HOURS", "")
+          effective = configured or "09,12,18,22"
+          parts = cron.split()
+          hour = f"{int(parts[1]):02d}" if len(parts) == 5 else None
+          selected = hour is not None and f",{hour}," in f",{effective},"
+          print("Cron expression:", json.dumps(cron))
+          print("Intended UTC hour:", hour)
+          print("Repository variable:", json.dumps(configured))
+          print("Effective hours:", json.dumps(effective))
+          print("Branch ref:", os.environ["RUN_REF"])
+          print("Hour selected by existing gate:", selected)
   build:
     if: github.ref == 'refs/heads/main' && (github.event_name != 'schedule' || contains(format(',{0},', vars.YOUTUBE_REFRESH_HOURS_UTC || '09,12,18,22'), format(',{0},', fromJSON('{"0 0 * * *":"00","0 1 * * *":"01","0 2 * * *":"02","0 3 * * *":"03","0 4 * * *":"04","0 5 * * *":"05","0 6 * * *":"06","0 7 * * *":"07","0 8 * * *":"08","0 9 * * *":"09","0 10 * * *":"10","0 11 * * *":"11","0 12 * * *":"12","0 13 * * *":"13","0 14 * * *":"14","0 15 * * *":"15","0 16 * * *":"16","0 17 * * *":"17","0 18 * * *":"18","0 19 * * *":"19","0 20 * * *":"20","0 21 * * *":"21","0 22 * * *":"22","0 23 * * *":"23"}')[github.event.schedule])))
     environment: youtube-refresh
