@@ -43,7 +43,7 @@ class EmbeddedPlaybackTests(unittest.TestCase):
             '$("official").addEventListener("click", () => {', self.js
         )
         self.assertIn(
-            "frame-src https://www.youtube-nocookie.com;", self.html
+            "frame-src https://www.youtube-nocookie.com https://open.spotify.com;", self.html
         )
         self.assertIn("script-src 'self';", self.html)
 

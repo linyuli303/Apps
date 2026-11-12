@@ -4636,6 +4636,101 @@ function validateSpotifyPlaylistPage(page) {
 
 // Playlist UI receives reduced data only, never credentials.
 // All rendering is text/node based; provider HTML and image URLs are discarded.
+// Official iframe only: no SDK, tokens, provider scripts, or autoplay.
+function createSpotifyEmbedPlayer(host) {
+  const panel = element("section", "spotify-embed-panel");
+  panel.setAttribute("aria-label", "Spotify playlist player");
+  panel.hidden = true;
+  const heading = element("div", "spotify-embed-heading");
+  const title = element("strong", "spotify-embed-title", "Spotify player");
+  const toggle = element("button", "", "Dock ›");
+  const closeButton = element("button", "", "Close player");
+  toggle.type = closeButton.type = "button";
+  toggle.setAttribute("aria-expanded", "true");
+  toggle.setAttribute("aria-controls", "spotify-embed-content");
+  const content = element("div", "spotify-embed-content");
+  content.id = "spotify-embed-content";
+  const notice = element("p", "spotify-embed-notice",
+    "Spotify content loads only when you open a player. Spotify may use cookies and browser data. Playback depends on Spotify and your browser; use Open in Spotify if unavailable.");
+  const frameHost = element("div", "spotify-embed-frame");
+  content.append(notice, frameHost);
+  heading.append(title, toggle, closeButton);
+  const restore = element("button", "spotify-embed-restore", "‹ ♫");
+  restore.type = "button";
+  restore.hidden = true;
+  restore.setAttribute("aria-label", "Restore Spotify playlist player");
+  restore.setAttribute("aria-controls", "spotify-embed-content");
+  panel.append(heading, content, restore);
+  host.append(panel);
+  let currentId = null;
+  let opener = null;
+  function expand(expanded) {
+    content.hidden = !expanded;
+    toggle.textContent = expanded ? "Dock ›" : "Expand";
+    heading.hidden = !expanded;
+    restore.hidden = expanded;
+    restore.setAttribute("aria-expanded", String(expanded));
+    toggle.setAttribute("aria-expanded", String(expanded));
+    panel.dataset.collapsed = String(!expanded);
+  }
+  function close(restoreFocus = false) {
+    frameHost.replaceChildren();
+    currentId = null;
+    panel.hidden = true;
+    expand(true);
+    if (restoreFocus && opener && opener.isConnected) opener.focus();
+    opener = null;
+  }
+  function open(item, trigger) {
+    if (!item || typeof item.id !== "string" ||
+        !/^[A-Za-z0-9]{22}$/.test(item.id) || typeof item.name !== "string") return;
+    opener = trigger;
+    title.textContent = item.name;
+    if (currentId !== item.id) {
+      const frame = document.createElement("iframe");
+      frame.title = "Spotify playlist: " + item.name;
+      frame.src = "https://open.spotify.com/embed/playlist/" + item.id;
+      frame.setAttribute("allow", "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture");
+      frame.setAttribute("allowfullscreen", "");
+      frame.setAttribute("referrerpolicy", "no-referrer");
+      frameHost.replaceChildren(frame);
+      currentId = item.id;
+    }
+    panel.hidden = false;
+    expand(true);
+    toggle.focus();
+    panel.scrollIntoView({block:"nearest",behavior:"smooth"});
+  }
+  const toggleClick = () => {
+    expand(false);
+    restore.focus();
+  };
+  const restoreClick = () => { expand(true); toggle.focus(); };
+  const closeClick = () => close(true);
+  const escape = event => {
+    if (event.key === "Escape" && !panel.hidden) { close(true); event.stopPropagation(); }
+  };
+  toggle.addEventListener("click", toggleClick);
+  restore.addEventListener("click", restoreClick);
+  closeButton.addEventListener("click", closeClick);
+  panel.addEventListener("keydown", escape);
+  // Stop this player when leaving Spotify; don't leave hidden audio behind.
+  const page = $("spotify-page");
+  const observer = page && typeof MutationObserver === "function"
+    ? new MutationObserver(() => { if (page.hidden) close(); }) : null;
+  if (observer) observer.observe(page, {attributes:true,attributeFilter:["hidden"]});
+  function dispose() {
+    close();
+    if (observer) observer.disconnect();
+    toggle.removeEventListener("click", toggleClick);
+    restore.removeEventListener("click", restoreClick);
+    closeButton.removeEventListener("click", closeClick);
+    panel.removeEventListener("keydown", escape);
+    panel.remove();
+  }
+  return Object.freeze({open, close, dispose});
+}
+
 function createSpotifyPlaylistView(controller, onReauthorize) {
   const panel = $("spotify-playlists");
   const rows = $("spotify-playlist-rows");
@@ -4645,6 +4740,7 @@ function createSpotifyPlaylistView(controller, onReauthorize) {
   let generation = 0, nextOffset = null, disposed = false;
   const shown = new Set();
   const records = new Map();
+  const embedPlayer = createSpotifyEmbedPlayer(panel);
   const toolbar = element("div", "music-library-toolbar");
   const search = document.createElement("input");
   search.type = "search";
@@ -4687,7 +4783,11 @@ function createSpotifyPlaylistView(controller, onReauthorize) {
       link.rel = "noopener noreferrer";
       link.referrerPolicy = "no-referrer";
       link.setAttribute("aria-label", "Open " + item.name + " in Spotify (new tab)");
-      row.append(cover, text, link);
+      const openPlayer = element("button", "music-library-open-player", "Open player");
+      openPlayer.type = "button";
+      openPlayer.setAttribute("aria-label", "Open Spotify player for " + item.name);
+      openPlayer.addEventListener("click", () => embedPlayer.open(item, openPlayer));
+      row.append(cover, text, openPlayer, link);
       fragment.append(row);
     }
     if (!filtered.length && records.size) fragment.append(element("p", "music-library-empty", "No matching loaded playlists."));
@@ -4749,6 +4849,7 @@ function createSpotifyPlaylistView(controller, onReauthorize) {
     refresh.removeEventListener("click", refreshClick); more.removeEventListener("click", moreClick);
     search.removeEventListener("input", render); sort.removeEventListener("change", render);
     grid.removeEventListener("click", selectGrid); list.removeEventListener("click", selectList);
+    embedPlayer.dispose();
     toolbar.remove();
   }
   return Object.freeze({load, clear});
@@ -4822,7 +4923,7 @@ function initializePodcastConfiguration(shows) {
     preparing: "Preparing secure Spotify authorization...",
     redirecting: "Opening Spotify authorization...",
     connecting: "Completing Spotify authorization...",
-    connected: "Connected · Track browsing and playback are not available yet.",
+    connected: "Connected · Open a playlist player to listen. Playback availability is controlled by Spotify.",
     denied: "Spotify authorization was declined. No connection was established.",
     failed: "Spotify connection failed. Connect again.",
     cleanup_failed: "Connection cancelled, but temporary login cleanup could not be confirmed. Close this tab before reconnecting.",

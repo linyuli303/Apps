@@ -44,7 +44,7 @@ class PlaybackSpeedTests(unittest.TestCase):
             self.html,
         )
         self.assertIn(
-            "frame-src https://www.youtube-nocookie.com;", self.html
+            "frame-src https://www.youtube-nocookie.com https://open.spotify.com;", self.html
         )
         self.assertNotIn("'unsafe-inline'", self.html)
         self.assertNotIn("'unsafe-eval'", self.html)

@@ -3099,3 +3099,40 @@ body.podcast-player-open main{padding-bottom:220px}
  #spotify-page .music-library-rows[data-view="list"] .music-library-card {grid-template-columns:40px minmax(0,1fr);}
  #spotify-page .music-library-rows[data-view="list"] .music-library-card a {grid-column:2;}
 }
+
+/* spotify-embed-player-v1: scoped official player; collapsible without remount. */
+#spotify-page .spotify-embed-panel {margin:20px 0;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);}
+#spotify-page .spotify-embed-panel[hidden],#spotify-page .spotify-embed-content[hidden] {display:none!important;}
+#spotify-page .spotify-embed-heading {display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+#spotify-page .spotify-embed-title {flex:1;min-width:100px;overflow-wrap:anywhere;font-size:13px;}
+#spotify-page .spotify-embed-notice {font-size:11px;color:var(--muted);line-height:1.5;margin:10px 0;}
+#spotify-page .spotify-embed-frame iframe {display:block;border:0;border-radius:12px;width:100%;height:352px;}
+#spotify-page .music-library-open-player {font:inherit;font-size:11px;min-height:36px;align-self:flex-start;}
+#spotify-page .spotify-embed-heading button {font:inherit;font-size:12px;min-height:44px;}
+#spotify-page .spotify-embed-panel :focus-visible {outline:2px solid var(--accent);outline-offset:3px;}
+#spotify-page .music-library-rows[data-view="list"] .music-library-card {grid-template-columns:44px minmax(0,1fr) auto auto;}
+@media(max-width:600px){
+ #spotify-page .spotify-embed-panel {padding:10px;}
+ #spotify-page .spotify-embed-heading {gap:6px;}
+ #spotify-page .spotify-embed-title {min-width:70px;}
+ #spotify-page .spotify-embed-heading button {padding:7px;}
+ #spotify-page .music-library-rows[data-view="list"] .music-library-card {grid-template-columns:40px minmax(0,1fr);}
+ #spotify-page .music-library-rows[data-view="list"] .music-library-card .music-library-open-player {grid-column:2;}
+ #spotify-page .music-library-rows[data-view="list"] .music-library-card a {grid-column:2;}
+}
+
+/* Side-docked state: a fixed edge tab, never a horizontal collapsed bar. */
+#spotify-page .spotify-embed-heading[hidden],
+#spotify-page .spotify-embed-restore[hidden] {display:none!important;}
+#spotify-page .spotify-embed-panel[data-collapsed="true"] {
+ position:fixed;right:0;bottom:26px;z-index:40;
+ width:48px;margin:0;padding:0;border-radius:12px 0 0 12px;
+ overflow:hidden;box-shadow:0 3px 14px rgb(0 0 0 / .15);
+}
+#spotify-page .spotify-embed-restore {
+ display:flex;align-items:center;justify-content:center;
+ width:48px;min-width:48px;height:76px;min-height:76px;
+ margin:0;padding:6px;border:0;border-radius:inherit;
+ background:var(--accent);color:var(--page);font:inherit;font-size:23px;
+}
+#spotify-page .spotify-embed-restore:focus-visible {outline-offset:-4px;}
