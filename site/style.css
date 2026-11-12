@@ -2837,3 +2837,105 @@ body.podcast-player-open main{padding-bottom:220px}
   white-space:normal;
   overflow-wrap:anywhere
 }
+
+/* Phone RSS sequential full-width panels v1. */
+:root[data-device-layout="phone"] #rss-catalogue{
+  --rss-width:var(--rss-region-width)
+}
+:root[data-device-layout="phone"] #rss-catalogue.rss-open{
+  width:var(--rss-region-width)
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-panel{
+  width:100%;
+  border-radius:12px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-detail{
+  left:0;
+  width:100%;
+  border:1px solid var(--border);
+  border-radius:12px;
+  z-index:2
+}
+:root[data-device-layout="phone"] #rss-catalogue.rss-wide .rss-panel{
+  visibility:hidden;
+  pointer-events:none
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-heading,
+:root[data-device-layout="phone"] #rss-catalogue .rss-detail-heading{
+  padding:12px;
+  flex-wrap:nowrap
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-heading h2{
+  font-size:22px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-detail-heading>div{
+  flex:1;
+  min-width:0
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-channel-name{
+  font-size:15px
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-search-label{
+  padding:10px 12px 0
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-channels{
+  padding:0 10px 12px
+}
+
+/* Existing accessible name remains; only the visible caption becomes an icon. */
+:root[data-device-layout="phone"] #rss-catalogue #rss-close{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 44px;
+  width:44px;
+  height:44px;
+  min-height:44px;
+  padding:8px;
+  font-size:0
+}
+:root[data-device-layout="phone"] #rss-catalogue #rss-close::before{
+  content:"\00d7";
+  font-size:26px;
+  line-height:1
+}
+
+/* Phone RSS navigation icons v1. */
+#rss-catalogue .rss-detail-close{
+  display:none
+}
+:root[data-device-layout="phone"] #rss-catalogue .rss-detail-close{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 44px;
+  width:44px;
+  height:44px;
+  min-height:44px;
+  padding:8px;
+  font-size:26px;
+  line-height:1
+}
+:root[data-device-layout="phone"] #rss-catalogue #rss-back{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  order:-1;
+  flex:0 0 44px;
+  width:44px;
+  height:44px;
+  min-height:44px;
+  padding:8px;
+  font-size:0
+}
+:root[data-device-layout="phone"] #rss-catalogue #rss-back::before{
+  content:"\2039";
+  font-size:30px;
+  line-height:1
+}
+
+/* Phone RSS horizontal navigation gestures v1. */
+:root[data-device-layout="phone"] #rss-catalogue .rss-panel,
+:root[data-device-layout="phone"] #rss-catalogue .rss-detail{
+  touch-action:pan-y pinch-zoom
+}

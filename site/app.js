@@ -1122,6 +1122,70 @@ function renderRSSCatalogue() {
       state.suppressPreview = false;
     });
     $("rss-close").addEventListener("click", () => setOpen(false));
+    $("rss-close").title = "Close RSS catalogue";
+    $("rss-back").setAttribute("aria-label", "Back to channels");
+    $("rss-back").title = "Back to channels";
+
+    const detailClose = element("button", "rss-detail-close", "\u00d7");
+    detailClose.id = "rss-detail-close";
+    detailClose.type = "button";
+    detailClose.setAttribute("aria-label", "Close RSS catalogue");
+    detailClose.title = "Close RSS catalogue";
+    detailClose.addEventListener("click", () => setOpen(false));
+    $("rss-detail").querySelector(".rss-detail-heading").append(detailClose);
+
+    // Phone gestures navigate catalogue views only, never start playback.
+    const catalogue = $("rss-catalogue");
+    let rssSwipe = null;
+    let suppressRSSClickUntil = 0;
+    const phoneCatalogue = () =>
+      document.documentElement.dataset.deviceLayout === "phone";
+
+    catalogue.addEventListener("pointerdown", event => {
+      rssSwipe = null;
+      if (!phoneCatalogue() || !state.open ||
+          !event.isPrimary || event.button !== 0 ||
+          event.target.closest(
+            "input,select,textarea,label,#rss-close,#rss-back,#rss-detail-close"
+          )) return;
+
+      rssSwipe = {
+        id:event.pointerId, x:event.clientX, y:event.clientY,
+        started:performance.now(), active:state.active,
+      };
+    });
+
+    catalogue.addEventListener("pointerup", event => {
+      const start = rssSwipe;
+      rssSwipe = null;
+      if (!start || event.pointerId !== start.id ||
+          !phoneCatalogue() || !state.open ||
+          state.active !== start.active ||
+          performance.now() - start.started > 1200) return;
+
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      if (dx > -60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+      // Reuse existing Back/Close actions and their focus restoration.
+      if (state.active !== null) {
+        $("rss-back").click();
+      } else {
+        setOpen(false);
+      }
+      suppressRSSClickUntil = performance.now() + 500;
+    });
+
+    catalogue.addEventListener("pointercancel", () => { rssSwipe = null; });
+    catalogue.addEventListener("lostpointercapture", () => { rssSwipe = null; });
+    catalogue.addEventListener("click", event => {
+      // Only suppress the pointer-generated click following a completed swipe.
+      // Keyboard activation (detail === 0) remains available.
+      if (event.detail !== 0 && performance.now() < suppressRSSClickUntil) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }, true);
     $("rss-search").addEventListener("input", () => {
       state.active = null;
       state.pinned = null;
@@ -1221,6 +1285,9 @@ function renderRSSCatalogue() {
     state.active = id;
     $("rss-catalogue").classList.toggle("rss-wide", id !== null);
     $("rss-detail").hidden = id === null;
+    // Hidden phone channel controls must not receive keyboard focus.
+    panel.inert = id !== null &&
+      document.documentElement.dataset.deviceLayout === "phone";
     const selected = rows.get(id);
     $("rss-detail-title").textContent = selected
       ? selected.title
@@ -1348,12 +1415,14 @@ function renderRSSCatalogue() {
     rows.set(channel.id, record);
 
     section.addEventListener("pointerenter", (event) => {
-      if (event.pointerType === "mouse" && state.pinned === null) {
+      if (event.pointerType === "mouse" && state.pinned === null &&
+          document.documentElement.dataset.deviceLayout !== "phone") {
         state.activate(channel.id);
       }
     });
     button.addEventListener("focus", () => {
-      if (state.pinned === null && !state.suppressPreview) {
+      if (state.pinned === null && !state.suppressPreview &&
+          document.documentElement.dataset.deviceLayout !== "phone") {
         state.activate(channel.id);
       }
     });
@@ -1364,6 +1433,13 @@ function renderRSSCatalogue() {
       } else {
         state.pinned = channel.id;
         state.activate(channel.id);
+      }
+    });
+
+    button.addEventListener("click", () => {
+      if (document.documentElement.dataset.deviceLayout === "phone" &&
+          state.active === channel.id) {
+        $("rss-back").focus({preventScroll:true});
       }
     });
 
