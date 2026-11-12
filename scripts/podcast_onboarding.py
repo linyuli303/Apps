@@ -33,7 +33,7 @@ def input_source(value):
         raise ValueError('rss_path_required')
     return {'kind':'rss','url':value}
 
-def resolve(source, config, fetcher=fetch_feed, now=None):
+def resolve(source, config, fetcher=fetch_feed, now=None, inspector=None):
     """Return an actionable result; never write configuration or expand CSP.
 
     Existing enabled shows define approved initial media hosts. Feed redirects to
@@ -108,14 +108,37 @@ def resolve(source, config, fetcher=fetch_feed, now=None):
         return {'status':'review_required','reason':'rss_fetch_or_validation_failed','showId':sid}
     approved={h for s in config['shows'] if s.get('enabled') for h in s.get('mediaHosts',[])}
     unknown=sorted(observed-approved)
-    if unknown:
-        return {'status':'approval_required','reason':'new_media_hosts','showId':sid,
-                'title':title,'mediaHostsToReview':unknown}
     record={'id':sid,'title':title,'enabled':True,'feedUrl':feed,
             'feedHosts':[host],'mediaHosts':sorted(observed)}
     try:
         episodes,counts=parse_feed(raw,record,config['maxEpisodesPerShow'],now)
     except ValueError:
         return {'status':'review_required','reason':'no_eligible_episodes','showId':sid,'title':title}
+    if unknown:
+        # Inspection candidates are NOT production approval.
+        result = {
+            'status': 'approval_required',
+            'reason': 'new_media_hosts',
+            'showId': sid,
+            'title': title,
+            'feedHost': host,
+            'episodeCount': len(episodes),
+            'mediaHostsToReview': unknown,
+        }
+        if inspector is not None:
+            positions = sorted({0, len(episodes) // 2, len(episodes) - 1})
+            observations = []
+            for position in positions:
+                try:
+                    observation = inspector(episodes[position]['mediaUrl'])
+                except Exception:
+                    observation = {
+                        'status': 'review_required',
+                        'reason': 'inspection_failed',
+                        'hops': [],
+                    }
+                observations.append(observation)
+            result['mediaInspection'] = observations
+        return result
     return {'status':'ready','show':record,'episodeCount':len(episodes),'inspection':counts,
             'mediaPolicy':'existing_initial_hosts_only; downstream redirects still enforced by CSP'}

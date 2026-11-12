@@ -9,6 +9,128 @@ from urllib.parse import urlsplit
 from podcast_request import authorize_event, source_identity, apply_change
 from build_podcasts import validate_config
 
+
+# Fixed messages only: never echo resolver exceptions or publisher text.
+REVIEW_REASONS = {
+    "directory_match_unavailable": "Apple directory returned no unique matching show.",
+    "directory_lookup_failed": "Apple directory lookup failed or returned an invalid response.",
+    "missing_rss_url": "No usable RSS URL was returned.",
+    "rss_requires_https_review": "The RSS URL failed the approved HTTPS URL checks.",
+    "rss_fetch_or_validation_failed": "RSS retrieval or XML/source validation failed.",
+    "no_eligible_episodes": "RSS episode validation did not produce a usable catalogue.",
+    "new_media_hosts": "The source requires additional initial media-host approval.",
+    "resolution_failed": "Source resolution could not complete.",
+}
+
+def review_feedback(result):
+    reason = result.get("reason")
+    explanation = (
+        REVIEW_REASONS.get(reason, "No recognized diagnostic reason was provided.")
+        if isinstance(reason, str)
+        else "No recognized diagnostic reason was provided."
+    )
+    heading = (
+        "Additional media-host approval required."
+        if result.get("status") == "approval_required"
+        else "Source resolution needs review."
+    )
+    return (
+        heading + "\n\nReason: " + explanation
+        + "\n\nNo configuration or CSP permissions were changed. "
+        "No publication was requested. Existing enabled sources were left unchanged."
+    )
+
+
+def inspection_feedback(result):
+    """Render bounded diagnostic observations, never permission approval."""
+    observations = result.get("mediaInspection")
+    if observations is None:
+        return ""
+    import re
+
+    def safe_host(value):
+        if (not isinstance(value, str) or len(value) > 253
+                or not re.fullmatch(
+                    r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", value
+                )):
+            raise ValueError("Invalid inspection host")
+        from build_podcasts import host_name
+        host_name(value)
+        if any(not re.fullmatch(
+            r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label
+        ) for label in value.split(".")):
+            raise ValueError("Invalid inspection hostname label")
+        return value
+
+    reasons = {
+        "head_ok": "HEAD reached HTTP 200",
+        "redirect_loop": "Redirect loop",
+        "unsafe_url": "Destination failed HTTPS URL checks",
+        "time_limit": "Inspection time limit reached",
+        "head_http_error": "HEAD response was not HTTP 200",
+        "missing_redirect": "Redirect location missing",
+        "redirect_limit": "Redirect limit reached",
+        "network_or_destination_failed": "Network or public-destination check failed",
+        "inspection_failed": "Inspection could not complete",
+    }
+    count = result.get("episodeCount")
+    hosts = result.get("mediaHostsToReview")
+    if (type(count) is not int or not 1 <= count <= 10000
+            or not isinstance(hosts, list) or not 1 <= len(hosts) <= 20
+            or not isinstance(observations, list)
+            or not 1 <= len(observations) <= 3):
+        raise ValueError("Invalid inspection report")
+
+    lines = [
+        "",
+        "",
+        "### Read-only media inspection",
+        "",
+        "Eligible episodes: " + str(count),
+        "Feed host: `" + safe_host(result.get("feedHost")) + "`",
+        "New initial media hosts requiring approval: "
+        + ", ".join("`" + safe_host(host) + "`" for host in hosts),
+        "",
+    ]
+    for index, observation in enumerate(observations, 1):
+        if not isinstance(observation, dict):
+            raise ValueError("Invalid inspection observation")
+        status = observation.get("status")
+        reason = observation.get("reason")
+        hops = observation.get("hops")
+        if (status not in ("observed", "review_required")
+                or not isinstance(reason, str) or reason not in reasons
+                or (status == "observed") != (reason == "head_ok")
+                or not isinstance(hops, list) or len(hops) > 6):
+            raise ValueError("Invalid inspection observation")
+        if status == "observed" and (
+            not hops or not isinstance(hops[-1], dict)
+            or hops[-1].get("httpStatus") != 200
+        ):
+            raise ValueError("Invalid successful inspection")
+        lines.append("Sample " + str(index) + ": " + reasons[reason] + ".")
+        for hop in hops:
+            if not isinstance(hop, dict):
+                raise ValueError("Invalid inspection hop")
+            code = hop.get("httpStatus")
+            cookie = hop.get("setCookie")
+            if (type(code) is not int or not 100 <= code <= 599
+                    or type(cookie) is not bool):
+                raise ValueError("Invalid inspection hop")
+            lines.append(
+                "- `" + safe_host(hop.get("host")) + "`: HTTP "
+                + str(code) + "; Set-Cookie header observed: "
+                + ("yes" if cookie else "no") + "."
+            )
+        lines.append("")
+    lines.extend([
+        "HEAD requests only; no audio response bodies were read.",
+        "Observed hosts are candidates, not approved permissions.",
+        "Browser playback has not been verified. Samples do not cover every "
+        "episode or guarantee cookie-free/ad-free playback.",
+    ])
+    return "\n".join(lines)
+
 def digest(value):
     return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True).encode()).hexdigest()
 
@@ -60,10 +182,7 @@ def apply_validated(event,config,envelope):
         if not any(s['id']==result.get('showId') and s.get('enabled') for s in config['shows']):raise ValueError('Unknown duplicate')
         return config,False,'Already subscribed. No configuration change required.',False
     if status in ('approval_required','review_required'):
-        # Fixed text only: never echo untrusted feed text, URLs or token values in a comment.
-        message=('Additional media-host approval required. No source or CSP change was made.' if status=='approval_required'
-                 else 'Source resolution needs review (HTTPS, redirects, directory availability or RSS validation). No configuration change was made.')
-        return config,False,message,False
+        return config,False,review_feedback(result)+inspection_feedback(result),False
     raise ValueError('Unknown resolution status')
 
 def decode(value):
@@ -77,13 +196,17 @@ def main():
     event=json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))
     root=Path(__file__).resolve().parents[1]
     config=json.loads((root/'podcasts.json').read_text(encoding='utf-8'))
-    envelope=prepare(event,config,resolve)
+    from functools import partial
+    from podcast_media_inspection import inspect_chain
+    envelope=prepare(event,config,partial(resolve, inspector=inspect_chain))
     encoded=base64.b64encode(json.dumps(envelope,ensure_ascii=True,separators=(',',':')).encode()).decode()
     if len(encoded)>64000:raise ValueError('Oversized resolution')
     with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as stream:stream.write('resolution='+encoded+'\n')
     # Exact host names are available in the read-only job log for review, never auto-approved.
     result=envelope['result']
     print('Onboarding result:',result.get('status'))
+    if result.get('status') in ('approval_required', 'review_required'):
+        print(review_feedback(result))
     for host in result.get('mediaHostsToReview',[]):
         from build_podcasts import host_name
         print('Host requiring approval:',host_name(host))
