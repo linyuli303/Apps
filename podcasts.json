@@ -155,6 +155,12 @@
       "mediaHosts": [
         "dts.podtrac.com"
       ]
+    },
+    {
+      "id": "apple-1814608156",
+      "title": "Pending source: podcasts.apple.com (apple-1814608156)",
+      "enabled": false,
+      "sourceUrl": "https://podcasts.apple.com/at/podcast/die-openai-story/id1814608156"
     }
   ]
 }
