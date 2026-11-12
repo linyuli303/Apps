@@ -31,8 +31,8 @@ class CategoryConfigurationTests(unittest.TestCase):
         self.assertNotIn('class="landing-brand"', toolbar)
         self.assertNotIn('id="title"', toolbar)
         order = (
-            "search", "video-source", "channel", "sort",
-            "configuration-toggle", "refresh",
+            "search", "channel", "video-source", "sort",
+            "refresh", "configuration-toggle",
         )
         positions = [toolbar.index(f'id="{name}"') for name in order]
         self.assertEqual(positions, sorted(positions))
