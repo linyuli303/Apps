@@ -127,6 +127,8 @@ def resolve(source, config, fetcher=fetch_feed, now=None, inspector=None):
             'feedHost': host,
             'episodeCount': len(episodes),
             'mediaHostsToReview': unknown,
+            # Proposal data only; approval_required cannot activate this record.
+            'candidate': dict(record),
         }
         if inspector is not None:
             positions = sorted({0, len(episodes) // 2, len(episodes) - 1})
