@@ -12,7 +12,7 @@ class SpotifyPlaylistMetadataTests(unittest.TestCase):
     @unittest.skipUnless(
         NODE, "Node.js unavailable; playlist metadata execution skipped"
     )
-    def test_six_metadata_scenarios(self):
+    def test_seven_metadata_scenarios(self):
         source = (ROOT / "site/app.js").read_text(encoding="utf-8")
         start = "function validateSpotifyPlaylistPage("
         end = (
@@ -39,7 +39,7 @@ globalThis.document = {
       set textContent(value) {
         reported = true;
         console.log(value);
-        if (!value.endsWith("6 passed; 0 failed")) process.exitCode = 1;
+        if (!value.endsWith("7 passed; 0 failed")) process.exitCode = 1;
       }
     };
   }
@@ -54,4 +54,4 @@ globalThis.document = {
             capture_output=True, text=True, encoding="utf-8", timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("6 passed; 0 failed", result.stdout)
+        self.assertIn("7 passed; 0 failed", result.stdout)

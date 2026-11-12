@@ -53,7 +53,7 @@ test("Provider links, descriptions and artwork are discarded", () => {
 test("Duplicate IDs and malformed records fail closed", () => {
   rejects(() => validateSpotifyPlaylistPage(page([item(), item()])));
   for (const changes of [
-    {id:"../escape"}, {name:" "}, {name:"x\n"},
+    {id:"../escape"}, {name:null}, {name:42}, {name:"x\n"},
     {name:"x".repeat(301)}, {owner:null},
     {owner:{id:""}}, {collaborative:"true"}
   ]) {
@@ -61,6 +61,22 @@ test("Duplicate IDs and malformed records fail closed", () => {
       page([{...item(), ...changes}])
     ));
   }
+});
+
+test("Empty and whitespace names use a fixed fallback without losing the page", () => {
+  const sources = [item(0), item(1), item(2), item(3)];
+  sources[0].name = "";
+  sources[1].name = "   ";
+  sources[2].name = " OST ";
+  sources[3].name = "落日大道";
+  const output = validateSpotifyPlaylistPage(page(sources));
+  assert(output.items.length === 4);
+  assert(output.items[0].name === "Untitled playlist");
+  assert(output.items[1].name === "Untitled playlist");
+  assert(output.items[2].name === "OST");
+  assert(output.items[3].name === "落日大道");
+  assert(sources[0].name === "");
+  assert(sources[1].name === "   ");
 });
 
 test("Missing display name uses fixed label; ownership grants no access", () => {
@@ -101,4 +117,4 @@ test("Invalid page containers, counts and offsets rejected", () => {
 const failed = results.filter(line => line.startsWith("FAIL:")).length;
 document.getElementById("results").textContent =
   results.join("\n") + "\n\n" +
-  (failed ? failed + " failed" : "6 passed; 0 failed");
+  (failed ? failed + " failed" : "7 passed; 0 failed");
