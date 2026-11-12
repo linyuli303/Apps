@@ -2816,6 +2816,214 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   volumeGroup.append(mute, volumeLabel, volume, volumeValue);
   transport.append(previous,button("back","Back 15 seconds",()=>skip(-15)),play,button("forward","Forward 15 seconds",()=>skip(15)),next,rate,volumeGroup);
   syncVolume();
+  // Presentation only: never change audio, queue, speed or playback position.
+  const playerBar = $("podcast-player");
+  const expandedParts = [
+    playerBar.querySelector(".podcast-now"),
+    playerBar.querySelector(".podcast-transport-area"),
+    playerBar.querySelector(".podcast-player-options"),
+  ];
+  if (expandedParts.some(part => !part)) {
+    throw new Error("Missing podcast presentation structure");
+  }
+  let presentation = "expanded";
+  let dockSide = "right";
+
+  function presentationIcon(path) {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "apps-icon");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const line = document.createElementNS(ns, "path");
+    line.setAttribute("d", path);
+    svg.append(line);
+    return svg;
+  }
+  function presentationButton(id, label, path, action) {
+    const control = element("button", "podcast-presentation-button");
+    control.type = "button";
+    control.id = id;
+    control.title = label;
+    control.setAttribute("aria-label", label);
+    control.append(presentationIcon(path));
+    control.addEventListener("click", action);
+    return control;
+  }
+
+  const compact = element("div", "podcast-compact");
+  compact.id = "podcast-compact";
+  const compactTitle = element("strong", "podcast-compact-title");
+  compactTitle.id = "podcast-compact-title";
+  const compactPlay = button("play", "Resume podcast", toggle);
+  compactPlay.id = "podcast-compact-play";
+
+  const collapse = presentationButton(
+    "podcast-collapse", "Collapse podcast player",
+    "m6 9 6 6 6-6",
+    () => setPodcastPresentation("collapsed")
+  );
+  collapse.setAttribute("aria-controls", "podcast-transport podcast-compact");
+  collapse.setAttribute("aria-expanded", "true");
+
+  const dock = presentationButton(
+    "podcast-dock", "Dock podcast player to right edge",
+    "m9 5 7 7-7 7",
+    () => setPodcastPresentation("docked", "right")
+  );
+  const expand = presentationButton(
+    "podcast-expand", "Expand podcast player",
+    "m6 15 6-6 6 6",
+    () => setPodcastPresentation("expanded")
+  );
+  expand.setAttribute("aria-controls", "podcast-transport");
+  expand.setAttribute("aria-expanded", "false");
+
+  const restore = presentationButton(
+    "podcast-restore", "Restore podcast player",
+    "m14 6-6 6 6 6",
+    () => setPodcastPresentation("collapsed")
+  );
+  restore.setAttribute("aria-controls", "podcast-compact");
+  restore.setAttribute("aria-expanded", "false");
+
+  // The mockup's expanded-side arrow collapses first; it never skips a state.
+  const collapseBeforeDock = presentationButton(
+    "podcast-collapse-before-dock", "Collapse player before docking",
+    "m9 5 7 7-7 7",
+    () => setPodcastPresentation("collapsed")
+  );
+  compact.append(compactTitle, compactPlay, dock, expand);
+  expandedParts[0].append(collapse);
+  expandedParts[2].append(collapseBeforeDock);
+  playerBar.append(compact, restore);
+
+  // Announce errors even when the full player is hidden.
+  const compactStatus = element("span", "sr-only");
+  compactStatus.setAttribute("role", "status");
+  compactStatus.setAttribute("aria-live", "polite");
+  playerBar.append(compactStatus);
+
+  function syncPodcastPresentation() {
+    compactTitle.textContent = $("podcast-now-title").textContent;
+    compactTitle.title = compactTitle.textContent;
+    decorate(
+      compactPlay, audio.paused ? "play" : "pause",
+      audio.paused ? "Resume podcast" : "Pause podcast"
+    );
+    compactStatus.textContent = presentation === "expanded"
+      ? "" : $("podcast-playback-status").textContent;
+  }
+
+  function setPodcastPresentation(nextState, side = dockSide, focus = true) {
+    if (!["expanded", "collapsed", "docked"].includes(nextState) ||
+        !["left", "right"].includes(side)) return;
+
+    const previousFocus = document.activeElement;
+    presentation = nextState;
+    dockSide = side;
+    playerBar.dataset.presentation = presentation;
+    playerBar.dataset.dockSide = dockSide;
+
+    for (const part of expandedParts) {
+      part.hidden = presentation !== "expanded";
+    }
+    compact.hidden = presentation !== "collapsed";
+    restore.hidden = presentation !== "docked";
+    restore.replaceChildren(presentationIcon(
+      dockSide === "left" ? "m10 6 6 6-6 6" : "m14 6-6 6 6 6"
+    ));
+
+    document.body.classList.toggle(
+      "podcast-player-collapsed", presentation === "collapsed"
+    );
+    document.body.classList.toggle(
+      "podcast-player-docked", presentation === "docked"
+    );
+    if (presentation !== "expanded") showQueue(false);
+    syncPodcastPresentation();
+
+    if (focus && !playerBar.hidden) {
+      const target = presentation === "expanded" ? collapse
+        : presentation === "collapsed" ? expand : restore;
+      target.focus({preventScroll:true});
+    } else if (previousFocus && playerBar.hidden &&
+               playerBar.contains(previousFocus)) {
+      $("myapps-podcasts").focus();
+    }
+  }
+
+  // Gestures belong only to title areas, never transport/seek/volume controls.
+  function bindPodcastTitleSwipe(titleArea, expectedState) {
+    let gesture = null;
+    const phoneMode = () =>
+      document.documentElement.dataset.deviceLayout === "phone";
+
+    titleArea.addEventListener("pointerdown", event => {
+      if (!phoneMode() || presentation !== expectedState ||
+          !event.isPrimary || event.button !== 0 ||
+          event.target.closest("button,input,select,a,textarea,label")) {
+        gesture = null;
+        return;
+      }
+      gesture = {
+        id:event.pointerId, x:event.clientX, y:event.clientY,
+        started:performance.now(), state:presentation,
+      };
+      try {
+        titleArea.setPointerCapture(event.pointerId);
+      } catch {
+        gesture = null;
+      }
+    });
+
+    titleArea.addEventListener("pointerup", event => {
+      const start = gesture;
+      gesture = null;
+      if (!start || event.pointerId !== start.id) return;
+
+      if (titleArea.hasPointerCapture(event.pointerId)) {
+        titleArea.releasePointerCapture(event.pointerId);
+      }
+      if (!phoneMode() || presentation !== start.state ||
+          playerBar.hidden || performance.now() - start.started > 1200) {
+        return;
+      }
+
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+      if (presentation === "expanded") {
+        setPodcastPresentation("collapsed");
+      } else if (presentation === "collapsed") {
+        setPodcastPresentation("docked", dx < 0 ? "left" : "right");
+      }
+    });
+
+    titleArea.addEventListener("pointercancel", () => { gesture = null; });
+    titleArea.addEventListener("lostpointercapture", () => { gesture = null; });
+  }
+  bindPodcastTitleSwipe(expandedParts[0], "expanded");
+  bindPodcastTitleSwipe(compactTitle, "collapsed");
+  // Observe display text only; no polling, media requests or storage.
+  const presentationObserver = new MutationObserver(syncPodcastPresentation);
+  presentationObserver.observe($("podcast-now-title"), {
+    childList:true, characterData:true, subtree:true,
+  });
+  presentationObserver.observe($("podcast-playback-status"), {
+    childList:true, characterData:true, subtree:true,
+  });
+  for (const event of ["play", "pause", "ended", "emptied"]) {
+    audio.addEventListener(event, syncPodcastPresentation);
+  }
+
+  // Reset presentation on Stop; the existing handler then clears playback.
+  $("podcast-stop").addEventListener("click", () => {
+    setPodcastPresentation("expanded", "right", false);
+  });
+  setPodcastPresentation("expanded", "right", false);
   $("podcast-seek").addEventListener("input",()=>{if(Number.isFinite(audio.duration))audio.currentTime=Math.min(audio.duration,Number($("podcast-seek").value));sync();});
   $("podcast-repeat").addEventListener("click",()=>{repeat=repeat==="off"?"all":repeat==="all"?"one":"off";$("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode(repeat==="one"?"One":repeat==="all"?"List":"Off"));$("podcast-repeat").setAttribute("aria-label","Repeat "+repeat+"; click to change mode");$("podcast-repeat").dataset.mode=repeat;});
   $("podcast-queue-toggle").addEventListener("click",()=>{showQueue($("podcast-queue").hidden);renderQueue();});
@@ -2824,10 +3032,14 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   });
   $("podcast-queue-close").addEventListener("click",()=>{showQueue(false);$("podcast-queue-toggle").focus();});
   $("podcast-stop").addEventListener("click",()=>{clearSource();queue=[];index=-1;repeat="off";speed=1;rate.value="1";$("podcast-auto-next").checked=true;$("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode("Off"));$("podcast-repeat").dataset.mode="off";$("podcast-player").hidden=true;document.body.classList.remove("podcast-player-open");showQueue(false);message("");rerender();$("myapps-podcasts").focus();});
-  audio.addEventListener("ended",()=>{if(repeat==="one"){audio.currentTime=0;attemptPlay();return;}if($("podcast-auto-next").checked){if(index+1<queue.length){start(index+1);return;}if(repeat==="all"&&queue.length){start(0);return;}}message("Playlist playback finished.");sync();});
+  audio.addEventListener("ended",()=>{if(repeat==="one"){audio.currentTime=0;attemptPlay();return;}if(queue.length){if(index+1<queue.length){start(index+1);return;}if(repeat==="all"&&queue.length){start(0);return;}}message("Playlist playback finished.");sync();});
   for(const event of ["play","pause","loadedmetadata","timeupdate","durationchange"])audio.addEventListener(event,sync);
   audio.addEventListener("error",()=>{if(!audio.hasAttribute("src"))return;message("Audio unavailable. Check media-host permissions, network access, or try another episode. No automatic fallback.");sync();});
   document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!$("podcast-queue").hidden){showQueue(false);$("podcast-queue-toggle").focus();}});
+  // Podcast auto-next is always enabled; retain the existing hidden input.
+  $("podcast-auto-next").checked = true;
+  $("podcast-auto-next").disabled = true;
+  $("podcast-auto-next").parentElement.hidden = true;
   decorate($("podcast-stop"),"close","Stop playback and clear playlist");
   $("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode("Off"));$("podcast-repeat").setAttribute("aria-label","Repeat off; click to change mode");
   window.MyAppsPodcastPlayer={pauseForVideo:()=>{audio.pause();showQueue(false);}};
