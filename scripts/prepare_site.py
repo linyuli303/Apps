@@ -18,6 +18,29 @@ spec=importlib.util.spec_from_file_location("security",ROOT/"scripts/security_ch
 security=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(security)
 ASSETS=("index.html","style.css","app.js","icon.svg","data/feed.json")
+ENTRY_PAGES=("MyTube/index.html","MyPodcasts/index.html")
+PUBLIC_ASSETS=ASSETS+ENTRY_PAGES
+
+def render_entry(html, app_revision, prefix=""):
+    if prefix not in ("", "../"):
+        raise ValueError("Unexpected asset prefix")
+    html, count = re.subn(
+        r'app\.js\?v=[^"\s]+',
+        "app.js?v=shared-categories-" + app_revision,
+        html,
+    )
+    if count != 1:
+        raise ValueError("Missing application cache version")
+    pattern = r'\b(href|src)="(icon\.svg|style\.css\?v=[^"\s]+|app\.js\?v=[^"\s]+)"'
+    html, count = re.subn(
+        pattern,
+        lambda match: match[1] + '="' + prefix + match[2] + '"',
+        html,
+    )
+    if count != 4:
+        raise ValueError("Unexpected shared-shell asset references")
+    return html
+
 
 def validate_feed(feed, config):
     if not isinstance(feed,dict) or set(feed)!={"title","generatedAt","channels","videos"}:
@@ -75,14 +98,27 @@ def prepare():
         if name == "app.js":
             target.write_text(public_js, encoding="utf-8", newline="\n")
         elif name == "index.html":
-            html = (source/name).read_text(encoding="utf-8")
-            html, count = re.subn(r'app\.js\?v=[^"\s]+', "app.js?v=shared-categories-" + app_revision, html)
-            if count != 1:
-                raise ValueError("Missing application cache version")
+            html = render_entry(
+                (source/name).read_text(encoding="utf-8"), app_revision
+            )
             target.write_text(html, encoding="utf-8", newline="\n")
         else:
             shutil.copyfile(source/name,target)
-    print("Staged exactly five public assets; raw exports, repository configuration, and credentials are excluded.")
+    entry_html = render_entry(
+        (source/"index.html").read_text(encoding="utf-8"),
+        app_revision, "../"
+    )
+    for name in ENTRY_PAGES:
+        target = output/name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(entry_html, encoding="utf-8", newline="\n")
+    actual = {
+        path.relative_to(output).as_posix()
+        for path in output.rglob("*") if path.is_file()
+    }
+    if actual != set(PUBLIC_ASSETS):
+        raise ValueError("Unexpected public artifact files")
+    print("Staged exactly seven public files; raw exports, repository configuration, and credentials are excluded.")
 
 if __name__=="__main__":
     try:prepare()

@@ -38,7 +38,7 @@ class PrivacyDefaultsTests(unittest.TestCase):
 
     def test_feed_fetch_no_store_and_no_credentials(self):
         self.assertIn(
-            'fetch("data/feed.json", { cache: "no-store", credentials: "omit" })',
+            'fetch(new URL("data/feed.json", MYAPPS_ROOT), { cache: "no-store", credentials: "omit" })',
             self.js,
         )
 
@@ -57,8 +57,19 @@ class PrivacyDefaultsTests(unittest.TestCase):
             '$("category-migrate-local").addEventListener("click",',
             '$("category-review-close").addEventListener',
         )
-        self.assertIn("localStorage.getItem(state.key)", recovery)
-        self.assertIn("localStorage.getItem(state.legacyKey)", recovery)
+        self.assertIn("[state.key, true]", recovery)
+        self.assertIn("[state.legacyKey, false]", recovery)
+        self.assertIn('encodeURIComponent("/MyTube/")', recovery)
+        self.assertIn(
+            '["approved-yt-category-draft-v2:" + previousScope, true]',
+            recovery,
+        )
+        self.assertIn(
+            '["approved-yt-categories-v1:" + previousScope, false]',
+            recovery,
+        )
+        self.assertIn("localStorage.getItem(key)", recovery)
+        self.assertIn("confirm(", recovery)
         self.assertIn("validateCategoryData(value)", recovery)
         self.assertIn("state.baseRevision = baseRevision", recovery)
         self.assertNotIn("localStorage.setItem", recovery)

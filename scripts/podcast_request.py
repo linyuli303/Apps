@@ -9,7 +9,7 @@ from build_podcasts import validate_config, host_name
 TITLE = '[MyApps] Podcast change'
 CONFIRMATION = 'I reviewed this public podcast request and understand that additions remain pending until source and media-host approval.'
 OWNER_ID = 42029941
-REPO = 'linyuli303/MyTube'
+REPO = 'linyuli303/Apps'
 
 def source_identity(value):
     if not isinstance(value,str) or not 1<=len(value)<=2048 or any(ord(c)<=32 or ord(c)>=127 for c in value) or '\\' in value:

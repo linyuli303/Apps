@@ -36,6 +36,39 @@ class FeedModeTests(unittest.TestCase):
             selector.needs_refresh("push", self.event, self.head, diff)
         )
 
+    def test_clean_url_packaging_push_reuses(self):
+        changed = {
+            "scripts/prepare_site.py",
+            "scripts/select_feed_mode.py",
+            "site/app.js",
+            "tests/test_clean_url_packaging.py",
+            "tests/test_privacy_defaults.py",
+            "tests/test_feed_reuse.py",
+        }
+        self.assertNotIn("scripts/prepare_site.py", selector.FEED_INPUTS)
+        self.assertIn("channels.json", selector.FEED_INPUTS)
+        self.assertIn("scripts/build_feed.py", selector.FEED_INPUTS)
+        self.assertFalse(selector.needs_refresh(
+            "push", self.event, self.head, Mock(return_value=changed)
+        ))
+
+    def test_apps_cutover_collects_before_reuse(self):
+        self.assertEqual(
+            reuse.PUBLIC_FEED,
+            "https://linyuli303.github.io/Apps/data/feed.json",
+        )
+        self.assertIn("scripts/reuse_public_feed.py", selector.FEED_INPUTS)
+        changed = {
+            "scripts/reuse_public_feed.py",
+            "scripts/prepare_site.py",
+            "scripts/select_feed_mode.py",
+            "site/app.js",
+            "site/index.html",
+        }
+        self.assertTrue(selector.needs_refresh(
+            "push", self.event, self.head, Mock(return_value=changed)
+        ))
+
     def test_all_feed_inputs_refresh(self):
         for path in selector.FEED_INPUTS:
             self.assertTrue(selector.needs_refresh(

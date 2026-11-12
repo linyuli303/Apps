@@ -18,7 +18,7 @@ CONFIRM = "I reviewed this channel ID and want to change the shared whitelist on
 class RequestProcessingTests(unittest.TestCase):
     def event(self):
         user = {"login": "linyuli303", "id": 42029941, "type": "User"}
-        return {"action": "opened", "repository": {"full_name": "linyuli303/MyTube", "default_branch": "main", "owner": dict(user)},
+        return {"action": "opened", "repository": {"full_name": "linyuli303/Apps", "default_branch": "main", "owner": dict(user)},
                 "sender": dict(user), "issue": {"number": 9, "state": "open", "user": dict(user),
                 "title": "[MyTube] Channel change", "updated_at": "2026-11-10T00:00:00Z",
                 "body": f"### Operation\n\nAdd\n\n### Channel ID\n\n{A}\n\n### Confirmation\n\n- [x] {CONFIRM}"}}
@@ -39,9 +39,9 @@ class RequestProcessingTests(unittest.TestCase):
         m.process(event, call)
         writes = [x for x in calls if x[0] == "PUT"]
         self.assertEqual(len(writes), 1)
-        self.assertEqual(writes[0][1], "/repos/linyuli303/MyTube/contents/channels.json")
+        self.assertEqual(writes[0][1], "/repos/linyuli303/Apps/contents/channels.json")
         self.assertEqual(writes[0][2]["sha"], "file-version")
-        self.assertEqual(calls[-1][1], "/repos/linyuli303/MyTube/actions/workflows/publish.yml/dispatches")
+        self.assertEqual(calls[-1][1], "/repos/linyuli303/Apps/actions/workflows/publish.yml/dispatches")
     def test_edited_issue_rejected_before_write(self):
         event = self.event(); call, calls = self.transport(event, edited=True)
         with self.assertRaises(ValueError): m.process(event, call)

@@ -10,7 +10,7 @@ from build_feed import read_config
 from prepare_site import validate_feed, security
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_FEED = "https://linyuli303.github.io/MyTube/data/feed.json"
+PUBLIC_FEED = "https://linyuli303.github.io/Apps/data/feed.json"
 MAX_BYTES = 25_000_000
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):

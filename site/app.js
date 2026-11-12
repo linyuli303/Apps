@@ -29,11 +29,14 @@ function element(tag, className, text) {
   if (text !== undefined) el.textContent = text;
   return el;
 }
+// Shared asset root remains stable during History API navigation.
+const MYAPPS_ROOT = new URL(".", document.currentScript.src);
+
 async function load() {
   $("refresh").disabled = true;
   $("status").textContent = "Loading approved feed…";
   try {
-    const response = await fetch("data/feed.json", { cache: "no-store", credentials: "omit" });
+    const response = await fetch(new URL("data/feed.json", MYAPPS_ROOT), { cache: "no-store", credentials: "omit" });
     if (!response.ok) throw new Error("Feed unavailable");
     const raw = await response.text();
     if (raw.length > 25000000) throw new Error("Feed too large");
@@ -491,7 +494,7 @@ document.addEventListener("keydown", (event) => {
 
 // Local draft only: no credential storage, write API, or public mutation endpoint.
 const STORAGE_SCOPE = encodeURIComponent(
-  location.pathname.replace(/[^/]*$/, ""),
+  MYAPPS_ROOT.pathname,
 );
 const DRAFT_KEY = "approved-yt-whitelist-v2:" + STORAGE_SCOPE;
 const REPO_KEY = "approved-yt-repository-v2:" + STORAGE_SCOPE;
@@ -657,7 +660,7 @@ function channelRequestURL(operation, channelID) {
     throw new Error("Use a valid immutable channel ID.");
   }
   const url = new URL(
-    "https://github.com/linyuli303/MyTube/issues/new",
+    "https://github.com/linyuli303/Apps/issues/new",
   );
   url.search = new URLSearchParams({
     template: "channel-change.yml",
@@ -966,7 +969,7 @@ load();
 // Palette UI: validated names only; colors are defined in external style.css.
 (function initializeThemePicker() {
   const themes = [{"id": "yugure", "ja": "\u5915\u66ae\u308c", "name": "Yugure"}, {"id": "kimono", "ja": "\u7740\u7269", "name": "Kimono"}, {"id": "hanami", "ja": "\u82b1\u898b", "name": "Hanami"}, {"id": "ukiyoe", "ja": "\u6d6e\u4e16\u7d75", "name": "Ukiyo-e"}, {"id": "japandi", "ja": "\u548c\u5317\u6b27", "name": "Japandi"}, {"id": "edo", "ja": "\u6c5f\u6238", "name": "Edo"}, {"id": "wabisabi", "ja": "\u4f98\u5bc2", "name": "Wabi-sabi"}, {"id": "nadeshiko", "ja": "\u64ab\u5b50", "name": "Nadeshiko"}, {"id": "akabeni", "ja": "\u8d64\u7d05", "name": "Akabeni"}, {"id": "kaki", "ja": "\u67ff", "name": "Kaki"}, {"id": "yamabuki", "ja": "\u5c71\u5439", "name": "Yamabuki"}, {"id": "karashi", "ja": "\u82a5\u5b50", "name": "Karashi"}, {"id": "kihada", "ja": "\u9ec4\u6a97", "name": "Kihada"}, {"id": "wakana", "ja": "\u82e5\u83dc", "name": "Wakana"}, {"id": "moegi", "ja": "\u840c\u9ec4", "name": "Moegi"}, {"id": "matsuba", "ja": "\u677e\u8449", "name": "Matsuba"}, {"id": "tokiwa", "ja": "\u5e38\u78d0", "name": "Tokiwa"}, {"id": "seiji", "ja": "\u9752\u78c1", "name": "Seiji"}, {"id": "asagi", "ja": "\u6d45\u8471", "name": "Asagi"}, {"id": "hanada", "ja": "\u7e39", "name": "Hanada"}, {"id": "ruri", "ja": "\u7460\u7483", "name": "Ruri"}, {"id": "kikyo", "ja": "\u6854\u6897", "name": "Kikyo"}, {"id": "fuji", "ja": "\u85e4", "name": "Fuji"}, {"id": "ayame", "ja": "\u83d6\u84b2", "name": "Ayame"}, {"id": "botan", "ja": "\u7261\u4e39", "name": "Botan"}, {"id": "sakura", "ja": "\u685c", "name": "Sakura"}, {"id": "kohbai", "ja": "\u7d05\u6885", "name": "Kohbai"}, {"id": "enji", "ja": "\u81d9\u8102", "name": "Enji"}, {"id": "shu", "ja": "\u6731", "name": "Shu"}, {"id": "hiwada", "ja": "\u6a9c\u76ae", "name": "Hiwada"}, {"id": "taisha", "ja": "\u4ee3\u8d6d", "name": "Taisha"}, {"id": "kohaku", "ja": "\u7425\u73c0", "name": "Kohaku"}, {"id": "kuchinashi", "ja": "\u6894\u5b50", "name": "Kuchinashi"}, {"id": "ukon", "ja": "\u9b31\u91d1", "name": "Ukon"}, {"id": "ominaeshi", "ja": "\u5973\u90ce\u82b1", "name": "Ominaeshi"}, {"id": "uguisu", "ja": "\u9daf", "name": "Uguisu"}, {"id": "yanagi", "ja": "\u67f3", "name": "Yanagi"}, {"id": "byakuroku", "ja": "\u767d\u7dd1", "name": "Byakuroku"}, {"id": "rokusho", "ja": "\u7dd1\u9752", "name": "Rokusho"}, {"id": "aotake", "ja": "\u9752\u7af9", "name": "Aotake"}, {"id": "tokusa", "ja": "\u6728\u8cca", "name": "Tokusa"}, {"id": "sabiseiji", "ja": "\u9306\u9752\u78c1", "name": "Sabiseiji"}, {"id": "mizuasagi", "ja": "\u6c34\u6d45\u8471", "name": "Mizuasagi"}, {"id": "sora", "ja": "\u7a7a", "name": "Sora"}, {"id": "ai", "ja": "\u85cd", "name": "Ai"}, {"id": "kon", "ja": "\u7d3a", "name": "Kon"}, {"id": "sumire", "ja": "\u83eb", "name": "Sumire"}, {"id": "murasaki", "ja": "\u7d2b", "name": "Murasaki"}, {"id": "shion", "ja": "\u7d2b\u82d1", "name": "Shion"}, {"id": "sumi", "ja": "\u58a8", "name": "Sumi"}, {"id": "ginnezumi", "ja": "\u9280\u9f20", "name": "Ginnezumi"}];
-  const scope = encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
+  const scope = encodeURIComponent(MYAPPS_ROOT.pathname);
   const themeKey = "approved-yt-theme-v2:" + scope;
   const modeKey = "approved-yt-appearance-v1:" + scope;
   let selected = "yugure", mode = "light";
@@ -1431,7 +1434,7 @@ function validateCategoryData(value) {
 
 function categoryState() {
   if (categoryState.saved) return categoryState.saved;
-  const scope = encodeURIComponent(location.pathname.replace(/[^/]*$/, ""));
+  const scope = encodeURIComponent(MYAPPS_ROOT.pathname);
   const key = "approved-yt-category-draft-v2:" + scope;
   const legacyKey = "approved-yt-categories-v1:" + scope;
   const fallback = {version:1, categories:[
@@ -2153,7 +2156,7 @@ function prepareSharedCategoryRequest() {
     for (const line of lines) list.append(element("li", "", line));
     $("category-review-count").textContent = lines.length + (lines.length === 1 ? " change to share" : " changes to share");
     $("category-review-details").open = false;
-    const url = new URL("https://github.com/linyuli303/MyTube/issues/new");
+    const url = new URL("https://github.com/linyuli303/Apps/issues/new");
     url.searchParams.set("template", "category-change.yml");
     url.searchParams.set("title", "[MyTube] Category change");
     url.searchParams.set("category_request", payload);
@@ -2178,13 +2181,26 @@ function prepareSharedCategoryRequest() {
   $("category-migrate-local").addEventListener("click", () => {
     try {
       const state = categoryState();
-      const savedDraft = localStorage.getItem(state.key);
-      const raw = savedDraft === null
-        ? localStorage.getItem(state.legacyKey) : savedDraft;
-      if (!raw || raw.length > 2000000) throw new Error();
-      const parsed = JSON.parse(raw);
-      const value = savedDraft === null ? parsed : parsed.model;
-      const baseRevision = savedDraft === null ? state.revision : parsed.baseRevision;
+      // Explicit recovery only; never copy or remove old browser storage.
+      const previousScope = encodeURIComponent("/MyTube/");
+      const candidates = [
+        [state.key, true],
+        [state.legacyKey, false],
+        ["approved-yt-category-draft-v2:" + previousScope, true],
+        ["approved-yt-categories-v1:" + previousScope, false],
+      ];
+      let recovered = null;
+      for (const [key, wrapped] of candidates) {
+        const stored = localStorage.getItem(key);
+        if (stored !== null) {
+          recovered = {stored, wrapped};
+          break;
+        }
+      }
+      if (!recovered || !recovered.stored || recovered.stored.length > 2000000) throw new Error();
+      const parsed = JSON.parse(recovered.stored);
+      const value = recovered.wrapped ? parsed.model : parsed;
+      const baseRevision = recovered.wrapped ? parsed.baseRevision : state.revision;
       if (!(baseRevision === null ||
           (typeof baseRevision === "string" && /^[0-9a-f]{40}$/.test(baseRevision)))) {
         throw new Error();
@@ -2542,7 +2558,16 @@ const PODCAST_PUBLIC_SNAPSHOT = null;
     $("podcast-page-status").textContent = "Page " + (podcastPage + 1) + " of " + Math.max(1, Math.ceil(matches.length / 48));
   }
   function route() {
-    const podcast = location.hash === "#/podcasts";
+    const legacy = location.hash === "#/podcasts" ? "MyPodcasts"
+      : location.hash === "#/tube" ? "MyTube" : null;
+    const podcastPath = new URL("MyPodcasts/", MYAPPS_ROOT).pathname;
+    const podcast = legacy ? legacy === "MyPodcasts"
+      : location.pathname === podcastPath;
+    if (legacy) {
+      const target = new URL(legacy + "/", MYAPPS_ROOT);
+      target.search = location.search;
+      history.replaceState(history.state, "", target.href);
+    }
     if (podcast && !$("player").hidden) closePlayer();
     $("tube-page").hidden = podcast;
     $("podcast-page").hidden = !podcast;
@@ -2553,12 +2578,21 @@ const PODCAST_PUBLIC_SNAPSHOT = null;
     }
     if (podcast) renderPodcasts();
   }
-  $("myapps-tube").addEventListener("click", () => { location.hash = "/tube"; });
-  $("myapps-podcasts").addEventListener("click", () => { location.hash = "/podcasts"; });
+  function navigate(section) {
+    const target = new URL(section + "/", MYAPPS_ROOT);
+    target.search = location.search;
+    if (location.pathname !== target.pathname || location.hash) {
+      history.pushState(null, "", target.href);
+    }
+    route();
+  }
+  $("myapps-tube").addEventListener("click", () => navigate("MyTube"));
+  $("myapps-podcasts").addEventListener("click", () => navigate("MyPodcasts"));
   $("podcast-search").addEventListener("input", () => renderPodcasts(true));
   for (const id of ["podcast-show", "podcast-sort"]) $(id).addEventListener("change", () => renderPodcasts(true));
   $("podcast-prev").addEventListener("click", () => { podcastPage--; renderPodcasts(); });
   $("podcast-next").addEventListener("click", () => { podcastPage++; renderPodcasts(); });
+  window.addEventListener("popstate", route);
   window.addEventListener("hashchange", route);
   route();
 })();
@@ -2724,7 +2758,7 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
 // Public GitHub request forms only: no token, persistent draft or source lookup.
 function initializePodcastConfiguration(shows) {
   const dialog=$("podcast-config-dialog"), opener=$("podcast-config");
-  const repo="https://github.com/linyuli303/MyTube/issues/new";
+  const repo="https://github.com/linyuli303/Apps/issues/new";
   function request(data) {
     const payload="```json\n"+JSON.stringify(data)+"\n```";
     const url=new URL(repo);url.searchParams.set("template","podcast-change.yml");url.searchParams.set("title","[MyApps] Podcast change");

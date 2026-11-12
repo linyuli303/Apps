@@ -59,7 +59,7 @@ class ChannelAuthorizationTests(unittest.TestCase):
         user = {"login": "linyuli303", "id": 12345, "type": "User"}
         return {
             "action": "opened",
-            "repository": {"full_name": "linyuli303/MyTube", "default_branch": "main", "owner": dict(user)},
+            "repository": {"full_name": "linyuli303/Apps", "default_branch": "main", "owner": dict(user)},
             "sender": dict(user),
             "issue": {"number": 7, "state": "open", "title": "[MyTube] Channel change",
                       "user": dict(user), "body": body()},

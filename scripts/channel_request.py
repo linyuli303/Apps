@@ -75,7 +75,7 @@ def authorize_event(event):
     if not isinstance(owner, dict) or not isinstance(author, dict):
         raise ValueError("Unauthorized event")
     owner_id = owner.get("id")
-    if (repo.get("full_name") != "linyuli303/MyTube"
+    if (repo.get("full_name") != "linyuli303/Apps"
             or repo.get("default_branch") != "main"
             or owner.get("login") != "linyuli303"
             or owner.get("type") != "User"

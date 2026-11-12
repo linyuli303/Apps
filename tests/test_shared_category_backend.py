@@ -20,7 +20,7 @@ MODEL = {"version": 1, "categories": [{"id": "cat-0", "name": "News"}], "assignm
 def event():
     body = "### Category request\n\n```json\n" + json.dumps({"baseRevision": SHA, "model": MODEL}) + "\n```\n\n### Confirmation\n\n- [x] " + c.CONFIRMATION
     owner = {"login": "linyuli303", "id": 42029941, "type": "User"}
-    return {"action": "opened", "repository": {"full_name": "linyuli303/MyTube", "default_branch": "main", "owner": owner}, "sender": owner,
+    return {"action": "opened", "repository": {"full_name": "linyuli303/Apps", "default_branch": "main", "owner": owner}, "sender": owner,
             "issue": {"number": 123, "title": c.TITLE, "state": "open", "user": owner, "body": body, "updated_at": "2026-01-01T00:00:00Z"}}
 
 def encoded(name, model, sha=SHA):

@@ -6,7 +6,7 @@ permissions: {}
 jobs:
   resolve:
     if: >-
-      github.repository == 'linyuli303/MyTube' &&
+      github.repository == 'linyuli303/Apps' &&
       github.ref == 'refs/heads/main' &&
       github.actor_id == '42029941' &&
       github.event.issue.user.id == 42029941 &&
@@ -38,7 +38,7 @@ jobs:
   apply:
     needs: resolve
     if: >-
-      github.repository == 'linyuli303/MyTube' &&
+      github.repository == 'linyuli303/Apps' &&
       github.ref == 'refs/heads/main' &&
       github.actor_id == '42029941' &&
       github.event.issue.user.id == 42029941 &&

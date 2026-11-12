@@ -6,11 +6,14 @@ import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-# Changes to these inputs require rebuilding rather than reusing a snapshot.
+# Collector/configuration changes require fresh collection.
+# Packaging changes still validate reused snapshots before publication.
 FEED_INPUTS = {
     "channels.json",
     "scripts/build_feed.py",
-    "scripts/prepare_site.py",
+    # A changed snapshot source/downloader requires fresh collection.
+    "scripts/reuse_public_feed.py",
+
 }
 SHA = re.compile(r"[a-f0-9]{40}\Z")
 
@@ -56,7 +59,7 @@ def changed_paths(before, after):
 def main():
     try:
         if (
-            os.environ.get("GITHUB_REPOSITORY") != "linyuli303/MyTube"
+            os.environ.get("GITHUB_REPOSITORY") != "linyuli303/Apps"
             or os.environ.get("GITHUB_REF") != "refs/heads/main"
         ):
             raise ValueError("Unexpected runner context")

@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 from channel_request import authorize_event, apply_change
 
-REPO = "linyuli303/MyTube"
+REPO = "linyuli303/Apps"
 OWNER_ID = 42029941
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
