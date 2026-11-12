@@ -28,3 +28,6 @@ __pycache__/
 venv/
 .DS_Store
 Thumbs.db
+
+# Local backups created by the compact-library installer
+*.before-compact-*.bak

@@ -4642,103 +4642,115 @@ function createSpotifyPlaylistView(controller, onReauthorize) {
   const status = $("spotify-playlist-status");
   const refresh = $("spotify-playlists-refresh");
   const more = $("spotify-playlists-more");
-  let generation = 0;
-  let nextOffset = null;
-  let disposed = false;
+  let generation = 0, nextOffset = null, disposed = false;
   const shown = new Set();
-
+  const records = new Map();
+  const toolbar = element("div", "music-library-toolbar");
+  const search = document.createElement("input");
+  search.type = "search";
+  search.placeholder = "Search loaded playlists…";
+  search.setAttribute("aria-label", "Search loaded playlist names and creators");
+  const sort = document.createElement("select");
+  sort.setAttribute("aria-label", "Sort loaded playlists");
+  for (const [value, label] of [["spotify","Spotify order"],["name","Name A–Z"],["creator","Creator A–Z"]]) {
+    const option = document.createElement("option");
+    option.value = value; option.textContent = label; sort.append(option);
+  }
+  const grid = element("button", "", "Grid");
+  const list = element("button", "", "List");
+  grid.type = list.type = "button";
+  grid.setAttribute("aria-pressed", "true");
+  list.setAttribute("aria-pressed", "false");
+  toolbar.append(search, sort, grid, list);
+  rows.before(toolbar);
+  rows.classList.add("music-library-rows");
+  rows.dataset.view = "grid";
+  function render() {
+    const query = search.value.trim().toLocaleLowerCase();
+    const all = Array.from(records.values());
+    const filtered = all.filter(item => (item.name + " " + item.ownerName).toLocaleLowerCase().includes(query));
+    if (sort.value !== "spotify") {
+      const key = sort.value === "creator" ? "ownerName" : "name";
+      filtered.sort((a,b) => a[key].localeCompare(b[key], undefined, {sensitivity:"base",numeric:true}));
+    }
+    const fragment = document.createDocumentFragment();
+    for (const item of filtered) {
+      const row = element("div", "podcast-managed-show music-library-card");
+      const cover = element("div", "music-library-cover", "♫");
+      cover.setAttribute("aria-hidden", "true");
+      const text = element("span", "music-library-label", item.name);
+      text.title = item.name;
+      text.append(element("small", "", "By " + item.ownerName + (item.collaborative ? " | Collaborative" : "")));
+      const link = element("a", "official", "Open in Spotify");
+      link.href = item.spotifyURL;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.referrerPolicy = "no-referrer";
+      link.setAttribute("aria-label", "Open " + item.name + " in Spotify (new tab)");
+      row.append(cover, text, link);
+      fragment.append(row);
+    }
+    if (!filtered.length && records.size) fragment.append(element("p", "music-library-empty", "No matching loaded playlists."));
+    rows.replaceChildren(fragment);
+    status.textContent = records.size
+      ? (query ? filtered.length + " matches / " : "") + records.size + " playlists loaded. Search and sorting cover loaded playlists only."
+      : "No playlists returned by Spotify.";
+  }
+  const selectGrid = () => {
+    rows.dataset.view = "grid";
+    grid.setAttribute("aria-pressed", "true"); list.setAttribute("aria-pressed", "false");
+  };
+  const selectList = () => {
+    rows.dataset.view = "list";
+    grid.setAttribute("aria-pressed", "false"); list.setAttribute("aria-pressed", "true");
+  };
+  search.addEventListener("input", render);
+  sort.addEventListener("change", render);
+  grid.addEventListener("click", selectGrid);
+  list.addEventListener("click", selectList);
   async function load(append = false) {
     if (disposed) return;
     const offset = append ? nextOffset : 0;
     if (offset === null) return;
     const token = ++generation;
     panel.hidden = false;
-    refresh.disabled = true;
-    more.disabled = true;
-    more.hidden = true;
-    if (!append) {
-      rows.replaceChildren();
-      shown.clear();
-      nextOffset = null;
-    }
+    refresh.disabled = true; more.disabled = true; more.hidden = true;
+    if (!append) { rows.replaceChildren(); shown.clear(); records.clear(); nextOffset = null; }
     status.textContent = "Loading playlists...";
-
     try {
       const result = await controller.readPlaylists(offset);
       if (disposed || token !== generation) return;
-      if (result.status === "reauthorize") {
-        onReauthorize();
-        return;
-      }
+      if (result.status === "reauthorize") { onReauthorize(); return; }
       if (result.status !== "ready") {
-        const messages = {
-          restricted:"Spotify did not permit this playlist request.",
-          rate_limited:"Spotify rate limit reached. Wait before refreshing.",
-          failed:"Playlists could not be loaded. Try Refresh.",
-          cancelled:"Playlist request cancelled.",
-        };
+        const messages = {restricted:"Spotify did not permit this playlist request.",rate_limited:"Spotify rate limit reached. Wait before refreshing.",failed:"Playlists could not be loaded. Try Refresh.",cancelled:"Playlist request cancelled."};
         status.textContent = messages[result.status] || messages.failed;
         return;
       }
-
-      const fragment = document.createDocumentFragment();
       for (const item of result.items) {
         if (shown.has(item.id)) continue;
-        shown.add(item.id);
-        const row = element("div", "podcast-managed-show");
-        const text = element("span", "", item.name);
-        text.append(element(
-          "small", "",
-          "By " + item.ownerName +
-          (item.collaborative ? " | Collaborative" : "")
-        ));
-        const link = element("a", "official", "Open in Spotify");
-        link.href = item.spotifyURL;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.referrerPolicy = "no-referrer";
-        link.setAttribute(
-          "aria-label", "Open " + item.name + " in Spotify (new tab)"
-        );
-        row.append(text, link);
-        fragment.append(row);
+        shown.add(item.id); records.set(item.id, item);
       }
-      rows.append(fragment);
       nextOffset = result.nextOffset;
       more.hidden = nextOffset === null;
-      status.textContent = shown.size
-        ? shown.size + " playlists loaded. Track lists are not enabled yet."
-        : "No playlists returned by Spotify.";
+      render();
     } catch {
-      if (!disposed && token === generation) {
-        status.textContent = "Playlists could not be loaded. Try Refresh.";
-      }
+      if (!disposed && token === generation) status.textContent = "Playlists could not be loaded. Try Refresh.";
     } finally {
-      if (!disposed && token === generation) {
-        refresh.disabled = false;
-        more.disabled = false;
-      }
+      if (!disposed && token === generation) { refresh.disabled = false; more.disabled = false; }
     }
   }
-
   const refreshClick = () => load(false);
   const moreClick = () => load(true);
   refresh.addEventListener("click", refreshClick);
   more.addEventListener("click", moreClick);
-
   function clear() {
-    disposed = true;
-    generation++;
-    shown.clear();
-    nextOffset = null;
-    rows.replaceChildren();
-    status.textContent = "";
-    panel.hidden = true;
-    more.hidden = true;
-    refresh.removeEventListener("click", refreshClick);
-    more.removeEventListener("click", moreClick);
+    disposed = true; generation++; shown.clear(); records.clear(); nextOffset = null;
+    rows.replaceChildren(); status.textContent = ""; panel.hidden = true; more.hidden = true;
+    refresh.removeEventListener("click", refreshClick); more.removeEventListener("click", moreClick);
+    search.removeEventListener("input", render); sort.removeEventListener("change", render);
+    grid.removeEventListener("click", selectGrid); list.removeEventListener("click", selectList);
+    toolbar.remove();
   }
-
   return Object.freeze({load, clear});
 }
 
