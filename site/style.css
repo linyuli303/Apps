@@ -2939,3 +2939,31 @@ body.podcast-player-open main{padding-bottom:220px}
 :root[data-device-layout="phone"] #rss-catalogue .rss-detail{
   touch-action:pan-y pinch-zoom
 }
+
+/* Podcast standard-mode disclosure in compact and docked states. */
+#podcast-player .podcast-privacy-notice{
+  margin:7px 0 0;
+  font-size:11px;
+  line-height:1.5;
+  color:var(--muted)
+}
+#podcast-player[data-privacy-mode="standard"] .podcast-compact::after{
+  content:"STD";
+  flex:0 0 auto;
+  padding:3px;
+  font-size:9px;
+  font-weight:700;
+  color:var(--label-accent);
+  border:1px solid var(--border);
+  border-radius:4px
+}
+#podcast-player[data-privacy-mode="standard"] #podcast-restore{
+  flex-direction:column;
+  gap:4px
+}
+#podcast-player[data-privacy-mode="standard"] #podcast-restore::after{
+  content:"STD";
+  font-size:9px;
+  font-weight:700;
+  line-height:1
+}

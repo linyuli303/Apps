@@ -77,7 +77,9 @@ class PodcastPlayerPolicyTests(unittest.TestCase):
         js=(ROOT/'site/app.js').read_text(encoding='utf-8')
         engine=js.split('function createPodcastPlayer(',1)[1]
         self.assertIn('audio.preload = "none"',engine)
-        self.assertIn('audio.src=e.mediaUrl',engine)
+        self.assertIn('audio.src = episode.mediaUrl',engine)
+        self.assertIn('audio.crossOrigin = "anonymous"',engine)
+        self.assertIn('audio.removeAttribute("crossorigin")',engine)
         self.assertNotIn('localStorage',engine)
         self.assertNotIn('sessionStorage',engine)
         self.assertNotIn('fetch(',engine)

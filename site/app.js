@@ -2674,12 +2674,93 @@ const PODCAST_PUBLIC_SNAPSHOT = null;
 
 // Podcast playback uses one audio element, no autoplay source or next-episode prefetch.
 // Native media may use browser caching and provider cookies; no credential-free claim.
+// Pure attempt policy: no media requests, storage, or automatic playback.
+function createPodcastPrivacyPolicy() {
+  let current = null;
+  let wantsPlayback = false;
+
+  function makeAttempt(episodeId, mode, position) {
+    return Object.freeze({episodeId, mode, position});
+  }
+
+  function begin(episodeId) {
+    if (typeof episodeId !== "string" || !episodeId) {
+      throw new Error("Invalid podcast episode identity");
+    }
+    current = makeAttempt(episodeId, "anonymous", 0);
+    wantsPlayback = true;
+    return current;
+  }
+
+  function isCurrent(attempt) {
+    return current !== null && attempt === current;
+  }
+
+  function shouldPlay(attempt) {
+    return isCurrent(attempt) && wantsPlayback;
+  }
+
+  function pause() {
+    wantsPlayback = false;
+  }
+
+  function resume(attempt) {
+    if (!isCurrent(attempt)) return false;
+    wantsPlayback = true;
+    return true;
+  }
+
+  function invalidate() {
+    current = null;
+    wantsPlayback = false;
+  }
+
+  function fallback(attempt, mediaErrorCode, position) {
+    // MediaError 2 = network; 4 = unsupported source (can include CORS).
+    // Neither establishes that CORS caused the failure.
+    // Do not downgrade on abort (1), decode failure (3), autoplay rejection,
+    // waiting/stalled events, or a timer.
+    if (!shouldPlay(attempt) || attempt.mode !== "anonymous" ||
+        ![2, 4].includes(mediaErrorCode)) {
+      return null;
+    }
+
+    const safePosition = Number.isFinite(position) && position >= 0
+      ? position : 0;
+    current = makeAttempt(attempt.episodeId, "standard", safePosition);
+    return current;
+  }
+
+  return Object.freeze({
+    begin, isCurrent, shouldPlay, pause, resume, invalidate, fallback,
+  });
+}
 function createPodcastPlayer(episodes, names, filtered, rerender) {
   const audio = document.createElement("audio");
   audio.preload = "none";
   audio.setAttribute("aria-hidden", "true");
   audio.hidden = true;
   $("podcast-player").append(audio);
+  // Persistent disclosure is separate from loading/error status.
+  const privacyNotice = element("p", "podcast-privacy-notice");
+  privacyNotice.id = "podcast-privacy-status";
+  privacyNotice.setAttribute("role", "status");
+  privacyNotice.setAttribute("aria-live", "polite");
+  privacyNotice.hidden = true;
+  $("podcast-player").querySelector(".podcast-transport-area").append(privacyNotice);
+
+  let refreshPrivacyPresentation = () => {};
+  function reportPodcastPrivacy(mode) {
+    if (!["anonymous", "standard", "none"].includes(mode)) return;
+    $("podcast-player").dataset.privacyMode = mode;
+    privacyNotice.hidden = mode === "none";
+    privacyNotice.textContent = mode === "anonymous"
+      ? "Anonymous audio mode: cross-origin credentials excluded. Browser caching may occur."
+      : mode === "standard"
+        ? "Standard playback fallback: provider cookies may be used, subject to browser settings. Browser caching may occur."
+        : "";
+    refreshPrivacyPresentation();
+  }
   const byID = new Map(episodes.map(e => [e.id, e]));
   const allowedHosts = new Set(["adswizz.podigee-cdn.net", "anchor.fm", "audio.podigee-cdn.net", "cdn.audiorella.com", "d3ctxlq1ktw2nl.cloudfront.net", "dcs-cached.megaphone.fm", "dts.podtrac.com", "npr.simplecastaudio.com", "play.podtrac.com", "podcast-mp3.dradio.de", "podfileszdf-a.akamaihd.net", "prfx.byspotify.com", "radiodownloaddw-a.akamaihd.net", "traffic.megaphone.fm", "wdrmedien-a.akamaihd.net", "cdn-storage.br.de", "media.neuland.br.de"]);
   let queue = [], index = -1, repeat = "off", speed = 1, generation = 0, drag = null;
@@ -2729,20 +2810,169 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
       const b=row.querySelector(".podcast-row-play");if(b)decorate(b,current&&!audio.paused?"pause":"play",(current&&!audio.paused?"Pause ":"Play ")+(byID.get(row.dataset.episode)?.title||"episode"));
     }
   }
-  function clearSource() { generation++;audio.pause();audio.removeAttribute("src");audio.load(); }
+  const privacyPolicy = createPodcastPrivacyPolicy();
+  let privacyAttempt = null;
+  let releaseAttemptListeners = () => {};
+  let playSequence = 0;
+  let lastPlaybackPosition = 0;
+
+  function pausePodcast() {
+    privacyPolicy.pause();
+    playSequence++;
+    audio.pause();
+    sync();
+  }
+
+  function clearSource() {
+    generation++;
+    playSequence++;
+    privacyPolicy.invalidate();
+    privacyAttempt = null;
+    releaseAttemptListeners();
+    releaseAttemptListeners = () => {};
+    lastPlaybackPosition = 0;
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.removeAttribute("crossorigin");
+    audio.load();
+    reportPodcastPrivacy("none");
+  }
+
   function attemptPlay() {
-    const token=generation;
-    audio.play().then(()=>{if(token===generation){message("");sync();}}).catch(()=>{if(token===generation){message("Playback blocked or unavailable. Press Play to retry. A media host or browser restriction may apply.");sync();}});
+    const attempt = privacyAttempt;
+    if (!attempt || !privacyPolicy.resume(attempt)) return;
+    const token = generation;
+    const sequence = ++playSequence;
+
+    audio.play().then(() => {
+      if (token !== generation || sequence !== playSequence ||
+          !privacyPolicy.shouldPlay(attempt)) return;
+      message("");
+      sync();
+    }).catch(error => {
+      if (token !== generation || sequence !== playSequence ||
+          !privacyPolicy.shouldPlay(attempt)) return;
+      // A source rejection can precede the corresponding media error event.
+      // Keep that event eligible; the rejection itself never causes fallback.
+      if (error && error.name === "NotSupportedError") {
+        message("Source could not start. Waiting for media error details; Pause cancels.");
+        sync();
+        return;
+      }
+      // Autoplay/other rejection: the next explicit tap should retry.
+      privacyPolicy.pause();
+      message("Playback blocked or unavailable. Press Play to retry.");
+      sync();
+    });
+  }
+
+  function loadPodcastAttempt(attempt) {
+    const episode = active();
+    if (!episode || !safeMedia(episode) ||
+        episode.id !== attempt.episodeId ||
+        !privacyPolicy.isCurrent(attempt)) return;
+
+    releaseAttemptListeners();
+    const token = ++generation;
+    playSequence++;
+    privacyAttempt = attempt;
+
+    const valid = () =>
+      token === generation && privacyPolicy.isCurrent(attempt) &&
+      active()?.id === attempt.episodeId &&
+      audio.getAttribute("src") === episode.mediaUrl;
+
+    const onTime = () => {
+      if (valid() && Number.isFinite(audio.currentTime)) {
+        lastPlaybackPosition = Math.max(0, audio.currentTime);
+      }
+    };
+
+    let restorePositionPending = attempt.position > 0;
+    const onMetadata = () => {
+      if (!valid()) return;
+      if (restorePositionPending) {
+        restorePositionPending = false;
+        try {
+          const maximum = Number.isFinite(audio.duration)
+            ? Math.max(0, audio.duration - 0.05) : attempt.position;
+          audio.currentTime = Math.min(attempt.position, maximum);
+        } catch {
+          message("Playback position could not be restored.");
+        }
+        // Metadata may restore position, but must never restart playback.
+      }
+    };
+
+    const onError = () => {
+      if (!valid() || !audio.error) return;
+      const retry = privacyPolicy.fallback(
+        attempt, audio.error.code, lastPlaybackPosition
+      );
+      if (retry) {
+        loadPodcastAttempt(retry);
+        return;
+      }
+      if (!privacyPolicy.shouldPlay(attempt)) return;
+      privacyPolicy.pause();
+      message(
+        "Audio unavailable. Check media permissions, network access, or try another episode. No further automatic retry."
+      );
+      sync();
+    };
+
+    audio.addEventListener("timeupdate", onTime);
+    audio.addEventListener("loadedmetadata", onMetadata);
+    audio.addEventListener("error", onError);
+    releaseAttemptListeners = () => {
+      audio.removeEventListener("timeupdate", onTime);
+      audio.removeEventListener("loadedmetadata", onMetadata);
+      audio.removeEventListener("error", onError);
+    };
+
+    audio.pause();
+    audio.removeAttribute("src");
+    if (attempt.mode === "anonymous") {
+      audio.crossOrigin = "anonymous";
+    } else {
+      // Removing the attribute restores ordinary, non-CORS media loading.
+      audio.removeAttribute("crossorigin");
+    }
+    reportPodcastPrivacy(attempt.mode);
+    lastPlaybackPosition = attempt.position;
+    audio.src = episode.mediaUrl;
+    audio.playbackRate = speed;
+    message(attempt.mode === "standard"
+      ? "Retrying using standard playback..." : "Loading anonymous audio...");
+    audio.load();
+    // With preload="none", Play initiates loading even for a position retry.
+    // The metadata handler restores position once without issuing another Play.
+    if (privacyPolicy.shouldPlay(attempt)) {
+      attemptPlay();
+    }
   }
   function start(i) {
     const e=byID.get(queue[i]);if(!safeMedia(e)){message("Episode has no approved audio URL.");return;}
     clearSource();index=i;
     if (!$("player").hidden) closePlayer();
     $("podcast-player").hidden=false;document.body.classList.add("podcast-player-open");
-    audio.src=e.mediaUrl;audio.playbackRate=speed;message("Loading audio...");
-    sync();renderQueue();attemptPlay();
+    const attempt = privacyPolicy.begin(e.id);
+    sync();renderQueue();
+    loadPodcastAttempt(attempt);
   }
-  function toggle() {if(!active()){if(queue.length)start(0);return;}if(audio.paused){if(audio.ended)audio.currentTime=0;attemptPlay();}else audio.pause();}
+  function toggle() {
+    if (!active()) {
+      if (queue.length) start(0);
+      return;
+    }
+    // A loading request can be pending while audio.paused is still true.
+    if (!audio.paused || privacyPolicy.shouldPlay(privacyAttempt)) {
+      pausePodcast();
+      return;
+    }
+    if (audio.ended) audio.currentTime = 0;
+    attemptPlay();
+  }
   function selectEpisode(e) {
     if(active()?.id===e.id){toggle();return;}
     const list=filtered();const pos=list.findIndex(x=>x.id===e.id);queue=list.slice(Math.max(0,pos)).filter(safeMedia).map(x=>x.id);start(0);
@@ -2988,8 +3218,21 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
       compactPlay, audio.paused ? "play" : "pause",
       audio.paused ? "Resume podcast" : "Pause podcast"
     );
-    compactStatus.textContent = presentation === "expanded"
-      ? "" : $("podcast-playback-status").textContent;
+    const standard = playerBar.dataset.privacyMode === "standard";
+    compactStatus.textContent = presentation === "expanded" ? "" : [
+      standard ? privacyNotice.textContent : "",
+      $("podcast-playback-status").textContent,
+    ].filter(Boolean).join(" ");
+
+    const restoreLabel = standard
+      ? "Restore podcast player. Standard playback fallback; provider cookies may be used."
+      : "Restore podcast player";
+    restore.setAttribute("aria-label", restoreLabel);
+    restore.title = restoreLabel;
+    compactPlay.title = standard
+      ? compactPlay.getAttribute("aria-label") +
+        ". Standard playback fallback; provider cookies may be used."
+      : compactPlay.getAttribute("aria-label");
   }
 
   function setPodcastPresentation(nextState, side = dockSide, focus = true) {
@@ -3083,6 +3326,7 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   }
   bindPodcastTitleSwipe(expandedParts[0], "expanded");
   bindPodcastTitleSwipe(compactTitle, "collapsed");
+  refreshPrivacyPresentation = syncPodcastPresentation;
   // Observe display text only; no polling, media requests or storage.
   const presentationObserver = new MutationObserver(syncPodcastPresentation);
   presentationObserver.observe($("podcast-now-title"), {
@@ -3110,7 +3354,7 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   $("podcast-stop").addEventListener("click",()=>{clearSource();queue=[];index=-1;repeat="off";speed=1;rate.value="1";$("podcast-auto-next").checked=true;$("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode("Off"));$("podcast-repeat").dataset.mode="off";$("podcast-player").hidden=true;document.body.classList.remove("podcast-player-open");showQueue(false);message("");rerender();$("myapps-podcasts").focus();});
   audio.addEventListener("ended",()=>{if(repeat==="one"){audio.currentTime=0;attemptPlay();return;}if(queue.length){if(index+1<queue.length){start(index+1);return;}if(repeat==="all"&&queue.length){start(0);return;}}message("Playlist playback finished.");sync();});
   for(const event of ["play","pause","loadedmetadata","timeupdate","durationchange"])audio.addEventListener(event,sync);
-  audio.addEventListener("error",()=>{if(!audio.hasAttribute("src"))return;message("Audio unavailable. Check media-host permissions, network access, or try another episode. No automatic fallback.");sync();});
+  // Attempt-scoped media error handling is installed by loadPodcastAttempt.
   document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!$("podcast-queue").hidden){showQueue(false);$("podcast-queue-toggle").focus();}});
   // Podcast auto-next is always enabled; retain the existing hidden input.
   $("podcast-auto-next").checked = true;
@@ -3118,7 +3362,7 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   $("podcast-auto-next").parentElement.hidden = true;
   decorate($("podcast-stop"),"close","Stop playback and clear playlist");
   $("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode("Off"));$("podcast-repeat").setAttribute("aria-label","Repeat off; click to change mode");
-  window.MyAppsPodcastPlayer={pauseForVideo:()=>{audio.pause();showQueue(false);}};
+  window.MyAppsPodcastPlayer={pauseForVideo:()=>{pausePodcast();showQueue(false);}};
   return {
     currentID:()=>active()?.id||null,
     rowPlay:e=>{const b=button(active()?.id===e.id&&!audio.paused?"pause":"play","Play "+e.title,()=>selectEpisode(e));b.classList.add("podcast-row-play");b.disabled=!safeMedia(e);return b;},
