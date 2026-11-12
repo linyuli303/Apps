@@ -158,9 +158,15 @@
     },
     {
       "id": "apple-1814608156",
-      "title": "Pending source: podcasts.apple.com (apple-1814608156)",
-      "enabled": false,
-      "sourceUrl": "https://podcasts.apple.com/at/podcast/die-openai-story/id1814608156"
+      "title": "Die OpenAI Story",
+      "enabled": true,
+      "feedUrl": "https://www.deutschlandfunk.de/die-peter-thiel-story-100.xml",
+      "feedHosts": [
+        "www.deutschlandfunk.de"
+      ],
+      "mediaHosts": [
+        "podcast-mp3.dradio.de"
+      ]
     }
   ]
 }
