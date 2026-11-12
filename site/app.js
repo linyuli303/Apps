@@ -2580,6 +2580,7 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
     back:["M5 8a9 9 0 1 1-1 8M5 3v5h5"], forward:["M19 8a9 9 0 1 0 1 8M19 3v5h-5"],
     previous:["M5 5v14M19 5l-10 7 10 7z"], next:["M19 5v14M5 5l10 7-10 7z"],
     add:["M4 6h12M4 11h8M4 16h8M18 12v8M14 16h8"],
+    top:["M5 4h14M12 20V8M6 14l6-6 6 6"],
     up:["M6 14l6-6 6 6"], down:["M6 10l6 6 6-6"], close:["M6 6l12 12M18 6L6 18"],
     repeat:["M4 10V8a3 3 0 0 1 3-3h13m-4-4 4 4-4 4M20 14v2a3 3 0 0 1-3 3H4m4-4-4 4 4 4"],
     queue:["M4 6h16M4 11h16M4 16h8M16 15l5 3-5 3z"]
@@ -2649,13 +2650,33 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
         const e=byID.get(queue[i]);if(!e)continue;
         const row=element("div","podcast-queue-row");row.dataset.position=String(i);
         if(i===index)row.setAttribute("aria-current","true");
+        row.addEventListener("dblclick",event=>{
+          if(event.target.closest("button,select,input,a"))return;
+          start(i);
+        });
         const title=element("span","podcast-queue-title",e.title);title.append(element("small","",(names.get(e.showId)||"")+(i===index?" - Now playing":i<index?" - Played":"")));row.append(title);
+        title.tabIndex=0;
+        title.setAttribute("role","button");
+        title.setAttribute("aria-label","Play "+e.title);
+        title.title="Double-click to play; keyboard: Enter or Space";
+        title.addEventListener("keydown",event=>{
+          if(event.key==="Enter" || event.key===" ") {
+            event.preventDefault();
+            event.stopPropagation();
+            start(i);
+          }
+        });
         if(i>index) {
           row.draggable=true;
           const up=button("up","Move episode up",()=>move(i,i-1));up.disabled=i<=index+1;
           const down=button("down","Move episode down",()=>move(i,i+1));down.disabled=i===queue.length-1;
           const remove=button("close","Remove episode from playlist",()=>{queue.splice(i,1);renderQueue();sync();});
-          row.append(up,down,remove);
+          const top=button(
+            "top","Move to top of upcoming episodes",
+            ()=>move(i,index+1)
+          );
+          top.disabled=i===index+1;
+          row.append(top,up,down,remove);
           row.addEventListener("dragstart",event=>{drag=i;event.dataTransfer.setData("text/plain",String(i));});
           row.addEventListener("dragover",event=>event.preventDefault());
           row.addEventListener("drop",event=>{event.preventDefault();if(drag!==null)move(drag,i);drag=null;});
@@ -2680,6 +2701,9 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   $("podcast-seek").addEventListener("input",()=>{if(Number.isFinite(audio.duration))audio.currentTime=Math.min(audio.duration,Number($("podcast-seek").value));sync();});
   $("podcast-repeat").addEventListener("click",()=>{repeat=repeat==="off"?"all":repeat==="all"?"one":"off";$("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode(repeat==="one"?"One":repeat==="all"?"List":"Off"));$("podcast-repeat").setAttribute("aria-label","Repeat "+repeat+"; click to change mode");$("podcast-repeat").dataset.mode=repeat;});
   $("podcast-queue-toggle").addEventListener("click",()=>{showQueue($("podcast-queue").hidden);renderQueue();});
+  $("podcast-queue").addEventListener("pointerleave",event=>{
+    if(event.pointerType==="mouse" && drag===null)showQueue(false);
+  });
   $("podcast-queue-close").addEventListener("click",()=>{showQueue(false);$("podcast-queue-toggle").focus();});
   $("podcast-stop").addEventListener("click",()=>{clearSource();queue=[];index=-1;repeat="off";speed=1;rate.value="1";$("podcast-auto-next").checked=true;$("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode("Off"));$("podcast-repeat").dataset.mode="off";$("podcast-player").hidden=true;document.body.classList.remove("podcast-player-open");showQueue(false);message("");rerender();$("myapps-podcasts").focus();});
   audio.addEventListener("ended",()=>{if(repeat==="one"){audio.currentTime=0;attemptPlay();return;}if($("podcast-auto-next").checked){if(index+1<queue.length){start(index+1);return;}if(repeat==="all"&&queue.length){start(0);return;}}message("Playlist playback finished.");sync();});
