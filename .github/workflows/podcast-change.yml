@@ -21,7 +21,7 @@ jobs:
       status: ${{ steps.resolve.outputs.status }}
     steps:
       - name: Checkout trusted main only
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -54,7 +54,7 @@ jobs:
       actions: write
     steps:
       - name: Checkout trusted main only
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -91,7 +91,7 @@ jobs:
       bundle_sha256: ${{ steps.bundle.outputs.sha256 }}
     steps:
       - name: Checkout exact trusted event commit
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
@@ -148,7 +148,7 @@ jobs:
       actions: read
     steps:
       - name: Checkout trusted base code, never the proposal branch
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
