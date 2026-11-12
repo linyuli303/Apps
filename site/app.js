@@ -2634,7 +2634,6 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   function toggle() {if(!active()){if(queue.length)start(0);return;}if(audio.paused){if(audio.ended)audio.currentTime=0;attemptPlay();}else audio.pause();}
   function selectEpisode(e) {
     if(active()?.id===e.id){toggle();return;}
-    if(queue.length && !confirm("Replace the current playlist with the filtered list, starting at this episode?"))return;
     const list=filtered();const pos=list.findIndex(x=>x.id===e.id);queue=list.slice(Math.max(0,pos)).filter(safeMedia).map(x=>x.id);start(0);
   }
   function add(e) {if(!safeMedia(e))return;if(!queue.includes(e.id))queue.push(e.id);showQueue(true);renderQueue();}
