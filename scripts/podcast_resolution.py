@@ -17,6 +17,8 @@ REVIEW_REASONS = {
     "missing_rss_url": "No usable RSS URL was returned.",
     "rss_requires_https_review": "The RSS URL failed the approved HTTPS URL checks.",
     "rss_fetch_or_validation_failed": "RSS retrieval or XML/source validation failed.",
+    "rss_fetch_failed": "RSS retrieval failed before XML validation. HTTPS, public-destination, redirect, HTTP response, size, or network checks may have stopped it.",
+    "rss_validation_failed": "An RSS response was retrieved, but XML or source-structure validation failed.",
     "no_eligible_episodes": "RSS episode validation did not produce a usable catalogue.",
     "new_media_hosts": "The source requires additional initial media-host approval.",
     "resolution_failed": "Source resolution could not complete.",

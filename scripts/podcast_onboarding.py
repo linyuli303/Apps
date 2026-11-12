@@ -78,6 +78,9 @@ def resolve(source, config, fetcher=fetch_feed, now=None, inspector=None):
             return {'status':'already_subscribed','showId':show['id']}
     try:
         raw = fetcher(feed,[host])
+    except (OSError, ValueError):
+        return {'status':'review_required','reason':'rss_fetch_failed','showId':sid}
+    try:
         guard=expat.ParserCreate()
         guard.StartDoctypeDeclHandler=reject_xml
         guard.EntityDeclHandler=reject_xml
@@ -105,7 +108,7 @@ def resolve(source, config, fetcher=fetch_feed, now=None, inspector=None):
         if not observed:
             raise ValueError('no_audio_enclosures')
     except (OSError, ValueError, expat.ExpatError, ET.ParseError):
-        return {'status':'review_required','reason':'rss_fetch_or_validation_failed','showId':sid}
+        return {'status':'review_required','reason':'rss_validation_failed','showId':sid}
     approved={h for s in config['shows'] if s.get('enabled') for h in s.get('mediaHosts',[])}
     unknown=sorted(observed-approved)
     record={'id':sid,'title':title,'enabled':True,'feedUrl':feed,
