@@ -134,7 +134,7 @@ def inspection_feedback(result):
     return "\n".join(lines)
 
 
-def diagnostic_fetch(url, hosts):
+def diagnostic_fetch(url, hosts, *, connector=None):
     """Preserve fetch behavior; log only fixed diagnostic categories."""
     import socket
     import ssl
@@ -142,7 +142,9 @@ def diagnostic_fetch(url, hosts):
     from build_podcasts import fetch_feed
 
     try:
-        return fetch_feed(url, hosts)
+        if connector is None:
+            return fetch_feed(url, hosts)
+        return fetch_feed(url, hosts, connector=connector)
     except Exception as error:
         stage = (
             "Apple directory"
@@ -252,7 +254,11 @@ def main():
     config=json.loads((root/'podcasts.json').read_text(encoding='utf-8'))
     from functools import partial
     from podcast_media_inspection import inspect_chain
-    envelope=prepare(event,config,partial(resolve, fetcher=diagnostic_fetch, inspector=inspect_chain))
+    from podcast_onboarding_network import connect_with_failover
+    onboarding_fetch = partial(
+        diagnostic_fetch, connector=connect_with_failover
+    )
+    envelope=prepare(event,config,partial(resolve, fetcher=onboarding_fetch, inspector=inspect_chain))
     encoded=base64.b64encode(json.dumps(envelope,ensure_ascii=True,separators=(',',':')).encode()).decode()
     if len(encoded)>64000:raise ValueError('Oversized resolution')
     with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as stream:stream.write('resolution='+encoded+'\n')

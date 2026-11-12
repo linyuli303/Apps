@@ -206,7 +206,7 @@ def public_addresses(host):
         raise PodcastError('Non-public feed destination')
     return addresses
 
-def fetch_feed(url, hosts):
+def fetch_feed(url, hosts, *, connector=None):
     # No proxy environment variables, CookieJar, credentials, cache, or media fetches.
     deadline = time.monotonic()+60
     for attempt in range(MAX_REDIRECTS+1):
@@ -215,7 +215,11 @@ def fetch_feed(url, hosts):
         remaining = deadline-time.monotonic()
         if remaining <= 0:
             raise PodcastError('Feed time budget exceeded')
-        connection = PinnedHTTPS(p.hostname,addresses[0],min(15,remaining))
+        connection = (
+            PinnedHTTPS(p.hostname,addresses[0],min(15,remaining))
+            if connector is None
+            else connector(p.hostname, addresses, min(15,remaining))
+        )
         try:
             target = p.path or '/'
             if p.query:
