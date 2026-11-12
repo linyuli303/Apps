@@ -4594,7 +4594,7 @@ function validateSpotifyPlaylistPage(page) {
         typeof item.id !== "string" ||
         !/^[A-Za-z0-9]{22}$/.test(item.id) ||
         seen.has(item.id) ||
-        !label(item.name, 300) || !item.name.trim() ||
+        !label(item.name, 300) ||
         !item.owner || typeof item.owner !== "object" ||
         Array.isArray(item.owner) ||
         !label(item.owner.id, 128) || !item.owner.id.trim() ||
@@ -4612,7 +4612,7 @@ function validateSpotifyPlaylistPage(page) {
 
     return Object.freeze({
       id: item.id,
-      name: item.name.trim(),
+      name: item.name.trim() || "Untitled playlist",
       ownerId: item.owner.id,
       ownerName: ownerName || "Spotify user",
       collaborative: item.collaborative === true,
