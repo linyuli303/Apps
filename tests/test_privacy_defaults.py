@@ -93,11 +93,44 @@ class PrivacyDefaultsTests(unittest.TestCase):
 
     def test_no_new_storage_system_or_cookie_api(self):
         for text in (
-            "document.cookie", "cookieStore", "sessionStorage",
+            "document.cookie", "cookieStore",
             "indexedDB", "serviceWorker", "caches.open",
         ):
             self.assertNotIn(text, self.js)
         self.assertNotIn("localStorage.clear(", self.js)
+
+        # Only the reviewed, lazy Spotify login adapter may access tab storage.
+        start = "function openSpotifyLoginStore(browser) {"
+        end = "async function createSpotifyPKCE("
+        self.assertEqual(self.js.count(start), 1)
+        self.assertEqual(self.js.count(end), 1)
+        first = self.js.index(start)
+        last = self.js.index(end, first)
+        adapter = self.js[first:last]
+        outside = self.js[:first] + self.js[last:]
+
+        self.assertEqual(adapter.count("sessionStorage"), 1)
+        self.assertIn(
+            "createSpotifyTransactionStore(browser.sessionStorage)", adapter
+        )
+        self.assertNotIn("sessionStorage", outside)
+        self.assertIn(
+            "browser.location.origin !== expected.origin", adapter
+        )
+        self.assertIn(
+            "browser.location.pathname.startsWith(expected.pathname)", adapter
+        )
+        self.assertLess(
+            adapter.index("browser.location.origin !== expected.origin"),
+            adapter.index("browser.sessionStorage"),
+        )
+        self.assertNotIn("localStorage", adapter)
+        self.assertNotIn(".setItem(", adapter)
+        self.assertNotIn(".clear(", adapter)
+        self.assertEqual(
+            self.js.count("openSpotifyLoginStore("), 2,
+            "Only the definition and lazy authorization initializer are allowed",
+        )
 
     def test_whitelist_remember_still_controls_writes(self):
         save = self.block("function saveDraft()", "function updateAfterEdit(")

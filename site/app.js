@@ -1,6 +1,17 @@
 // Privacy default: page-memory preferences.
 // For enforced anti-framing, use the documented HTTP response headers on a capable host.
 "use strict";
+
+// Synchronous callback cleanup precedes feed loading and application routing.
+// Function declarations below are hoisted; no storage or token exchange here.
+const SPOTIFY_STARTUP_CALLBACK = captureSpotifyStartupCallback({
+  readURL:() => window.location.href,
+  replaceURL:url => window.history.replaceState(null, "", url),
+});
+if (SPOTIFY_STARTUP_CALLBACK.status === "failed") {
+  // Stop initialization rather than propagate authorization material.
+  throw new Error("Spotify callback cleanup failed. Reopen MyApps using its clean URL.");
+}
 const SHARED_CATEGORY_SNAPSHOT = null; // Replaced only in the published artifact.
 const $ = (id) => document.getElementById(id);
 let feed = null,
@@ -2632,21 +2643,30 @@ const PODCAST_PUBLIC_SNAPSHOT = null;
     $("podcast-page-status").textContent = "Page " + (podcastPage + 1) + " of " + Math.max(1, Math.ceil(matches.length / 48));
   }
   function route() {
+    const spotify = location.hash === "#/spotify";
     const legacy = location.hash === "#/podcasts" ? "MyPodcasts"
       : location.hash === "#/tube" ? "MyTube" : null;
     const podcastPath = new URL("MyPodcasts/", MYAPPS_ROOT).pathname;
-    const podcast = legacy ? legacy === "MyPodcasts"
-      : location.pathname === podcastPath;
+    const podcast = !spotify && (legacy ? legacy === "MyPodcasts"
+      : location.pathname === podcastPath);
+    const tube = !spotify && !podcast;
+
     if (legacy) {
       const target = new URL(legacy + "/", MYAPPS_ROOT);
       target.search = location.search;
       history.replaceState(history.state, "", target.href);
     }
-    if (podcast && !$("player").hidden) closePlayer();
-    $("tube-page").hidden = podcast;
+    if (!tube && !$("player").hidden) closePlayer();
+    $("tube-page").hidden = !tube;
     $("podcast-page").hidden = !podcast;
-    $("rss-catalogue").hidden = podcast;
-    for (const [id, active] of [["myapps-tube", !podcast], ["myapps-podcasts", podcast]]) {
+    $("spotify-page").hidden = !spotify;
+    $("rss-catalogue").hidden = !tube;
+
+    for (const [id, active] of [
+      ["myapps-tube", tube],
+      ["myapps-podcasts", podcast],
+      ["myapps-spotify", spotify],
+    ]) {
       if (active) $(id).setAttribute("aria-current", "page");
       else $(id).removeAttribute("aria-current");
     }
@@ -2660,6 +2680,15 @@ const PODCAST_PUBLIC_SNAPSHOT = null;
     }
     route();
   }
+  $("myapps-spotify").addEventListener("click", () => {
+    const target = new URL(MYAPPS_ROOT.href);
+    target.search = location.search;
+    target.hash = "/spotify";
+    if (location.href !== target.href) {
+      history.pushState(null, "", target.href);
+    }
+    route();
+  });
   $("myapps-tube").addEventListener("click", () => navigate("MyTube"));
   $("myapps-podcasts").addEventListener("click", () => navigate("MyPodcasts"));
   $("podcast-search").addEventListener("input", () => renderPodcasts(true));
@@ -3537,6 +3566,29 @@ function detectMyAppsLayout(userAgent, width, coarsePointer) {
 })();
 
 // Spotify authorization foundation: generation only, no requests or storage.
+// Public application identity. Never add a client secret here.
+const MYAPPS_SPOTIFY_CONFIG = Object.freeze({
+  clientId: "f900eeb7bfba4a1fa35d0e37ec84c4ec",
+  redirectUri: "https://linyuli303.github.io/Apps/",
+});
+
+// Lazy adapter: called only by the forthcoming authorization integration.
+// Local previews must use injected fake storage, not production login state.
+function openSpotifyLoginStore(browser) {
+  const expected = new URL(MYAPPS_SPOTIFY_CONFIG.redirectUri);
+  if (!browser || !browser.location ||
+      browser.location.origin !== expected.origin ||
+      !browser.location.pathname.startsWith(expected.pathname)) {
+    throw new Error("Spotify login is unavailable on this preview origin.");
+  }
+
+  try {
+    return createSpotifyTransactionStore(browser.sessionStorage);
+  } catch {
+    throw new Error("Temporary Spotify login storage unavailable.");
+  }
+}
+
 async function createSpotifyPKCE(cryptoProvider = globalThis.crypto) {
   if (!cryptoProvider ||
       typeof cryptoProvider.getRandomValues !== "function" ||
@@ -4049,6 +4101,267 @@ async function exchangeSpotifyAuthorization(
   }
 }
 
+// Unwired callback lifecycle. Browser operations are explicitly injected.
+// Credentials remain inside this closure; never include them in UI status.
+function createSpotifyCallbackController({
+  clientId, store, replaceURL,
+  exchange = exchangeSpotifyAuthorization,
+  clock = Date.now,
+}) {
+  if (typeof clientId !== "string" || !/^[a-f0-9]{32}$/.test(clientId) ||
+      !store || typeof store.consume !== "function" ||
+      typeof store.clear !== "function" ||
+      typeof replaceURL !== "function" ||
+      typeof exchange !== "function" || typeof clock !== "function") {
+    throw new Error("Invalid Spotify callback controller.");
+  }
+
+  let generation = 0;
+  let pending = null;
+  let session = null;
+  let status = "disconnected";
+
+  function invalidate() {
+    generation++;
+    if (pending) pending.abort();
+    pending = null;
+    session = null;
+    status = "disconnected";
+  }
+
+  function disconnect() {
+    // Invalidate before cleanup: even failed cleanup cannot revive a response.
+    invalidate();
+    try {
+      store.clear();
+    } catch {
+      status = "cleanup_failed";
+    }
+    return status;
+  }
+
+  async function completeCallback(callbackUrl) {
+    invalidate();
+    const token = generation;
+    let cleanURL;
+    try {
+      cleanURL = spotifyCallbackCleanupURL(callbackUrl);
+      if (cleanURL === null) return "not_callback";
+
+      // Synchronous cleanup must succeed before consuming/exchanging a code.
+      replaceURL(cleanURL);
+      const authorization = store.consume(callbackUrl, clientId, clock());
+      if (authorization.status === "denied") {
+        status = "denied";
+        return status;
+      }
+
+      const controller = new AbortController();
+      pending = controller;
+      status = "connecting";
+      const received = await exchange(authorization, {
+        signal:controller.signal,
+      });
+
+      if (token !== generation || controller.signal.aborted) {
+        return "cancelled";
+      }
+
+      // Copy only validated session fields, including with injected exchanges.
+      const checked = validateSpotifyTokenResponse({
+        access_token:received.accessToken,
+        ...(received.refreshToken === null ? {} : {
+          refresh_token:received.refreshToken,
+        }),
+        token_type:"Bearer",
+        expires_in:1,
+        scope:received.scopes.join(" "),
+      }, clock());
+      if (!Number.isSafeInteger(received.expiresAt) ||
+          received.expiresAt <= clock() ||
+          received.expiresAt - clock() > 86400000) {
+        throw new Error("Invalid Spotify session expiry");
+      }
+
+      session = Object.freeze({
+        accessToken:checked.accessToken,
+        refreshToken:checked.refreshToken,
+        scopes:checked.scopes,
+        expiresAt:received.expiresAt,
+      });
+      pending = null;
+      status = "connected";
+      return status;
+    } catch {
+      if (token !== generation) return "cancelled";
+      invalidate();
+      status = "failed";
+      try {
+        store.clear();
+      } catch {
+        status = "cleanup_failed";
+      }
+      return status;
+    }
+  }
+
+  function getStatus() {
+    if (session && clock() >= session.expiresAt) {
+      invalidate();
+      status = "expired";
+    }
+    return status;
+  }
+
+  return Object.freeze({completeCallback, disconnect, getStatus});
+}
+
+// Unwired Connect lifecycle. Navigation and temporary storage are injected.
+// Call connect only from an explicit user action; never log login material.
+function createSpotifyConnectController({
+  clientId, store, navigate,
+  generatePKCE = createSpotifyPKCE,
+  buildURL = buildSpotifyAuthorizationURL,
+  clock = Date.now,
+}) {
+  if (typeof clientId !== "string" || !/^[a-f0-9]{32}$/.test(clientId) ||
+      !store || typeof store.save !== "function" ||
+      typeof store.clear !== "function" ||
+      typeof navigate !== "function" ||
+      typeof generatePKCE !== "function" ||
+      typeof buildURL !== "function" || typeof clock !== "function") {
+    throw new Error("Invalid Spotify Connect controller.");
+  }
+
+  let generation = 0;
+  let status = "idle";
+
+  function cancel() {
+    generation++;
+    status = "cancelled";
+    try {
+      store.clear();
+    } catch {
+      status = "cleanup_failed";
+    }
+    return status;
+  }
+
+  async function connect() {
+    const token = ++generation;
+    status = "preparing";
+    try {
+      // Clear any abandoned transaction before preparing a new login.
+      store.clear();
+      const pkce = await generatePKCE();
+      if (token !== generation) return "cancelled";
+
+      const transaction = createSpotifyAuthTransaction(
+        pkce, clientId, clock()
+      );
+      const destination = await buildURL(
+        transaction, pkce.challenge, clientId, clock()
+      );
+      if (token !== generation) return "cancelled";
+
+      // Revalidate after asynchronous challenge hashing.
+      validateSpotifyAuthTransaction(transaction, clientId, clock());
+
+      // Defend the navigation boundary even with an injected URL builder.
+      const url = new URL(destination);
+      if (url.origin !== "https://accounts.spotify.com" ||
+          url.pathname !== "/authorize" ||
+          url.username || url.password || url.hash ||
+          url.searchParams.getAll("client_id").length !== 1 ||
+          url.searchParams.get("client_id") !== clientId ||
+          url.searchParams.getAll("redirect_uri").length !== 1 ||
+          url.searchParams.get("redirect_uri") !== transaction.redirectUri ||
+          url.searchParams.getAll("state").length !== 1 ||
+          url.searchParams.get("state") !== transaction.state) {
+        throw new Error("Invalid Spotify navigation destination");
+      }
+
+      // These injected operations must be synchronous.
+      store.save(transaction, clientId, clock());
+      if (token !== generation) return "cancelled";
+      status = "redirecting";
+      navigate(url.href);
+      return "redirecting";
+    } catch {
+      // An old attempt must not clear a newer attempt's transaction/status.
+      if (token !== generation) return "cancelled";
+      status = "failed";
+      try {
+        store.clear();
+      } catch {
+        status = "cleanup_failed";
+      }
+      return status;
+    }
+  }
+
+  return Object.freeze({
+    connect,
+    cancel,
+    getStatus:() => status,
+  });
+}
+
+// Unwired synchronous startup gate. No storage, exchange or normal app routing.
+// Call before feed loading/routing when integration is ready.
+// Captured callback material must never be logged or exposed in UI status.
+function captureSpotifyStartupCallback({readURL, replaceURL}) {
+  if (typeof readURL !== "function" || typeof replaceURL !== "function") {
+    throw new Error("Invalid Spotify startup dependencies.");
+  }
+
+  let captured = null;
+  let status = "not_callback";
+
+  try {
+    const original = readURL();
+    const candidate = new URL(original);
+    const callbackKeys = [
+      "code", "state", "error", "error_description", "error_uri"
+    ];
+    // Normal section URLs and local previews need no callback processing.
+    if (!callbackKeys.some(key => candidate.searchParams.has(key))) {
+      return Object.freeze({status:"not_callback", take:() => null, discard() {}});
+    }
+    const cleaned = spotifyCallbackCleanupURL(original);
+    if (cleaned !== null) {
+      // Cleanup must be synchronous and complete before releasing the input.
+      const result = replaceURL(cleaned);
+      if (result && typeof result.then === "function") {
+        throw new Error("Asynchronous callback cleanup is not supported");
+      }
+
+      // Independently confirm the browser no longer exposes the callback.
+      if (readURL() !== cleaned) {
+        throw new Error("Callback URL cleanup not confirmed");
+      }
+
+      captured = original;
+      status = "callback";
+    }
+  } catch {
+    captured = null;
+    status = "failed";
+  }
+
+  function take() {
+    const value = captured;
+    captured = null;
+    return value;
+  }
+
+  function discard() {
+    captured = null;
+  }
+
+  return Object.freeze({status, take, discard});
+}
+
 // Public GitHub request forms only: no token, persistent draft or source lookup.
 function initializePodcastConfiguration(shows) {
   const dialog=$("podcast-config-dialog"), opener=$("podcast-config");
@@ -4092,3 +4405,146 @@ function initializePodcastConfiguration(shows) {
     }catch {$("podcast-config-status").textContent="Use a public HTTPS RSS or Apple show URL without credentials, query parameters or a fragment. Query-based/private feeds require separate review; do not submit them here.";}
   });
 }
+
+// Authorization-only screen integration. No SDK, library calls or token logging.
+(function initializeSpotifyAuthorizationScreen() {
+  const connectButton = $("spotify-connect");
+  const disconnectButton = $("spotify-disconnect");
+  const statusNode = $("spotify-status");
+  if (!connectButton || !disconnectButton || !statusNode) return;
+
+  let connector = null;
+  let callbackController = null;
+  let uiGeneration = 0;
+
+  const expected = new URL(MYAPPS_SPOTIFY_CONFIG.redirectUri);
+  const supportedOrigin =
+    location.origin === expected.origin &&
+    location.pathname.startsWith(expected.pathname);
+
+  const messages = Object.freeze({
+    disconnected: "Spotify is disconnected.",
+    preparing: "Preparing secure Spotify authorization...",
+    redirecting: "Opening Spotify authorization...",
+    connecting: "Completing Spotify authorization...",
+    connected: "Spotify authorization succeeded. Library and playback integration are not enabled yet.",
+    denied: "Spotify authorization was declined. No connection was established.",
+    failed: "Spotify connection failed. Connect again.",
+    cleanup_failed: "Connection cancelled, but temporary login cleanup could not be confirmed. Close this tab before reconnecting.",
+    expired: "Spotify authorization expired. Connect again.",
+    cancelled: "Spotify connection cancelled.",
+  });
+
+  function display(state) {
+    statusNode.textContent = messages[state] || messages.failed;
+    const busy = ["preparing", "connecting", "redirecting"].includes(state);
+    connectButton.disabled =
+      !supportedOrigin || busy || state === "connected" ||
+      state === "cleanup_failed";
+    disconnectButton.hidden =
+      !busy && state !== "connected" && state !== "cleanup_failed";
+  }
+
+  function initializeControllers() {
+    if (connector && callbackController) return;
+
+    const store = openSpotifyLoginStore(window);
+    const clientId = MYAPPS_SPOTIFY_CONFIG.clientId;
+    const nextCallback = createSpotifyCallbackController({
+      clientId,
+      store,
+      replaceURL:url => history.replaceState(null, "", url),
+    });
+    const nextConnector = createSpotifyConnectController({
+      clientId,
+      store,
+      navigate:url => location.assign(url),
+    });
+    callbackController = nextCallback;
+    connector = nextConnector;
+  }
+
+  function cancelBoth() {
+    // Always attempt both cancellations, regardless of cleanup outcome.
+    const connectStatus = connector ? connector.cancel() : "cancelled";
+    const callbackStatus = callbackController
+      ? callbackController.disconnect() : "disconnected";
+    return [connectStatus, callbackStatus].includes("cleanup_failed")
+      ? "cleanup_failed" : "disconnected";
+  }
+
+  connectButton.addEventListener("click", async () => {
+    if (!supportedOrigin || connectButton.disabled) return;
+    if (!window.confirm(
+      "Connect to Spotify? Authorization leaves this page. " +
+      "Unsaved edits, playback and the current playlist will be lost on return."
+    )) return;
+
+    const token = ++uiGeneration;
+    try {
+      initializeControllers();
+      if (cancelBoth() === "cleanup_failed") {
+        display("cleanup_failed");
+        return;
+      }
+      display("preparing");
+      const result = await connector.connect();
+      if (token !== uiGeneration) return;
+      display(result);
+    } catch {
+      if (token === uiGeneration) display("failed");
+    }
+  });
+
+  disconnectButton.addEventListener("click", () => {
+    uiGeneration++;
+    display(cancelBoth());
+  });
+
+  // Readiness/expiry checks expose status only, never credentials.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && callbackController &&
+        callbackController.getStatus() === "expired") {
+      display("expired");
+    }
+  });
+
+  const captured = SPOTIFY_STARTUP_CALLBACK.take();
+  if (!supportedOrigin) {
+    display("disconnected");
+    statusNode.textContent =
+      "Preview only: real Spotify authorization is available on the production origin.";
+    return;
+  }
+
+  if (captured === null) {
+    display("disconnected");
+    return;
+  }
+
+  const token = ++uiGeneration;
+  try {
+    initializeControllers();
+    display("connecting");
+
+    // completeCallback synchronously cleans/consumes before its first await.
+    const completion = callbackController.completeCallback(captured);
+
+    // Use the existing hash router; never carry callback query parameters.
+    const destination = new URL(MYAPPS_SPOTIFY_CONFIG.redirectUri);
+    destination.hash = "/spotify";
+    history.replaceState(null, "", destination.href);
+    window.dispatchEvent(new Event("hashchange"));
+
+    completion.then(result => {
+      if (token === uiGeneration) display(result);
+    }).catch(() => {
+      if (token === uiGeneration) {
+        display(cancelBoth() === "cleanup_failed" ? "cleanup_failed" : "failed");
+      }
+    });
+  } catch {
+    uiGeneration++;
+    display(cancelBoth() === "cleanup_failed" ? "cleanup_failed" : "failed");
+  }
+})();
