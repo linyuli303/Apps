@@ -18,11 +18,12 @@ jobs:
       contents: read
     outputs:
       resolution: ${{ steps.resolve.outputs.resolution }}
+      status: ${{ steps.resolve.outputs.status }}
     steps:
       - name: Checkout trusted main only
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -38,6 +39,7 @@ jobs:
   apply:
     needs: resolve
     if: >-
+      needs.resolve.outputs.status != 'approval_required' &&
       github.repository == 'linyuli303/Apps' &&
       github.ref == 'refs/heads/main' &&
       github.actor_id == '42029941' &&
@@ -54,7 +56,7 @@ jobs:
       - name: Checkout trusted main only
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -69,3 +71,102 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PODCAST_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
         run: python scripts/process_podcast_request.py
+
+  proposal-preflight:
+    name: proposal-preflight
+    needs: resolve
+    if: >-
+      needs.resolve.outputs.status == 'approval_required' &&
+      github.repository == 'linyuli303/Apps' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor_id == '42029941' &&
+      github.event.issue.user.id == 42029941 &&
+      github.event.repository.owner.id == 42029941 &&
+      github.event.issue.title == '[MyApps] Podcast change'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      bundle_sha256: ${{ steps.bundle.outputs.sha256 }}
+    steps:
+      - name: Checkout exact trusted event commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Run isolated proposal preflight without write credentials
+        env:
+          PODCAST_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
+        run: >-
+          python scripts/podcast_proposal_preflight.py
+          --base-sha "$GITHUB_SHA"
+          --output "$RUNNER_TEMP/podcast-proposal.json"
+      - name: Bind successful bundle to trusted job output
+        id: bundle
+        shell: python
+        run: |
+          import hashlib
+          import os
+          from pathlib import Path
+          path = Path(os.environ["RUNNER_TEMP"]) / "podcast-proposal.json"
+          with path.open("rb") as stream:
+              raw = stream.read(8_000_001)
+          if not raw or len(raw) > 8_000_000:
+              raise ValueError("Invalid bundle size")
+          value = hashlib.sha256(raw).hexdigest()
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
+              stream.write("sha256=" + value + "\n")
+      - name: Upload proposal data only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: podcast-proposal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/podcast-proposal.json
+          if-no-files-found: error
+          retention-days: 1
+
+  proposal-writer:
+    needs: [resolve, proposal-preflight]
+    if: >-
+      needs.resolve.outputs.status == 'approval_required' &&
+      needs.proposal-preflight.result == 'success' &&
+      github.repository == 'linyuli303/Apps' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor_id == '42029941' &&
+      github.event.issue.user.id == 42029941 &&
+      github.event.repository.owner.id == 42029941 &&
+      github.event.issue.title == '[MyApps] Podcast change'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - name: Checkout trusted base code, never the proposal branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Check trusted tracked files
+        run: python scripts/security_check.py
+      - name: Download same-run proposal data outside checkout
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: podcast-proposal-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/podcast-proposal-input
+      - name: Revalidate and create owner-review draft PR only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PODCAST_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
+          PODCAST_PREFLIGHT_SHA256: ${{ needs.proposal-preflight.outputs.bundle_sha256 }}
+          PODCAST_PROPOSAL_BUNDLE: ${{ runner.temp }}/podcast-proposal-input/podcast-proposal.json
+        run: python scripts/podcast_proposal_writer.py

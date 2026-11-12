@@ -108,8 +108,12 @@ class PodcastConfigUITests(unittest.TestCase):
     def test_workflow_narrow(self):
         workflow=(ROOT/'.github/workflows/podcast-change.yml').read_text(encoding='utf-8')
         self.assertIn("github.actor_id == '42029941'",workflow)
-        self.assertIn('ref: main',workflow);self.assertIn('persist-credentials: false',workflow)
-        self.assertEqual(workflow.count('GH_TOKEN:'),1)
+        self.assertEqual(workflow.count('ref: ${{ github.sha }}'), 4)
+        self.assertEqual(workflow.count('persist-credentials: false'), 4)
+        self.assertEqual(
+            workflow.count("github.ref == 'refs/heads/main'"), 4
+        )
+        self.assertEqual(workflow.count('GH_TOKEN:'),2)
         self.assertNotIn('github.event.issue.body',workflow)
         self.assertNotIn('YOUTUBE_API_KEY',workflow)
 

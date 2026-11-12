@@ -261,7 +261,13 @@ def main():
     envelope=prepare(event,config,partial(resolve, fetcher=onboarding_fetch, inspector=inspect_chain))
     encoded=base64.b64encode(json.dumps(envelope,ensure_ascii=True,separators=(',',':')).encode()).decode()
     if len(encoded)>64000:raise ValueError('Oversized resolution')
-    with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as stream:stream.write('resolution='+encoded+'\n')
+    status = envelope["result"].get("status")
+    if status not in (
+        "ready", "already_subscribed", "approval_required",
+        "review_required", "remove",
+    ):
+        raise ValueError("Unexpected resolution status")
+    with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as stream:stream.write('resolution='+encoded+'\n'+'status='+status+'\n')
     # Exact host names are available in the read-only job log for review, never auto-approved.
     result=envelope['result']
     print('Onboarding result:',result.get('status'))
