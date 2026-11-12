@@ -15,33 +15,72 @@ class CategoryConfigurationTests(unittest.TestCase):
         self.js=(ROOT/'site/app.js').read_text(encoding='utf-8')
         self.html=(ROOT/'site/index.html').read_text(encoding='utf-8')
     def test_unique_ids_and_toolbar_order(self):
-        parser=IDs();parser.feed(self.html)
-        self.assertEqual(len(parser.ids),len(set(parser.ids)))
-        for name in ('category-tabs','category-filter','category-menu','configuration-toggle','configuration-dialog','whitelist-dialog','refresh','whitelist-manager'):
-            self.assertIn(name,parser.ids)
-        toolbar=self.html.split('<section class="toolbar landing-toolbar"',1)[1].split('</section>',1)[0]
-        self.assertIn('class="landing-brand"',toolbar)
-        for name in ('title','search','channel','sort'):
-            self.assertIn(f'id="{name}"',toolbar)
-        self.assertNotIn('id="refresh"',toolbar)
-        actions=self.html.split('<div class="category-toolbar-actions">',1)[1].split('</div>',1)[0]
-        self.assertIn('id="configuration-toggle"',actions)
-        self.assertIn('id="refresh"',actions)
-        self.assertIn('document.querySelector(".category-toolbar-actions")',self.js)
-        self.assertIn('actions.append(picker, announce); header.prepend(actions);',self.js)
-        self.assertLess(self.html.index('id="category-tabs"'),self.html.index('id="configuration-toggle"'))
-        self.assertLess(self.html.index('id="configuration-toggle"'),self.html.index('id="refresh"'))
+        parser = IDs()
+        parser.feed(self.html)
+        self.assertEqual(len(parser.ids), len(set(parser.ids)))
+        for name in (
+            "title", "search", "video-source", "channel", "sort",
+            "category-tabs", "category-filter", "category-menu",
+            "configuration-toggle", "configuration-dialog",
+            "whitelist-dialog", "refresh", "whitelist-manager",
+        ):
+            self.assertIn(name, parser.ids)
+        toolbar = self.html.split(
+            '<section class="toolbar landing-toolbar"', 1
+        )[1].split("</section>", 1)[0]
+        self.assertNotIn('class="landing-brand"', toolbar)
+        self.assertNotIn('id="title"', toolbar)
+        order = (
+            "search", "video-source", "channel", "sort",
+            "configuration-toggle", "refresh",
+        )
+        positions = [toolbar.index(f'id="{name}"') for name in order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn('class="apps-filter-controls"', toolbar)
+        actions = toolbar.split(
+            '<div class="category-toolbar-actions">', 1
+        )[1].split("</div>", 1)[0]
+        self.assertIn('id="configuration-toggle"', actions)
+        self.assertIn('id="refresh"', actions)
+        self.assertIn(
+            'document.querySelector(".myapps-header-actions")', self.js
+        )
+        self.assertIn(
+            "actions.append(picker, appearanceToggle, announce); "
+            "header.prepend(actions);", self.js
+        )
+        self.assertLess(
+            self.html.index('id="refresh"'),
+            self.html.index('id="category-tabs"'),
+        )
     def test_compact_branding_and_filter_labels(self):
-        toolbar=self.html.split('<section class="toolbar landing-toolbar"',1)[1].split('</section>',1)[0]
-        self.assertIn('src="icon.svg" width="42" height="42"',toolbar)
-        self.assertIn('<h1 id="title">MyTube</h1><sup>Yuli</sup>',toolbar)
-        for caption in ('Search your feed','Channel','Sort'):
-            self.assertIn(f'<span class="sr-only">{caption}</span>',toolbar)
-        css=(ROOT/'site/style.css').read_text(encoding='utf-8')
-        compact=css.split('/* Approved compact landing layout. */',1)[1]
-        self.assertIn('gap: 1px;',compact)
-        self.assertIn('font-family: inherit;',compact)
-        self.assertIn('const heading = element("span", "sr-only");',self.js)
+        header = self.html.split(
+            '<div class="myapps-header" role="banner">', 1
+        )[1].split('<section class="toolbar landing-toolbar"', 1)[0]
+        self.assertIn('src="icon.svg" width="42" height="42"', header)
+        self.assertIn(
+            '<h1 id="title">MyApps</h1><sup>Yuli</sup>', header
+        )
+        self.assertIn('aria-label="Applications"', header)
+        for app in ("MyTube", "MySpotify", "MyPodcasts"):
+            self.assertIn(app, header)
+        toolbar = self.html.split(
+            '<section class="toolbar landing-toolbar"', 1
+        )[1].split("</section>", 1)[0]
+        for caption in ("Search your feed", "Channel", "Sort", "Video source"):
+            self.assertIn(
+                f'<span class="sr-only">{caption}</span>', toolbar
+            )
+        css = (ROOT / "site/style.css").read_text(encoding="utf-8")
+        self.assertIn(
+            "grid-template-columns:minmax(0,1fr) minmax(0,1fr)", css
+        )
+        self.assertIn(
+            'const heading = element("span", "sr-only");', self.js
+        )
+        self.assertIn(
+            'appearanceToggle.setAttribute("aria-label",', self.js
+        )
 
     def test_feed_notices_collapsed_and_preserved(self):
         opening='<details class="feed-information">'
@@ -70,10 +109,19 @@ class CategoryConfigurationTests(unittest.TestCase):
         self.assertIn('aria-label="Filter by category"',self.html)
         self.assertNotIn('innerHTML',self.js)
     def test_labels_and_title(self):
-        self.assertIn('placeholder="Search by channel name or UC channel ID"',self.html)
-        self.assertIn('placeholder="UC channel ID or YouTube channel URL"',self.html)
-        self.assertIn('<title>MyTube</title>',self.html)
-        self.assertIn('<h1 id="title">MyTube</h1>',self.html)
+        self.assertIn(
+            'placeholder="Search by channel name or UC channel ID"',
+            self.html,
+        )
+        self.assertIn(
+            'placeholder="UC channel ID or YouTube channel URL"',
+            self.html,
+        )
+        self.assertIn("<title>MyApps</title>", self.html)
+        self.assertIn('<h1 id="title">MyApps</h1>', self.html)
+        self.assertIn(
+            'document.title = "MyApps";', self.js
+        )
     def test_dialog_and_focus_guards(self):
         self.assertIn('$("configuration-dialog")?.open || $("whitelist-dialog")?.open',self.js)
         self.assertIn('$("configuration-toggle").focus()',self.js)

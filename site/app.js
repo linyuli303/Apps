@@ -70,8 +70,8 @@ async function load() {
     );
     feed = data;
     initializeDraft(data);
-    $("title").textContent = data.title || "My Channels";
-    document.title = data.title || "My Channels";
+    $("title").textContent = "MyApps";
+    document.title = "MyApps";
     const previous = $("channel").value;
     $("channel").replaceChildren(new Option("All approved channels", ""));
     data.channels
@@ -182,6 +182,16 @@ function render() {
       );
     }
 
+    const categoryModel = categoryState().model;
+    const assignedTags = new Set(categoryModel.assignments[v.channelId] || []);
+    const badges = element("span", "video-category-tags");
+    for (const category of categoryModel.categories) {
+      if (assignedTags.has(category.id)) badges.append(element("span", "video-category-tag", category.name));
+    }
+    if (badges.childElementCount) {
+      const host = thumbnails ? card.querySelector(".card-body") : card.querySelector(".text-feed-title");
+      if (host) host.append(badges);
+    }
     const durationHost = thumbnails ? card.querySelector(".meta") : viewsForDuration(card);
     if (durationHost) durationHost.append(element("span", "feed-duration", " | " + playbackDurationLabel(v.duration)));
     card.setAttribute("aria-label", `${v.title} - Play inside MyTube`);
@@ -964,7 +974,7 @@ load();
     selected = "yugure"; mode = "light";
   }
   readPreferences();
-  const header = document.querySelector(".category-toolbar-actions"), refresh = $("refresh");
+  const header = document.querySelector(".myapps-header-actions"), refresh = $("refresh");
   if (!header || !refresh || $("mytube-theme-picker")) return;
   const actions = element("div", "landing-palette-actions");
   const picker = element("details", "palette-picker"); picker.id = "mytube-theme-picker";
@@ -990,6 +1000,21 @@ load();
   const appearance = element("select"); appearance.id = "appearance";
   appearance.append(new Option("Light", "light"), new Option("Dark", "dark"), new Option("System", "system"));
   modeLabel.append(appearance);
+  modeLabel.hidden = true;
+  const appearanceToggle = element("button", "apps-appearance-toggle");
+  appearanceToggle.type = "button";
+  appearanceToggle.id = "appearance-toggle";
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("class", "apps-icon");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("aria-hidden", "true");
+  icon.setAttribute("focusable", "false");
+  const circle = document.createElementNS(icon.namespaceURI, "circle");
+  circle.setAttribute("cx", "12"); circle.setAttribute("cy", "12"); circle.setAttribute("r", "9");
+  const half = document.createElementNS(icon.namespaceURI, "path");
+  half.setAttribute("d", "M12 3a9 9 0 0 1 0 18z");
+  half.setAttribute("class", "appearance-half");
+  icon.append(circle, half); appearanceToggle.append(icon);
   function apply(persist = false, speak = false) {
     const theme = themes.find(t => t.id === selected);
     const dark = mode === "dark" || (mode === "system" && system.matches);
@@ -998,6 +1023,9 @@ load();
     name.textContent = theme.ja + " · " + theme.name;
     trigger.replaceChildren(swatches(selected), arrow);
     appearance.value = mode;
+    appearanceToggle.setAttribute("aria-pressed", String(dark));
+    appearanceToggle.setAttribute("aria-label", "Toggle appearance; currently " + (dark ? "dark" : "light"));
+    appearanceToggle.title = "Toggle appearance: " + (dark ? "dark" : "light");
     if ($("player-appearance")) $("player-appearance").value = mode;
     buttons.forEach((b, i) => {
       b.setAttribute("aria-pressed", String(themes[i].id === selected));
@@ -1029,12 +1057,15 @@ load();
   panelHeading.append(modeLabel);
   panel.append(panelHeading, list, element("div", "palette-footnote", "Selection lasts until this page reloads. Nothing is saved to browser storage."));
   picker.append(summary, panel);
-  actions.append(picker, announce); header.prepend(actions);
+  actions.append(picker, appearanceToggle, announce); header.prepend(actions);
   function changeAppearance(value) {
     if (!["light", "dark", "system"].includes(value)) return;
     mode = value;
     apply(true, true);
   }
+  appearanceToggle.addEventListener("click", () => {
+    changeAppearance(document.documentElement.dataset.appearance === "dark" ? "light" : "dark");
+  });
   appearance.addEventListener("change", () => {
     changeAppearance(appearance.value);
   });
