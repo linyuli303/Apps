@@ -1913,3 +1913,44 @@ main > .thumbnail-option {
 #grid.plain-feed .text-feed-title{min-width:0}
 @media(max-width:800px){.myapps-header{gap:14px}.myapps-nav{order:3;width:100%}.myapps-header-actions{margin-left:auto}.apps-filter-controls>label{flex-basis:90px}}
 @media(max-width:600px){.myapps-header{padding-bottom:16px;margin-bottom:18px}.myapps-header .landing-wordmark #title{font-size:21px}.myapps-nav{justify-content:space-between;gap:4px}.myapps-nav-item{font-size:11px;padding:7px;gap:5px}.landing-toolbar{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}.apps-filter-controls{gap:6px}.apps-filter-controls .category-toolbar-actions{flex-wrap:wrap;justify-content:flex-end}.apps-filter-controls .category-toolbar-actions>button{padding:7px;font-size:11px}.myapps-header-actions .palette-panel{width:min(535px,calc(100vw - 40px));max-width:calc(100vw - 40px)}}
+
+
+/* Category column in the default text feed. */
+#grid.plain-feed .card {
+  grid-template-columns:
+    95px 170px minmax(0, 1fr) minmax(110px, 180px) 145px;
+}
+#grid.plain-feed .text-feed-date { grid-column:1; grid-row:1; }
+#grid.plain-feed .text-feed-channel { grid-column:2; grid-row:1; }
+#grid.plain-feed .text-feed-title { grid-column:3; grid-row:1; }
+#grid.plain-feed .video-category-tags {
+  grid-column:4;
+  grid-row:1;
+  margin:0;
+  min-width:0;
+  justify-content:flex-start;
+  align-items:center;
+}
+#grid.plain-feed .text-feed-views { grid-column:5; grid-row:1; }
+
+@media(max-width:700px) {
+  #grid.plain-feed .card {
+    grid-template-columns:
+      70px minmax(0, 1fr) minmax(65px, 100px) 80px;
+    gap:5px 7px;
+  }
+  #grid.plain-feed .text-feed-date {
+    grid-column:1;
+    grid-row:1 / span 2;
+  }
+  #grid.plain-feed .text-feed-title { grid-column:2; grid-row:1; }
+  #grid.plain-feed .text-feed-channel { grid-column:2; grid-row:2; }
+  #grid.plain-feed .video-category-tags {
+    grid-column:3;
+    grid-row:1 / span 2;
+  }
+  #grid.plain-feed .text-feed-views {
+    grid-column:4;
+    grid-row:1 / span 2;
+  }
+}

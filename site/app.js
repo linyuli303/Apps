@@ -189,7 +189,7 @@ function render() {
       if (assignedTags.has(category.id)) badges.append(element("span", "video-category-tag", category.name));
     }
     if (badges.childElementCount) {
-      const host = thumbnails ? card.querySelector(".card-body") : card.querySelector(".text-feed-title");
+      const host = thumbnails ? card.querySelector(".card-body") : card;
       if (host) host.append(badges);
     }
     const durationHost = thumbnails ? card.querySelector(".meta") : viewsForDuration(card);
