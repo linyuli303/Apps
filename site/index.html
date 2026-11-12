@@ -12,7 +12,7 @@
     />
     <title>MyApps</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=myapps-podcast-player-1" />
+    <link rel="stylesheet" href="style.css?v=myapps-podcast-config-1" />
     <script src="app.js?v=myapps-shell-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
@@ -134,6 +134,7 @@
           <div class="podcast-filters">
             <label><span class="sr-only">Podcast show</span><select id="podcast-show"><option value="">All approved shows</option></select></label>
             <label><span class="sr-only">Sort podcast episodes</span><select id="podcast-sort"><option value="new">Newest first</option><option value="old">Oldest first</option><option value="title">Title A-Z</option></select></label>
+            <button id="podcast-config" type="button" aria-haspopup="dialog" aria-controls="podcast-config-dialog" aria-expanded="false">Config</button>
           </div>
         </div>
         <p id="podcast-status" role="status"></p>
@@ -476,5 +477,16 @@
       <div class="podcast-queue-heading"><strong>Playlist</strong><button id="podcast-queue-close" type="button" aria-label="Close playlist">Close</button></div>
       <p>Drag upcoming episodes to reorder, or use the arrow buttons. Library sorting does not change this playlist.</p><div id="podcast-queue-rows"></div>
     </section>
+
+    <dialog id="podcast-config-dialog" aria-labelledby="podcast-config-title">
+      <div class="podcast-config-heading"><h2 id="podcast-config-title">Podcast configuration</h2><button id="podcast-config-close" type="button">Close / Esc</button></div>
+      <p>Review a shared addition or removal through an owner GitHub Issue. Opening the form does not submit it. Changes require processing and publication.</p>
+      <p><strong>Public sources only.</strong> Never enter private feeds, tokens or credentials. New sources remain pending until feed and media hosts are reviewed. Drafts are not saved.</p>
+      <label for="podcast-new-source">Public Apple Podcasts show link or HTTPS RSS URL</label>
+      <div class="podcast-add-source"><input id="podcast-new-source" type="url" autocomplete="off" maxlength="2048" placeholder="https://podcasts.apple.com/... or public RSS URL" /><button id="podcast-request-add" type="button">Review addition</button></div>
+      <label for="podcast-source-search">Search shows</label><input id="podcast-source-search" type="search" autocomplete="off" maxlength="240" />
+      <div id="podcast-managed-shows"></div><p id="podcast-config-status" role="status" aria-live="polite"></p>
+      <details id="podcast-request-fallback" hidden><summary>Copy request if needed</summary><textarea id="podcast-request-payload" readonly rows="5" spellcheck="false"></textarea><a id="podcast-request-link" target="_blank" rel="noopener noreferrer">Open GitHub request form</a></details>
+    </dialog>
   </body>
 </html>

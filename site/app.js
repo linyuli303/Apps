@@ -356,7 +356,7 @@ $("sort").addEventListener("change", () => {
 $("thumbnails").addEventListener("change", render);
 document.addEventListener("keydown", (event) => {
   if ($("category-editor")?.open || $("category-review")?.open ||
-      $("configuration-dialog")?.open || $("whitelist-dialog")?.open) return;
+      $("configuration-dialog")?.open || $("whitelist-dialog")?.open || $("podcast-config-dialog")?.open) return;
   if (!$("player").hidden) {
     if (document.fullscreenElement) return;
     if (!$("player-feed-panel").hidden &&
@@ -2503,6 +2503,7 @@ const PODCAST_PUBLIC_SNAPSHOT = null;
   const shows = ready ? snapshot.shows : [];
   const episodes = ready ? snapshot.episodes : [];
   const names = new Map(shows.map(show => [show.id, show.title]));
+  initializePodcastConfiguration(shows);
   let podcastPage = 0;
   let matches = [];
   const playback = createPodcastPlayer(episodes, names, () => matches, () => renderPodcasts());
@@ -2694,4 +2695,49 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
     rowPlay:e=>{const b=button(active()?.id===e.id&&!audio.paused?"pause":"play","Play "+e.title,()=>selectEpisode(e));b.classList.add("podcast-row-play");b.disabled=!safeMedia(e);return b;},
     rowAdd:e=>{const b=button("add","Add "+e.title+" to playlist",()=>add(e));b.disabled=!safeMedia(e);return b;}
   };
+}
+
+
+// Public GitHub request forms only: no token, persistent draft or source lookup.
+function initializePodcastConfiguration(shows) {
+  const dialog=$("podcast-config-dialog"), opener=$("podcast-config");
+  const repo="https://github.com/linyuli303/MyTube/issues/new";
+  function request(data) {
+    const payload="```json\n"+JSON.stringify(data)+"\n```";
+    const url=new URL(repo);url.searchParams.set("template","podcast-change.yml");url.searchParams.set("title","[MyApps] Podcast change");
+    url.searchParams.set("podcast_request",payload);
+    if(url.href.length>6500)url.searchParams.delete("podcast_request");
+    $("podcast-request-payload").value=payload;
+    $("podcast-request-link").href=url.href;
+    $("podcast-request-fallback").hidden=false;
+    window.open(url.href,"_blank","noopener,noreferrer");
+    $("podcast-config-status").textContent="GitHub form opened if popups are allowed. Nothing submitted yet. Review the public request, confirm and submit as the repository owner. Check processing and publication. Additions remain pending until feed/media approval.";
+  }
+  function renderShows() {
+    const query=$("podcast-source-search").value.trim().toLocaleLowerCase();
+    const list=$("podcast-managed-shows");list.replaceChildren();
+    for(const show of shows.filter(s=>(s.title+" "+s.id).toLocaleLowerCase().includes(query))) {
+      const row=element("div","podcast-managed-show");
+      const text=element("span","",show.title);text.append(element("small","",show.id+" | "+(show.status==="ok"?"Published":show.status==="pending"?"Pending validation":"Unavailable at collection")));
+      const remove=element("button","","Review removal");remove.type="button";
+      remove.addEventListener("click",()=>{if(confirm("Open a public GitHub removal request for "+show.title+"? Nothing is removed until owner approval and publication."))request({operation:"Remove",showId:show.id});});
+      row.append(text,remove);list.append(row);
+    }
+    if(!shows.length)list.append(element("p","","A packaged podcast catalogue is required to manage existing shows."));
+  }
+  opener.addEventListener("click",()=>{renderShows();dialog.showModal();opener.setAttribute("aria-expanded","true");});
+  $("podcast-config-close").addEventListener("click",()=>dialog.close());
+  dialog.addEventListener("close",()=>{opener.setAttribute("aria-expanded","false");opener.focus();});
+  dialog.addEventListener("keydown",event=>event.stopPropagation());
+  $("podcast-source-search").addEventListener("input",renderShows);
+  $("podcast-request-add").addEventListener("click",()=>{
+    const source=$("podcast-new-source").value.trim();
+    try {
+      const u=new URL(source);
+      if(source.length>2048||/[^\x21-\x7e]/.test(source)||source.includes("\\")||u.protocol!=="https:"||u.username||u.password||u.search||u.hash||(u.port&&u.port!=="443"))throw new Error();
+      if(u.hostname==="podcasts.apple.com"&&!/^\/(?:[a-z]{2}\/)?podcast\/(?:[^/]+\/)?id[0-9]{1,20}\/?$/.test(u.pathname))throw new Error();
+      if(!confirm("Confirm this is a PUBLIC show/feed URL with no private tokens or subscription credentials. The URL will be public in a GitHub Issue and repository. The new source stays pending until feed and media hosts are reviewed."))return;
+      request({operation:"Add",sourceUrl:source});
+    }catch {$("podcast-config-status").textContent="Use a public HTTPS RSS or Apple show URL without credentials, query parameters or a fragment. Query-based/private feeds require separate review; do not submit them here.";}
+  });
 }

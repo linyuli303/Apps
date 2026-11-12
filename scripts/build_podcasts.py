@@ -60,8 +60,16 @@ def validate_config(config):
         raise PodcastError('Invalid podcast configuration')
     ids = set()
     for s in config['shows']:
+        # Request-created additions are inert until feed/media review.
+        if isinstance(s,dict) and set(s)=={'id','title','enabled','sourceUrl'}:
+            from podcast_request import source_identity
+            if (s['enabled'] is not False or not isinstance(s['title'],str) or not 1<=len(s['title'])<=200 or
+                    any(ord(c)<32 for c in s['title']) or s['id'] in ids or source_identity(s['sourceUrl'])!=s['id']):
+                raise PodcastError('Invalid pending source')
+            ids.add(s['id'])
+            continue
         if (not isinstance(s, dict) or set(s) != {'id','title','enabled','feedUrl','feedHosts','mediaHosts'} or
-                not isinstance(s['id'], str) or not re.fullmatch(r'apple-[0-9]{1,20}',s['id']) or
+                not isinstance(s['id'], str) or not re.fullmatch(r'(?:apple-[0-9]{1,20}|rss-[0-9a-f]{32})',s['id']) or
                 s['id'] in ids or not isinstance(s['title'],str) or not 1 <= len(s['title']) <= 200 or
                 any(ord(c) < 32 for c in s['title']) or type(s['enabled']) is not bool):
             raise PodcastError('Invalid show')
@@ -282,7 +290,7 @@ def main():
     args.output.write_text(json.dumps(catalogue,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     for show in catalogue['shows']:
         print(show['id']+' | '+show['status']+' | '+str(show['episodeCount'])+' episodes')
-    return 0 if any(s['status']=='ok' for s in catalogue['shows']) else 1
+    return 0 if (not any(s['enabled'] for s in config['shows']) or any(s['status']=='ok' for s in catalogue['shows'])) else 1
 
 if __name__ == '__main__':
     raise SystemExit(main())

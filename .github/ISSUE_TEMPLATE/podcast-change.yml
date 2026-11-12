@@ -1,0 +1,25 @@
+name: Change MyPodcasts show
+description: Owner-reviewed public podcast addition or removal. Additions remain pending validation.
+title: "[MyApps] Podcast change"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Public request. Never include private feeds, subscription links, tokens or credentials.
+        Only requests opened by the authorized owner can be processed.
+        Additions remain disabled until feed and media hosts are explicitly reviewed.
+        Opening this form is not submission. Changes appear after processing and publication.
+  - type: textarea
+    id: podcast_request
+    attributes:
+      label: Podcast request
+      description: Keep the JSON request and both code fences supplied by MyApps Config.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I reviewed this public podcast request and understand that additions remain pending until source and media-host approval.
+          required: true
