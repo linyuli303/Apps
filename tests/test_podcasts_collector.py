@@ -124,3 +124,41 @@ class PodcastCollectorTests(unittest.TestCase):
             def close(self): pass
         with patch.object(p,'public_addresses',return_value=['8.8.8.8']),patch.object(p,'PinnedHTTPS',Connection):
             with self.assertRaises(p.PodcastError): p.fetch_feed(SHOW['feedUrl'],SHOW['feedHosts'])
+
+
+class PodcastAllEpisodesTests(unittest.TestCase):
+    def test_all_mode_config(self):
+        config = {'version':1,'maxEpisodesPerShow':None,'shows':[SHOW.copy()]}
+        self.assertIsNone(p.validate_config(config)['maxEpisodesPerShow'])
+
+    def test_all_mode_over_old_limit(self):
+        raw = rss(''.join(item(guid=str(i)) for i in range(125)))
+        episodes, stats = p.parse_feed(raw, SHOW, None, NOW)
+        self.assertEqual(len(episodes),125)
+        self.assertEqual(stats['eligible'],125)
+
+    def test_all_mode_deduplicates(self):
+        episodes, stats = p.parse_feed(rss(item()+item()), SHOW, None, NOW)
+        self.assertEqual(len(episodes),1)
+        self.assertEqual(stats['items'],2)
+
+    def test_all_mode_item_limit_fails_not_truncates(self):
+        with patch.object(p,'MAX_ITEMS',1):
+            with self.assertRaises(p.PodcastError):
+                p.parse_feed(rss(item()+item(guid='two')), SHOW, None, NOW)
+
+    def test_all_mode_byte_limit_unchanged(self):
+        with patch.object(p,'MAX_BYTES',10):
+            with self.assertRaises(p.PodcastError):
+                p.parse_feed(rss(item()), SHOW, None, NOW)
+
+    def test_parse_rejects_invalid_selection_limit(self):
+        for value in (True,0,101,'all'):
+            with self.assertRaises(p.PodcastError):
+                p.parse_feed(rss(item()),SHOW,value,NOW)
+
+    def test_collect_all_mode(self):
+        config={'version':1,'maxEpisodesPerShow':None,'shows':[SHOW.copy()]}
+        catalogue=p.collect(config,fetcher=lambda *_:rss(''.join(item(guid=str(i)) for i in range(125))),now=NOW)
+        self.assertEqual(catalogue['shows'][0]['episodeCount'],125)
+        self.assertEqual(len(catalogue['episodes']),125)

@@ -11,6 +11,7 @@ _scripts_path = str(Path(__file__).resolve().parent)
 if _scripts_path not in sys.path:
     sys.path.insert(0, _scripts_path)
 from shared_categories_public import package as package_categories
+from podcasts_public import package as package_podcasts
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location("security",ROOT/"scripts/security_check.py")
@@ -62,6 +63,7 @@ def prepare():
             raise ValueError("Website asset failed size/credential checks")
     validate_feed(json.loads((source/"data/feed.json").read_text()),json.loads((ROOT/"channels.json").read_text()))
     public_js, category_revision = package_categories(ROOT, (source/"app.js").read_text(encoding="utf-8"))
+    public_js = package_podcasts(ROOT, public_js)
     if security.sensitive(public_js.encode("utf-8")) or len(public_js.encode("utf-8")) > 25_000_000:
         raise ValueError("Packaged script failed safety checks")
     app_revision = hashlib.sha256(public_js.encode("utf-8")).hexdigest()[:20]

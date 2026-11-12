@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "maxEpisodesPerShow": 15,
+  "maxEpisodesPerShow": null,
   "shows": [
     {
       "id": "apple-1761230754",

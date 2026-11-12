@@ -242,6 +242,7 @@ function syncKinoControls() {
 
 function openPlayer(id) {
   closePlayerFeed(false);
+  if (window.MyAppsPodcastPlayer) window.MyAppsPodcastPlayer.pauseForVideo();
   const video =
     feed &&
     feed.videos.find(
@@ -2492,3 +2493,205 @@ function renderCategoryTabs() {
   $("category-filter").addEventListener("change", renderCategoryTabs);
   renderCategoryTabs();
 })();
+
+
+// Replaced by prepare_site.py only. Validated public media URLs; requested only on Play.
+const PODCAST_PUBLIC_SNAPSHOT = null;
+(function initializePodcastBrowsing() {
+  const snapshot = PODCAST_PUBLIC_SNAPSHOT;
+  const ready = snapshot && snapshot.version === 1;
+  const shows = ready ? snapshot.shows : [];
+  const episodes = ready ? snapshot.episodes : [];
+  const names = new Map(shows.map(show => [show.id, show.title]));
+  let podcastPage = 0;
+  let matches = [];
+  const playback = createPodcastPlayer(episodes, names, () => matches, () => renderPodcasts());
+  function duration(seconds) {
+    if (seconds === null) return "Duration unavailable";
+    const hours = Math.floor(seconds / 3600);
+    return hours ? hours + ":" + String(Math.floor(seconds % 3600 / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0") : Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+  }
+  for (const show of shows) {
+    $("podcast-show").append(new Option(show.title, show.id));
+    $("podcast-sources").append(element("li", "", show.title + " - " + (show.status === "ok" ? show.episodeCount + " episodes" : show.status === "pending" ? "Pending source verification" : "Unavailable at collection")));
+  }
+  function renderPodcasts(reset = false) {
+    if (reset) podcastPage = 0;
+    const query = $("podcast-search").value.trim().toLocaleLowerCase();
+    matches = episodes.filter(e => (!$("podcast-show").value || e.showId === $("podcast-show").value) && (e.title + " " + names.get(e.showId)).toLocaleLowerCase().includes(query));
+    matches.sort((a,b) => $("podcast-sort").value === "title" ? a.title.localeCompare(b.title) : $("podcast-sort").value === "old" ? a.publishedAt.localeCompare(b.publishedAt) : b.publishedAt.localeCompare(a.publishedAt));
+    podcastPage = Math.min(podcastPage, Math.max(0, Math.ceil(matches.length / 48) - 1));
+    const fragment = document.createDocumentFragment();
+    for (const episode of matches.slice(podcastPage * 48, (podcastPage + 1) * 48)) {
+      const row = element("article", "podcast-row");
+      const date = element("time", "podcast-date", dateLabel(episode.publishedAt));
+      date.dateTime = episode.publishedAt;
+      row.dataset.episode = episode.id;
+      const controls = element("span", "podcast-row-controls");
+      controls.append(playback.rowPlay(episode), playback.rowAdd(episode));
+      row.classList.toggle("podcast-current", playback.currentID() === episode.id);
+      row.append(date, element("span", "podcast-show-name", names.get(episode.showId)), element("span", "podcast-episode-title", episode.title), controls, element("span", "podcast-duration", duration(episode.durationSeconds)));
+      fragment.append(row);
+    }
+    if (!matches.length) fragment.append(element("p", "", ready ? "No matching episodes." : "Podcast catalogue not packaged yet. Local source alone contains no podcast data."));
+    $("podcast-results").replaceChildren(fragment);
+    $("podcast-status").textContent = ready ? matches.length + " episodes | " + shows.filter(s => s.status === "ok").length + " available shows | Collected " + dateLabel(snapshot.generatedAt) + ". Audio starts only on Play." : "Podcast metadata unavailable. YouTube remains independent.";
+    $("podcast-prev").disabled = podcastPage === 0;
+    $("podcast-next").disabled = (podcastPage + 1) * 48 >= matches.length;
+    $("podcast-page-status").textContent = "Page " + (podcastPage + 1) + " of " + Math.max(1, Math.ceil(matches.length / 48));
+  }
+  function route() {
+    const podcast = location.hash === "#/podcasts";
+    if (podcast && !$("player").hidden) closePlayer();
+    $("tube-page").hidden = podcast;
+    $("podcast-page").hidden = !podcast;
+    $("rss-catalogue").hidden = podcast;
+    for (const [id, active] of [["myapps-tube", !podcast], ["myapps-podcasts", podcast]]) {
+      if (active) $(id).setAttribute("aria-current", "page");
+      else $(id).removeAttribute("aria-current");
+    }
+    if (podcast) renderPodcasts();
+  }
+  $("myapps-tube").addEventListener("click", () => { location.hash = "/tube"; });
+  $("myapps-podcasts").addEventListener("click", () => { location.hash = "/podcasts"; });
+  $("podcast-search").addEventListener("input", () => renderPodcasts(true));
+  for (const id of ["podcast-show", "podcast-sort"]) $(id).addEventListener("change", () => renderPodcasts(true));
+  $("podcast-prev").addEventListener("click", () => { podcastPage--; renderPodcasts(); });
+  $("podcast-next").addEventListener("click", () => { podcastPage++; renderPodcasts(); });
+  window.addEventListener("hashchange", route);
+  route();
+})();
+
+
+// Podcast playback uses one audio element, no autoplay source or next-episode prefetch.
+// Native media may use browser caching and provider cookies; no credential-free claim.
+function createPodcastPlayer(episodes, names, filtered, rerender) {
+  const audio = document.createElement("audio");
+  audio.preload = "none";
+  audio.setAttribute("aria-hidden", "true");
+  audio.hidden = true;
+  $("podcast-player").append(audio);
+  const byID = new Map(episodes.map(e => [e.id, e]));
+  const allowedHosts = new Set(["adswizz.podigee-cdn.net", "anchor.fm", "audio.podigee-cdn.net", "cdn.audiorella.com", "d3ctxlq1ktw2nl.cloudfront.net", "dcs-cached.megaphone.fm", "dts.podtrac.com", "npr.simplecastaudio.com", "play.podtrac.com", "podcast-mp3.dradio.de", "podfileszdf-a.akamaihd.net", "prfx.byspotify.com", "radiodownloaddw-a.akamaihd.net", "traffic.megaphone.fm", "wdrmedien-a.akamaihd.net"]);
+  let queue = [], index = -1, repeat = "off", speed = 1, generation = 0, drag = null;
+  const icons = {
+    play:["M8 5l11 7-11 7z"], pause:["M9 5v14M16 5v14"],
+    back:["M5 8a9 9 0 1 1-1 8M5 3v5h5"], forward:["M19 8a9 9 0 1 0 1 8M19 3v5h-5"],
+    previous:["M5 5v14M19 5l-10 7 10 7z"], next:["M19 5v14M5 5l10 7-10 7z"],
+    add:["M4 6h12M4 11h8M4 16h8M18 12v8M14 16h8"],
+    up:["M6 14l6-6 6 6"], down:["M6 10l6 6 6-6"], close:["M6 6l12 12M18 6L6 18"],
+    repeat:["M4 10V8a3 3 0 0 1 3-3h13m-4-4 4 4-4 4M20 14v2a3 3 0 0 1-3 3H4m4-4-4 4 4 4"],
+    queue:["M4 6h16M4 11h16M4 16h8M16 15l5 3-5 3z"]
+  };
+  function icon(name) {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns,"svg");
+    svg.setAttribute("viewBox","0 0 24 24"); svg.setAttribute("class","apps-icon");
+    svg.setAttribute("aria-hidden","true"); svg.setAttribute("focusable","false");
+    for (const d of icons[name]) { const path=document.createElementNS(ns,"path"); path.setAttribute("d",d); svg.append(path); }
+    if (name === "back" || name === "forward") {
+      const text=document.createElementNS(ns,"text"); text.setAttribute("x","12");text.setAttribute("y","15");text.setAttribute("text-anchor","middle");text.setAttribute("class","podcast-skip-number");text.textContent="15";svg.append(text);
+    }
+    return svg;
+  }
+  function decorate(button,name,label) { button.replaceChildren(icon(name));button.setAttribute("aria-label",label);button.title=label; }
+  function button(name,label,action) { const b=element("button","podcast-icon-button");b.type="button";decorate(b,name,label);b.addEventListener("click",action);return b; }
+  const active = () => byID.get(queue[index]) || null;
+  const time = value => { if (!Number.isFinite(value)) return "--:--";const n=Math.max(0,Math.floor(value));return n>=3600?Math.floor(n/3600)+":"+String(Math.floor(n%3600/60)).padStart(2,"0")+":"+String(n%60).padStart(2,"0"):Math.floor(n/60)+":"+String(n%60).padStart(2,"0"); };
+  function safeMedia(e) {
+    if (!e || typeof e.mediaUrl !== "string") return false;
+    try { const u=new URL(e.mediaUrl);return u.protocol==="https:" && !u.username && !u.password && !u.hash && (!u.port || u.port==="443") && allowedHosts.has(u.hostname); } catch { return false; }
+  }
+  function message(text) { $("podcast-playback-status").textContent=text; }
+  function showQueue(open) { $("podcast-queue").hidden=!open;$("podcast-queue-toggle").setAttribute("aria-expanded",String(open)); }
+  function sync() {
+    const e=active();if(e){$("podcast-now-title").textContent=e.title;$("podcast-now-show").textContent=names.get(e.showId)||"";}
+    decorate(play,audio.paused?"play":"pause",audio.paused?"Resume podcast":"Pause podcast");
+    previous.disabled=index<=0;next.disabled=index<0||index+1>=queue.length;
+    const duration=Number.isFinite(audio.duration)?audio.duration:null;
+    $("podcast-seek").disabled=duration===null||duration<=0;
+    $("podcast-seek").max=duration||1;$("podcast-seek").value=Number.isFinite(audio.currentTime)?audio.currentTime:0;
+    $("podcast-elapsed").textContent=time(audio.currentTime);$("podcast-total").textContent=time(duration===null?e?.durationSeconds:duration);
+    for(const row of $("podcast-results").querySelectorAll("[data-episode]")) {
+      const current=row.dataset.episode===e?.id;row.classList.toggle("podcast-current",current);
+      const b=row.querySelector(".podcast-row-play");if(b)decorate(b,current&&!audio.paused?"pause":"play",(current&&!audio.paused?"Pause ":"Play ")+(byID.get(row.dataset.episode)?.title||"episode"));
+    }
+  }
+  function clearSource() { generation++;audio.pause();audio.removeAttribute("src");audio.load(); }
+  function attemptPlay() {
+    const token=generation;
+    audio.play().then(()=>{if(token===generation){message("");sync();}}).catch(()=>{if(token===generation){message("Playback blocked or unavailable. Press Play to retry. A media host or browser restriction may apply.");sync();}});
+  }
+  function start(i) {
+    const e=byID.get(queue[i]);if(!safeMedia(e)){message("Episode has no approved audio URL.");return;}
+    clearSource();index=i;
+    if (!$("player").hidden) closePlayer();
+    $("podcast-player").hidden=false;document.body.classList.add("podcast-player-open");
+    audio.src=e.mediaUrl;audio.playbackRate=speed;message("Loading audio...");
+    sync();renderQueue();attemptPlay();
+  }
+  function toggle() {if(!active()){if(queue.length)start(0);return;}if(audio.paused){if(audio.ended)audio.currentTime=0;attemptPlay();}else audio.pause();}
+  function selectEpisode(e) {
+    if(active()?.id===e.id){toggle();return;}
+    if(queue.length && !confirm("Replace the current playlist with the filtered list, starting at this episode?"))return;
+    const list=filtered();const pos=list.findIndex(x=>x.id===e.id);queue=list.slice(Math.max(0,pos)).filter(safeMedia).map(x=>x.id);start(0);
+  }
+  function add(e) {if(!safeMedia(e))return;if(!queue.includes(e.id))queue.push(e.id);showQueue(true);renderQueue();}
+  function move(from,to) {if(from<=index||to<=index||to<0||to>=queue.length)return;const item=queue.splice(from,1)[0];queue.splice(to,0,item);renderQueue();const target=$("podcast-queue-rows").querySelector('[data-position="'+to+'"] button');target?.focus();}
+  function renderQueue() {
+    const host=$("podcast-queue-rows");host.replaceChildren();
+    // Queue may hold the whole catalogue; render it in bounded chunks on demand.
+    let drawn=0;
+    function more() {
+      host.querySelector(".podcast-queue-more")?.remove();
+      const end=Math.min(queue.length,drawn+100);
+      for(let i=drawn;i<end;i++) {
+        const e=byID.get(queue[i]);if(!e)continue;
+        const row=element("div","podcast-queue-row");row.dataset.position=String(i);
+        if(i===index)row.setAttribute("aria-current","true");
+        const title=element("span","podcast-queue-title",e.title);title.append(element("small","",(names.get(e.showId)||"")+(i===index?" - Now playing":i<index?" - Played":"")));row.append(title);
+        if(i>index) {
+          row.draggable=true;
+          const up=button("up","Move episode up",()=>move(i,i-1));up.disabled=i<=index+1;
+          const down=button("down","Move episode down",()=>move(i,i+1));down.disabled=i===queue.length-1;
+          const remove=button("close","Remove episode from playlist",()=>{queue.splice(i,1);renderQueue();sync();});
+          row.append(up,down,remove);
+          row.addEventListener("dragstart",event=>{drag=i;event.dataTransfer.setData("text/plain",String(i));});
+          row.addEventListener("dragover",event=>event.preventDefault());
+          row.addEventListener("drop",event=>{event.preventDefault();if(drag!==null)move(drag,i);drag=null;});
+          row.addEventListener("dragend",()=>{drag=null;});
+        }
+        host.append(row);
+      }
+      drawn=end;if(drawn<queue.length){const b=element("button","podcast-queue-more","Show next 100 queued episodes");b.type="button";b.addEventListener("click",more);host.append(b);}
+    }
+    more();if(!queue.length)host.append(element("p","","Playlist empty. Add episodes with the list button."));
+    $("podcast-queue-toggle").replaceChildren(icon("queue"),document.createTextNode("Playlist ("+queue.length+")"));
+  }
+  function skip(offset) {if(!active())return;try{audio.currentTime=Math.max(0,Math.min(Number.isFinite(audio.duration)?audio.duration:Infinity,audio.currentTime+offset));}catch{}sync();}
+  const transport=$("podcast-transport");
+  const previous=button("previous","Previous episode",()=>{if(index>0)start(index-1);});
+  const play=button("play","Resume podcast",toggle);play.classList.add("podcast-main-play");
+  const next=button("next","Next episode",()=>{if(index+1<queue.length)start(index+1);});
+  const rate=element("select");rate.setAttribute("aria-label","Podcast playback speed");
+  for(const n of [.5,.75,1,1.25,1.5,1.75,2])rate.append(new Option(n+"x",String(n)));rate.value="1";
+  rate.addEventListener("change",()=>{speed=Number(rate.value);audio.playbackRate=speed;});
+  transport.append(previous,button("back","Back 15 seconds",()=>skip(-15)),play,button("forward","Forward 15 seconds",()=>skip(15)),next,rate);
+  $("podcast-seek").addEventListener("input",()=>{if(Number.isFinite(audio.duration))audio.currentTime=Math.min(audio.duration,Number($("podcast-seek").value));sync();});
+  $("podcast-repeat").addEventListener("click",()=>{repeat=repeat==="off"?"all":repeat==="all"?"one":"off";$("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode(repeat==="one"?"One":repeat==="all"?"List":"Off"));$("podcast-repeat").setAttribute("aria-label","Repeat "+repeat+"; click to change mode");$("podcast-repeat").dataset.mode=repeat;});
+  $("podcast-queue-toggle").addEventListener("click",()=>{showQueue($("podcast-queue").hidden);renderQueue();});
+  $("podcast-queue-close").addEventListener("click",()=>{showQueue(false);$("podcast-queue-toggle").focus();});
+  $("podcast-stop").addEventListener("click",()=>{clearSource();queue=[];index=-1;repeat="off";speed=1;rate.value="1";$("podcast-auto-next").checked=true;$("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode("Off"));$("podcast-repeat").dataset.mode="off";$("podcast-player").hidden=true;document.body.classList.remove("podcast-player-open");showQueue(false);message("");rerender();$("myapps-podcasts").focus();});
+  audio.addEventListener("ended",()=>{if(repeat==="one"){audio.currentTime=0;attemptPlay();return;}if($("podcast-auto-next").checked){if(index+1<queue.length){start(index+1);return;}if(repeat==="all"&&queue.length){start(0);return;}}message("Playlist playback finished.");sync();});
+  for(const event of ["play","pause","loadedmetadata","timeupdate","durationchange"])audio.addEventListener(event,sync);
+  audio.addEventListener("error",()=>{if(!audio.hasAttribute("src"))return;message("Audio unavailable. Check media-host permissions, network access, or try another episode. No automatic fallback.");sync();});
+  document.addEventListener("keydown",event=>{if(event.key==="Escape"&&!$("podcast-queue").hidden){showQueue(false);$("podcast-queue-toggle").focus();}});
+  decorate($("podcast-stop"),"close","Stop playback and clear playlist");
+  $("podcast-repeat").replaceChildren(icon("repeat"),document.createTextNode("Off"));$("podcast-repeat").setAttribute("aria-label","Repeat off; click to change mode");
+  window.MyAppsPodcastPlayer={pauseForVideo:()=>{audio.pause();showQueue(false);}};
+  return {
+    currentID:()=>active()?.id||null,
+    rowPlay:e=>{const b=button(active()?.id===e.id&&!audio.paused?"pause":"play","Play "+e.title,()=>selectEpisode(e));b.classList.add("podcast-row-play");b.disabled=!safeMedia(e);return b;},
+    rowAdd:e=>{const b=button("add","Add "+e.title+" to playlist",()=>add(e));b.disabled=!safeMedia(e);return b;}
+  };
+}

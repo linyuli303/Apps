@@ -100,6 +100,8 @@ jobs:
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: python scripts/build_feed.py
+      - name: Collect approved podcast RSS metadata (no audio downloads)
+        run: python scripts/build_podcasts.py --fetch --output site/data/podcasts.json
       - name: Validate and stage only public website assets
         run: python scripts/prepare_site.py
       - name: Upload Pages artifact

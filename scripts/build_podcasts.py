@@ -54,7 +54,8 @@ def checked_url(value, hosts):
 def validate_config(config):
     if (not isinstance(config, dict) or set(config) != {'version','maxEpisodesPerShow','shows'} or
             type(config['version']) is not int or config['version'] != 1 or
-            type(config['maxEpisodesPerShow']) is not int or not 1 <= config['maxEpisodesPerShow'] <= 100 or
+            (config['maxEpisodesPerShow'] is not None and
+             (type(config['maxEpisodesPerShow']) is not int or not 1 <= config['maxEpisodesPerShow'] <= 100)) or
             not isinstance(config['shows'], list) or len(config['shows']) > 100):
         raise PodcastError('Invalid podcast configuration')
     ids = set()
@@ -120,6 +121,10 @@ def reject_xml(*args):
     raise PodcastError('DTD and entity declarations are forbidden')
 
 def parse_feed(raw, show, limit, now=None):
+    # None means every eligible episode supplied by this RSS response.
+    # MAX_BYTES and MAX_ITEMS remain fail-closed safety boundaries, not truncation.
+    if limit is not None and (type(limit) is not int or not 1 <= limit <= 100):
+        raise PodcastError('Invalid episode selection limit')
     if not isinstance(raw,bytes) or len(raw) > MAX_BYTES:
         raise PodcastError('Feed exceeds size limit')
     # Reject declarations using an encoding-aware XML parser before building a tree.
