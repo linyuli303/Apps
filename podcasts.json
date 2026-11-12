@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "maxEpisodesPerShow": 15,
+  "shows": [
+    {
+      "id": "apple-1761230754",
+      "title": "AI FIRST Podcast",
+      "enabled": true,
+      "feedUrl": "https://anchor.fm/s/f8da5e14/podcast/rss",
+      "feedHosts": [
+        "anchor.fm"
+      ],
+      "mediaHosts": [
+        "anchor.fm"
+      ]
+    },
+    {
+      "id": "apple-6811945509",
+      "title": "I'M SORRY, DAVE",
+      "enabled": true,
+      "feedUrl": "https://im-sorry-dave.podigee.io/feed/mp3",
+      "feedHosts": [
+        "im-sorry-dave.podigee.io"
+      ],
+      "mediaHosts": [
+        "audio.podigee-cdn.net"
+      ]
+    },
+    {
+      "id": "apple-1697851853",
+      "title": "KI verstehen",
+      "enabled": true,
+      "feedUrl": "https://www.deutschlandfunk.de/ki-verstehen-102.xml",
+      "feedHosts": [
+        "www.deutschlandfunk.de"
+      ],
+      "mediaHosts": [
+        "podcast-mp3.dradio.de"
+      ]
+    },
+    {
+      "id": "apple-187624695",
+      "title": "heute journal (AUDIO)",
+      "enabled": true,
+      "feedUrl": "https://www.zdf.de/rss/podcast/audio/zdf/nachrichten/heute-journal",
+      "feedHosts": [
+        "www.zdf.de"
+      ],
+      "mediaHosts": [
+        "podfileszdf-a.akamaihd.net"
+      ]
+    },
+    {
+      "id": "apple-1798670690",
+      "title": "heute journal - der Podcast",
+      "enabled": true,
+      "feedUrl": "https://cdn.audiorella.com/podcasts/1477-heute-journal-der-podcast/feed.rss",
+      "feedHosts": [
+        "cdn.audiorella.com"
+      ],
+      "mediaHosts": [
+        "cdn.audiorella.com"
+      ]
+    },
+    {
+      "id": "apple-1727551326",
+      "title": "Crashkurs - Wirtschaft trifft Geschichte",
+      "enabled": true,
+      "feedUrl": "https://www.deutschlandfunk.de/crashkurs-100.xml",
+      "feedHosts": [
+        "www.deutschlandfunk.de"
+      ],
+      "mediaHosts": [
+        "podcast-mp3.dradio.de"
+      ]
+    },
+    {
+      "id": "apple-173754605",
+      "title": "Computer und Kommunikation",
+      "enabled": true,
+      "feedUrl": "https://www.deutschlandfunk.de/computer-und-kommunikation-102.xml",
+      "feedHosts": [
+        "www.deutschlandfunk.de"
+      ],
+      "mediaHosts": [
+        "podcast-mp3.dradio.de"
+      ]
+    },
+    {
+      "id": "apple-1718726590",
+      "title": "Dark Agent - Im Netz der Geheimdienste",
+      "enabled": true,
+      "feedUrl": "https://www.deutschlandfunk.de/dark-avenger-100.xml",
+      "feedHosts": [
+        "www.deutschlandfunk.de"
+      ],
+      "mediaHosts": [
+        "podcast-mp3.dradio.de"
+      ]
+    },
+    {
+      "id": "apple-152022135",
+      "title": "HBR IdeaCast",
+      "enabled": false,
+      "feedUrl": "https://feeds.harvardbusiness.org/harvardbusiness/ideacast",
+      "feedHosts": [
+        "feeds.harvardbusiness.org"
+      ],
+      "mediaHosts": []
+    },
+    {
+      "id": "apple-1523584878",
+      "title": "MIT Technology Review Narrated",
+      "enabled": true,
+      "feedUrl": "https://feeds.megaphone.fm/inmachineswetrust",
+      "feedHosts": [
+        "feeds.megaphone.fm"
+      ],
+      "mediaHosts": [
+        "traffic.megaphone.fm"
+      ]
+    },
+    {
+      "id": "apple-1501505787",
+      "title": "Quarks Daily",
+      "enabled": true,
+      "feedUrl": "https://www1.wdr.de/mediathek/audio/daily-quarks/daily-quarks-podcast-104.podcast",
+      "feedHosts": [
+        "www1.wdr.de"
+      ],
+      "mediaHosts": [
+        "wdrmedien-a.akamaihd.net"
+      ]
+    },
+    {
+      "id": "apple-523121474",
+      "title": "TED Radio Hour",
+      "enabled": true,
+      "feedUrl": "https://feeds.npr.org/510298/podcast.xml",
+      "feedHosts": [
+        "feeds.npr.org"
+      ],
+      "mediaHosts": [
+        "prfx.byspotify.com"
+      ]
+    },
+    {
+      "id": "apple-211308650",
+      "title": "Wirtschaft im Gespr\u00e4ch",
+      "enabled": true,
+      "feedUrl": "https://rss.dw.com/xml/podcast_wirtschaft",
+      "feedHosts": [
+        "rss.dw.com"
+      ],
+      "mediaHosts": [
+        "dts.podtrac.com"
+      ]
+    }
+  ]
+}
