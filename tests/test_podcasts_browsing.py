@@ -6,6 +6,22 @@ from datetime import datetime, timezone
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
 import podcasts_public as p
+def without_spotify_helpers(source):
+    """Exclude only the independent Spotify block, retaining podcast config."""
+    start = "// Spotify authorization foundation:"
+    end = (
+        "// Public GitHub request forms only: "
+        "no token, persistent draft or source lookup."
+    )
+    if source.count(start) != 1 or source.count(end) != 1:
+        raise ValueError("Unexpected application boundaries")
+    first = source.index(start)
+    last = source.index(end)
+    if last <= first:
+        raise ValueError("Unexpected application source order")
+    return source[:first] + source[last:]
+
+
 class PodcastBrowsingTests(unittest.TestCase):
     def fixture(self):
         config={'version':1,'maxEpisodesPerShow':15,'shows':[{'id':'apple-1','title':'Test','enabled':True,'feedUrl':'https://feed.example.org/rss','feedHosts':['feed.example.org'],'mediaHosts':['media.example.org']}]}
@@ -33,7 +49,7 @@ class PodcastBrowsingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             self.assertEqual(p.package(Path(folder),p.MARKER),p.MARKER)
     def test_no_media_or_storage(self):
-        js=(ROOT/'site/app.js').read_text(encoding='utf-8').split('// Replaced by prepare_site.py only. Validated public media',1)[1]
+        js=without_spotify_helpers((ROOT/'site/app.js').read_text(encoding='utf-8')).split('// Replaced by prepare_site.py only. Validated public media',1)[1]
         for forbidden in ('fetch(', 'localStorage', 'sessionStorage', 'innerHTML', 'createElement("img")'):
             self.assertNotIn(forbidden,js)
     def test_five_assets_retained(self):
@@ -75,7 +91,7 @@ class PodcastAllCatalogueTests(unittest.TestCase):
 class PodcastPlayerPolicyTests(unittest.TestCase):
     def test_lazy_audio_source(self):
         js=(ROOT/'site/app.js').read_text(encoding='utf-8')
-        engine=js.split('function createPodcastPlayer(',1)[1]
+        engine=without_spotify_helpers(js).split('function createPodcastPlayer(',1)[1]
         self.assertIn('audio.preload = "none"',engine)
         self.assertIn('audio.src = episode.mediaUrl',engine)
         self.assertIn('audio.crossOrigin = "anonymous"',engine)
@@ -97,7 +113,7 @@ class PodcastPlayerPolicyTests(unittest.TestCase):
         self.assertIn('if (!$("player").hidden) closePlayer()',js)
     def test_repeat_and_reorder(self):
         js=(ROOT/'site/app.js').read_text(encoding='utf-8')
-        engine=js.split('function createPodcastPlayer(',1)[1]
+        engine=without_spotify_helpers(js).split('function createPodcastPlayer(',1)[1]
         self.assertIn('repeat==="one"',engine)
         self.assertIn('row.draggable=true',engine)
         self.assertIn('audio.removeAttribute("src")',engine)

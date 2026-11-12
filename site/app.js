@@ -3536,6 +3536,519 @@ function detectMyAppsLayout(userAgent, width, coarsePointer) {
   applyLayout();
 })();
 
+// Spotify authorization foundation: generation only, no requests or storage.
+async function createSpotifyPKCE(cryptoProvider = globalThis.crypto) {
+  if (!cryptoProvider ||
+      typeof cryptoProvider.getRandomValues !== "function" ||
+      !cryptoProvider.subtle ||
+      typeof cryptoProvider.subtle.digest !== "function") {
+    throw new Error("Secure Spotify authorization unavailable.");
+  }
+
+  function base64url(bytes) {
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+  }
+
+  const verifierBytes = new Uint8Array(32);
+  const stateBytes = new Uint8Array(32);
+  cryptoProvider.getRandomValues(verifierBytes);
+  cryptoProvider.getRandomValues(stateBytes);
+
+  const verifier = base64url(verifierBytes);
+  const state = base64url(stateBytes);
+  const hashed = await cryptoProvider.subtle.digest(
+    "SHA-256", new TextEncoder().encode(verifier)
+  );
+  const challenge = base64url(new Uint8Array(hashed));
+
+  if (![verifier, state, challenge].every(
+    value => /^[A-Za-z0-9_-]{43}$/.test(value)
+  )) {
+    throw new Error("Invalid Spotify authorization material.");
+  }
+
+  // Do not log or place the verifier in an authorization URL.
+  return Object.freeze({
+    verifier,
+    state,
+    challenge,
+    challengeMethod: "S256",
+  });
+}
+
+// Pure authorization transaction checks; no requests, redirects or storage.
+function validateSpotifyAuthTransaction(value, clientId, now = Date.now()) {
+  const redirectUri = "https://linyuli303.github.io/Apps/";
+  const fields = [
+    "version", "clientId", "redirectUri", "verifier",
+    "state", "createdAt", "expiresAt"
+  ].sort().join(",");
+
+  if (typeof clientId !== "string" ||
+      !/^[a-f0-9]{32}$/.test(clientId) ||
+      !Number.isSafeInteger(now) || now < 0 ||
+      !value || typeof value !== "object" || Array.isArray(value) ||
+      Object.keys(value).sort().join(",") !== fields ||
+      value.version !== 1 ||
+      value.clientId !== clientId ||
+      value.redirectUri !== redirectUri ||
+      typeof value.verifier !== "string" ||
+      !/^[A-Za-z0-9_-]{43}$/.test(value.verifier) ||
+      typeof value.state !== "string" ||
+      !/^[A-Za-z0-9_-]{43}$/.test(value.state) ||
+      !Number.isSafeInteger(value.createdAt) ||
+      value.createdAt < 0 ||
+      !Number.isSafeInteger(value.expiresAt) ||
+      value.expiresAt - value.createdAt !== 10 * 60 * 1000 ||
+      value.createdAt > now ||
+      now >= value.expiresAt) {
+    throw new Error("Spotify login transaction invalid or expired.");
+  }
+
+  // Return a detached record so callers cannot mutate the supplied object.
+  return Object.freeze({
+    version: 1,
+    clientId: value.clientId,
+    redirectUri: value.redirectUri,
+    verifier: value.verifier,
+    state: value.state,
+    createdAt: value.createdAt,
+    expiresAt: value.expiresAt,
+  });
+}
+
+function createSpotifyAuthTransaction(pkce, clientId, now = Date.now()) {
+  if (!pkce || typeof pkce !== "object" ||
+      pkce.challengeMethod !== "S256" ||
+      typeof pkce.challenge !== "string" ||
+      !/^[A-Za-z0-9_-]{43}$/.test(pkce.challenge)) {
+    throw new Error("Invalid Spotify PKCE material.");
+  }
+
+  return validateSpotifyAuthTransaction({
+    version: 1,
+    clientId,
+    redirectUri: "https://linyuli303.github.io/Apps/",
+    verifier: pkce.verifier,
+    state: pkce.state,
+    createdAt: now,
+    expiresAt: now + 10 * 60 * 1000,
+  }, clientId, now);
+}
+
+// Pure callback validation. Never log callback URLs or authorization codes.
+function validateSpotifyCallback(
+  callbackUrl, transaction, clientId, now = Date.now()
+) {
+  const checked = validateSpotifyAuthTransaction(transaction, clientId, now);
+  if (typeof callbackUrl !== "string" || callbackUrl.length > 12000) {
+    throw new Error("Invalid Spotify callback.");
+  }
+
+  let url;
+  try {
+    url = new URL(callbackUrl);
+  } catch {
+    throw new Error("Invalid Spotify callback.");
+  }
+
+  const expected = new URL(checked.redirectUri);
+  if (url.origin !== expected.origin ||
+      url.pathname !== expected.pathname ||
+      url.username || url.password || url.hash) {
+    throw new Error("Unexpected Spotify callback destination.");
+  }
+
+  const allowed = new Set([
+    "code", "state", "error", "error_description", "error_uri"
+  ]);
+  for (const key of url.searchParams.keys()) {
+    if (!allowed.has(key) || url.searchParams.getAll(key).length !== 1) {
+      throw new Error("Unexpected Spotify callback parameters.");
+    }
+  }
+
+  if (url.searchParams.get("state") !== checked.state) {
+    throw new Error("Spotify callback state mismatch.");
+  }
+
+  const hasCode = url.searchParams.has("code");
+  const hasError = url.searchParams.has("error");
+  if (hasCode === hasError) {
+    throw new Error("Ambiguous Spotify callback.");
+  }
+
+  if (hasError) {
+    const error = url.searchParams.get("error");
+    if (!error || error.length > 200) {
+      throw new Error("Invalid Spotify authorization error.");
+    }
+    // Do not render provider error text or follow error_uri.
+    return Object.freeze({status:"denied"});
+  }
+
+  if (url.searchParams.has("error_description") ||
+      url.searchParams.has("error_uri")) {
+    throw new Error("Unexpected Spotify success parameters.");
+  }
+
+  const code = url.searchParams.get("code");
+  if (!code || code.length > 4096 || /[\s\u0000-\u001f\u007f]/.test(code)) {
+    throw new Error("Invalid Spotify authorization code.");
+  }
+
+  return Object.freeze({
+    status:"authorized",
+    code,
+    verifier:checked.verifier,
+    clientId:checked.clientId,
+    redirectUri:checked.redirectUri,
+  });
+}
+
+// Injected storage adapter only. No browser storage instance or startup wiring.
+function createSpotifyTransactionStore(storage) {
+  const key = "myapps-spotify-auth-v1:/Apps/";
+  if (!storage ||
+      !["getItem", "setItem", "removeItem"].every(
+        method => typeof storage[method] === "function"
+      )) {
+    throw new Error("Temporary Spotify login storage unavailable.");
+  }
+
+  function remove() {
+    try {
+      storage.removeItem(key);
+      if (storage.getItem(key) !== null) throw new Error("Removal failed");
+    } catch {
+      throw new Error("Temporary Spotify login cleanup failed.");
+    }
+  }
+
+  function save(transaction, clientId, now = Date.now()) {
+    // Starting a new transaction invalidates any previous login attempt.
+    remove();
+    const checked = validateSpotifyAuthTransaction(
+      transaction, clientId, now
+    );
+    const raw = JSON.stringify(checked);
+    if (raw.length > 2048) {
+      throw new Error("Invalid Spotify login transaction size.");
+    }
+
+    try {
+      storage.setItem(key, raw);
+      if (storage.getItem(key) !== raw) {
+        throw new Error("Storage verification failed");
+      }
+    } catch {
+      remove();
+      throw new Error("Temporary Spotify login storage unavailable.");
+    }
+  }
+
+  function consume(callbackUrl, clientId, now = Date.now()) {
+    let raw;
+    try {
+      raw = storage.getItem(key);
+    } catch {
+      throw new Error("Temporary Spotify login storage unavailable.");
+    }
+
+    // Delete before parsing, validation, or returning exchange inputs.
+    // No token exchange may proceed if deletion cannot be confirmed.
+    remove();
+    if (typeof raw !== "string" || !raw || raw.length > 2048) {
+      throw new Error("Spotify login transaction missing or invalid.");
+    }
+
+    let transaction;
+    try {
+      transaction = JSON.parse(raw);
+    } catch {
+      throw new Error("Spotify login transaction missing or invalid.");
+    }
+
+    return validateSpotifyCallback(
+      callbackUrl, transaction, clientId, now
+    );
+  }
+
+  return Object.freeze({save, consume, clear:remove});
+}
+
+// Pure URL cleanup planning; does not validate or authorize a login.
+// The future callback handler must capture inputs, clean browser history,
+// then consume/validate the transaction before attempting token exchange.
+function spotifyCallbackCleanupURL(callbackUrl) {
+  const destination = "https://linyuli303.github.io/Apps/";
+  if (typeof callbackUrl !== "string" || callbackUrl.length > 12000) {
+    throw new Error("Invalid Spotify callback destination.");
+  }
+
+  let url;
+  try {
+    url = new URL(callbackUrl);
+  } catch {
+    throw new Error("Invalid Spotify callback destination.");
+  }
+
+  const expected = new URL(destination);
+  if (url.origin !== expected.origin ||
+      url.pathname !== expected.pathname ||
+      url.username || url.password) {
+    throw new Error("Invalid Spotify callback destination.");
+  }
+
+  const callbackKeys = [
+    "code", "state", "error", "error_description", "error_uri"
+  ];
+  if (!callbackKeys.some(key => url.searchParams.has(key))) {
+    return null;
+  }
+
+  // Remove the entire callback query and fragment, including unexpected
+  // parameters. Never carry authorization material into normal app routing.
+  // Returning this URL does not make malformed callback inputs valid.
+  return destination;
+}
+
+// URL construction only: no navigation, requests, storage, or token exchange.
+async function buildSpotifyAuthorizationURL(
+  transaction, challenge, clientId, now = Date.now(),
+  cryptoProvider = globalThis.crypto
+) {
+  const checked = validateSpotifyAuthTransaction(
+    transaction, clientId, now
+  );
+  if (typeof challenge !== "string" ||
+      !/^[A-Za-z0-9_-]{43}$/.test(challenge) ||
+      !cryptoProvider || !cryptoProvider.subtle ||
+      typeof cryptoProvider.subtle.digest !== "function") {
+    throw new Error("Invalid Spotify authorization challenge.");
+  }
+
+  // Independently bind the supplied challenge to this transaction's verifier.
+  const hashed = await cryptoProvider.subtle.digest(
+    "SHA-256", new TextEncoder().encode(checked.verifier)
+  );
+  let binary = "";
+  for (const byte of new Uint8Array(hashed)) {
+    binary += String.fromCharCode(byte);
+  }
+  const expectedChallenge = btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  if (challenge !== expectedChallenge) {
+    throw new Error("Spotify authorization challenge mismatch.");
+  }
+
+  // Fixed, reviewed permissions. Never accept scopes from URL or user input.
+  const scopes = [
+    "user-follow-read",
+    "playlist-read-private",
+    "playlist-read-collaborative",
+    "user-library-read",
+    "user-library-modify",
+    "streaming",
+    "user-modify-playback-state",
+    "user-read-private",
+    "user-read-email",
+  ];
+
+  const url = new URL("https://accounts.spotify.com/authorize");
+  url.search = new URLSearchParams({
+    client_id: checked.clientId,
+    response_type: "code",
+    redirect_uri: checked.redirectUri,
+    state: checked.state,
+    scope: scopes.join(" "),
+    code_challenge_method: "S256",
+    code_challenge: challenge,
+  }).toString();
+
+  // The verifier is sent only in the later token exchange, never this URL.
+  return url.href;
+}
+
+// Pure token-response validation. Returned credentials must remain in memory.
+// Never log this input, its return value, or provider response bodies.
+function validateSpotifyTokenResponse(value, now = Date.now()) {
+  const requiredScopes = [
+    "user-follow-read",
+    "playlist-read-private",
+    "playlist-read-collaborative",
+    "user-library-read",
+    "user-library-modify",
+    "streaming",
+    "user-modify-playback-state",
+    "user-read-private",
+    "user-read-email",
+  ];
+  const validToken = token =>
+    typeof token === "string" &&
+    token.length >= 1 && token.length <= 8192 &&
+    /^[A-Za-z0-9._~+\/-]+=*$/.test(token);
+
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      !Number.isSafeInteger(now) || now < 0 ||
+      !validToken(value.access_token) ||
+      typeof value.token_type !== "string" ||
+      value.token_type.toLowerCase() !== "bearer" ||
+      !Number.isSafeInteger(value.expires_in) ||
+      value.expires_in < 1 || value.expires_in > 86400 ||
+      !Number.isSafeInteger(now + value.expires_in * 1000) ||
+      typeof value.scope !== "string" || value.scope.length > 2000 ||
+      ("refresh_token" in value && !validToken(value.refresh_token))) {
+    throw new Error("Invalid Spotify token response.");
+  }
+
+  const scopes = value.scope.split(" ");
+  if (scopes.length !== requiredScopes.length ||
+      new Set(scopes).size !== scopes.length ||
+      scopes.some(scope => !requiredScopes.includes(scope))) {
+    throw new Error("Spotify authorization permissions mismatch.");
+  }
+
+  // Discard unrelated response fields; do not retain account/provider metadata.
+  return Object.freeze({
+    accessToken: value.access_token,
+    refreshToken: value.refresh_token ?? null,
+    expiresAt: now + value.expires_in * 1000,
+    scopes: Object.freeze([...scopes].sort()),
+  });
+}
+
+// Unwired exchange adapter. Call only after one-time callback consumption.
+// Never log inputs, response bodies, provider errors, or returned credentials.
+async function exchangeSpotifyAuthorization(
+  authorization, {request = globalThis.fetch, signal} = {}
+) {
+  const endpoint = "https://accounts.spotify.com/api/token";
+  const fields = [
+    "status", "code", "verifier", "clientId", "redirectUri"
+  ].sort().join(",");
+
+  if (!authorization || typeof authorization !== "object" ||
+      Array.isArray(authorization) ||
+      Object.keys(authorization).sort().join(",") !== fields ||
+      authorization.status !== "authorized" ||
+      typeof authorization.clientId !== "string" ||
+      !/^[a-f0-9]{32}$/.test(authorization.clientId) ||
+      authorization.redirectUri !== "https://linyuli303.github.io/Apps/" ||
+      typeof authorization.verifier !== "string" ||
+      !/^[A-Za-z0-9_-]{43}$/.test(authorization.verifier) ||
+      typeof authorization.code !== "string" ||
+      !authorization.code || authorization.code.length > 4096 ||
+      /[\s\u0000-\u001f\u007f]/.test(authorization.code) ||
+      typeof request !== "function") {
+    throw new Error("Invalid Spotify exchange inputs.");
+  }
+
+  const controller = new AbortController();
+  let reader = null;
+  let completed = false;
+  let listening = false;
+  let timer;
+  const cancel = () => controller.abort();
+
+  try {
+    if (signal) {
+      if (typeof signal.aborted !== "boolean" ||
+          typeof signal.addEventListener !== "function" ||
+          typeof signal.removeEventListener !== "function") {
+        throw new Error("Invalid cancellation signal");
+      }
+      signal.addEventListener("abort", cancel, {once:true});
+      listening = true;
+      if (signal.aborted) cancel();
+    }
+    if (controller.signal.aborted) throw new Error("Cancelled");
+
+    const body = new URLSearchParams({
+      grant_type: "authorization_code",
+      code: authorization.code,
+      redirect_uri: authorization.redirectUri,
+      client_id: authorization.clientId,
+      code_verifier: authorization.verifier,
+    });
+    timer = setTimeout(cancel, 15000);
+
+    const response = await request(endpoint, {
+      method: "POST",
+      mode: "cors",
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json",
+      },
+      body: body.toString(),
+      signal: controller.signal,
+    });
+
+    if (controller.signal.aborted ||
+        !response || response.status !== 200 ||
+        response.redirected || response.url !== endpoint ||
+        !/^application\/json(?:\s*;|$)/i.test(
+          response.headers.get("Content-Type") || ""
+        ) ||
+        !response.body || typeof response.body.getReader !== "function") {
+      throw new Error("Invalid exchange response");
+    }
+
+    reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    while (true) {
+      const part = await reader.read();
+      if (controller.signal.aborted) throw new Error("Cancelled");
+      if (part.done) break;
+      if (!(part.value instanceof Uint8Array)) {
+        throw new Error("Invalid response chunk");
+      }
+      size += part.value.byteLength;
+      if (size > 32768) throw new Error("Response too large");
+      chunks.push(part.value);
+    }
+
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const value = JSON.parse(
+      new TextDecoder("utf-8", {fatal:true}).decode(bytes)
+    );
+    const tokens = validateSpotifyTokenResponse(value);
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    completed = true;
+    return tokens;
+  } catch {
+    // Fixed feedback only; no raw errors or provider response content.
+    throw new Error("Spotify connection failed or was cancelled. Connect again.");
+  } finally {
+    clearTimeout(timer);
+    if (listening) signal.removeEventListener("abort", cancel);
+    if (!completed) {
+      controller.abort();
+      if (reader) {
+        try { Promise.resolve(reader.cancel()).catch(() => {}); } catch {}
+      }
+    }
+  }
+}
+
 // Public GitHub request forms only: no token, persistent draft or source lookup.
 function initializePodcastConfiguration(shows) {
   const dialog=$("podcast-config-dialog"), opener=$("podcast-config");
