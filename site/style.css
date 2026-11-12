@@ -2172,3 +2172,297 @@ body.podcast-player-open main{padding-bottom:220px}
   .podcast-player-bar{grid-template-columns:minmax(0,1fr)}
   .podcast-player-bar .podcast-transport-area{grid-column:1}
 }
+
+/* Device layouts v1: scoped controls; no MyTube player dimensions. */
+.myapps-header-actions{gap:10px;flex-wrap:wrap}
+.myapps-layout-control{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;color:var(--muted)
+}
+.myapps-layout-control select{
+  min-height:38px;padding:6px 8px;font-size:12px;max-width:100px
+}
+.podcast-speed-notice{
+  margin:7px 0 0;font-size:11px;line-height:1.5;color:var(--muted)
+}
+
+/* Moved RSS toggle remains horizontal in the library toolbar. */
+:root[data-device-layout="tv"] #rss-toggle,
+:root[data-device-layout="phone"] #rss-toggle{
+  position:static;writing-mode:horizontal-tb;visibility:visible;
+  white-space:nowrap;letter-spacing:normal;border-radius:10px;
+  width:auto;min-width:44px
+}
+:root[data-device-layout="tv"] #rss-toggle{
+  min-height:52px;padding:12px 16px;font-size:17px
+}
+:root[data-device-layout="phone"] #rss-toggle{
+  min-height:44px;padding:8px 10px
+}
+
+/* TV catalogue and library controls. Video player rules are not changed. */
+:root[data-device-layout="tv"] .rss-catalogue{
+  --rss-width:min(440px,42vw);top:14vh;bottom:18vh
+}
+:root[data-device-layout="tv"] .rss-catalogue .rss-detail{
+  width:min(780px,calc(100vw - 460px))
+}
+:root[data-device-layout="tv"] .rss-catalogue .rss-channel-name{
+  font-size:19px
+}
+:root[data-device-layout="tv"] .rss-catalogue .rss-channel-button{
+  min-height:60px
+}
+:root[data-device-layout="tv"] .rss-catalogue .rss-video-title{
+  font-size:17px;min-height:48px;white-space:normal
+}
+:root[data-device-layout="tv"] .rss-catalogue .rss-heading button,
+:root[data-device-layout="tv"] .rss-catalogue .rss-detail-heading button{
+  min-height:48px;font-size:15px;padding:10px
+}
+:root[data-device-layout="tv"] #podcast-page .podcast-row{
+  min-height:68px;font-size:18px;padding:12px
+}
+:root[data-device-layout="tv"] #podcast-page .podcast-date,
+:root[data-device-layout="tv"] #podcast-page .podcast-show-name,
+:root[data-device-layout="tv"] #podcast-page .podcast-duration{
+  font-size:14px
+}
+:root[data-device-layout="tv"] .podcast-player-bar{
+  grid-template-columns:minmax(0,1fr);gap:12px;padding:22px
+}
+:root[data-device-layout="tv"] .podcast-now strong{font-size:20px}
+:root[data-device-layout="tv"] .podcast-now>span{font-size:15px}
+:root[data-device-layout="tv"] .podcast-player-options{
+  grid-column:1;max-width:none;justify-content:center
+}
+:root[data-device-layout="tv"] .podcast-player-bar button{
+  min-width:52px;min-height:52px;height:auto;font-size:15px
+}
+:root[data-device-layout="tv"] .podcast-player-bar :focus,
+:root[data-device-layout="tv"] .rss-catalogue :focus,
+:root[data-device-layout="tv"] #tube-page button:focus,
+:root[data-device-layout="tv"] #podcast-page button:focus{
+  outline:4px solid var(--accent);outline-offset:3px
+}
+:root[data-device-layout="tv"] body.podcast-player-open main{
+  padding-bottom:340px
+}
+:root[data-device-layout="tv"] .podcast-queue{bottom:300px}
+
+/* Phone player, including a manually selected phone layout. */
+:root[data-device-layout="phone"] .podcast-player-bar{
+  grid-template-columns:minmax(0,1fr);gap:8px;padding:12px
+}
+:root[data-device-layout="phone"] .podcast-player-options{
+  grid-column:1;max-width:none;justify-content:space-between
+}
+:root[data-device-layout="phone"] .podcast-transport{
+  flex-wrap:wrap;gap:6px
+}
+:root[data-device-layout="phone"] .podcast-icon-button{
+  min-width:44px;min-height:44px;height:44px
+}
+:root[data-device-layout="phone"] .podcast-player-options #podcast-repeat,
+:root[data-device-layout="phone"] .podcast-player-options #podcast-queue-toggle{
+  font-size:0;gap:0;min-width:44px;min-height:44px;padding:10px
+}
+:root[data-device-layout="phone"] .podcast-player-options .apps-icon{
+  width:22px;height:22px
+}
+:root[data-device-layout="phone"] .podcast-queue{
+  bottom:260px;max-height:40vh
+}
+:root[data-device-layout="phone"] body.podcast-player-open main{
+  padding-bottom:320px
+}
+:root[data-device-layout="phone"] .rss-catalogue{
+  --rss-width:calc(100vw - 24px);left:12px;top:16vh;bottom:12vh
+}
+:root[data-device-layout="phone"] .rss-catalogue .rss-detail{
+  left:0;width:100%;border-left:1px solid var(--border);z-index:2
+}
+
+/* Phone action icons v1. */
+.myapps-layout-icon{display:none}
+:root[data-device-layout="phone"] .myapps-layout-icon{
+  display:block
+}
+:root[data-device-layout="phone"] .myapps-action-caption,
+:root[data-device-layout="phone"] .myapps-nav-item>span{
+  display:none
+}
+:root[data-device-layout="phone"] .myapps-nav-item{
+  min-width:44px;min-height:44px;justify-content:center
+}
+:root[data-device-layout="phone"] #configuration-toggle,
+:root[data-device-layout="phone"] #podcast-config,
+:root[data-device-layout="phone"] #rss-toggle{
+  min-width:44px;min-height:44px;justify-content:center
+}
+:root[data-device-layout="phone"] #rss-toggle{
+  display:inline-flex;align-items:center;padding:10px
+}
+:root[data-device-layout="phone"] .podcast-auto-next-option{
+  position:relative;display:inline-flex;align-items:center;
+  justify-content:center;min-width:44px;min-height:44px;
+  padding:10px;border:1px solid var(--border);border-radius:12px
+}
+:root[data-device-layout="phone"] .podcast-auto-next-option input{
+  position:absolute;width:1px;height:1px;min-height:0;
+  margin:0;padding:0;opacity:0
+}
+:root[data-device-layout="phone"] .podcast-auto-next-option input:checked+svg{
+  color:var(--accent);background:var(--hover);
+  outline:2px solid var(--accent);outline-offset:3px;border-radius:3px
+}
+:root[data-device-layout="phone"] .podcast-auto-next-option input:focus+svg{
+  outline:3px solid var(--accent);outline-offset:5px
+}
+
+/* Explicit device RSS toolbar placement. */
+:root[data-device-layout="tv"] .apps-filter-controls #rss-toggle,
+:root[data-device-layout="phone"] .apps-filter-controls #rss-toggle{
+  grid-column:4 / 6;
+  grid-row:2;
+  justify-self:end;
+  width:auto
+}
+@media(max-width:750px){
+  :root[data-device-layout="tv"] .apps-filter-controls #rss-toggle,
+  :root[data-device-layout="phone"] .apps-filter-controls #rss-toggle{
+    grid-column:1;
+    grid-row:3;
+    justify-self:start
+  }
+}
+
+/* Shared icon-only RSS and Refresh toolbar v2. */
+#rss-toggle .myapps-action-caption,
+#refresh .myapps-action-caption{
+  display:none
+}
+#rss-toggle .myapps-layout-icon{
+  display:block
+}
+:root .apps-filter-controls #rss-toggle,
+:root[data-device-layout="tv"] .apps-filter-controls #rss-toggle,
+:root[data-device-layout="phone"] .apps-filter-controls #rss-toggle{
+  position:static;
+  writing-mode:horizontal-tb;
+  visibility:visible;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:44px;
+  min-width:44px;
+  min-height:44px;
+  height:44px;
+  padding:10px;
+  border-radius:10px;
+  letter-spacing:normal;
+  grid-column:5;
+  grid-row:1;
+  justify-self:end
+}
+:root .landing-toolbar .apps-filter-controls{
+  grid-template-columns:minmax(150px,1fr) 110px 140px 44px 44px 95px
+}
+:root .apps-filter-controls #refresh{
+  grid-column:4;
+  grid-row:1;
+  width:44px;
+  min-width:44px;
+  min-height:44px;
+  height:44px;
+  padding:10px
+}
+:root .apps-filter-controls #configuration-toggle{
+  grid-column:6;
+  grid-row:1
+}
+@media(max-width:750px){
+  :root .landing-toolbar .apps-filter-controls{
+    grid-template-columns:100px minmax(0,1fr) 95px
+  }
+  :root .apps-filter-controls #refresh{
+    grid-column:1;
+    grid-row:3;
+    justify-self:start
+  }
+  :root .apps-filter-controls #rss-toggle,
+  :root[data-device-layout="tv"] .apps-filter-controls #rss-toggle,
+  :root[data-device-layout="phone"] .apps-filter-controls #rss-toggle{
+    grid-column:2;
+    grid-row:3;
+    justify-self:end
+  }
+  :root .apps-filter-controls #configuration-toggle{
+    grid-column:3;
+    grid-row:3
+  }
+}
+
+/* Grouped library actions v3: explicit catalogue activation. */
+#configuration-toggle .myapps-action-caption,
+#podcast-config .myapps-action-caption{
+  display:none
+}
+
+/* Keep the three existing MyTube buttons together in one action group. */
+:root .landing-toolbar .apps-filter-controls{
+  grid-template-columns:minmax(150px,1fr) 110px 140px auto
+}
+:root .landing-toolbar .apps-filter-controls .category-toolbar-actions{
+  display:flex;
+  grid-column:4;
+  grid-row:1;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  margin:0;
+  flex-wrap:nowrap
+}
+:root .apps-filter-controls #refresh,
+:root .apps-filter-controls #rss-toggle,
+:root .apps-filter-controls #configuration-toggle,
+:root .podcast-filters #podcast-config{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:44px;
+  min-width:44px;
+  max-width:44px;
+  height:44px;
+  min-height:44px;
+  padding:10px;
+  border-radius:10px;
+  flex:0 0 44px
+}
+:root .apps-filter-controls #refresh{order:1}
+:root .apps-filter-controls #rss-toggle{order:2}
+:root .apps-filter-controls #configuration-toggle{order:3}
+:root .podcast-filters #podcast-config{justify-self:end}
+
+@media(max-width:750px){
+  :root .landing-toolbar .apps-filter-controls{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)
+  }
+  :root .apps-filter-controls>label:nth-of-type(1){
+    grid-column:1 / -1;
+    grid-row:1
+  }
+  :root .apps-filter-controls>label:nth-of-type(2){
+    grid-column:1;
+    grid-row:2
+  }
+  :root .apps-filter-controls>label:nth-of-type(3){
+    grid-column:2;
+    grid-row:2
+  }
+  :root .landing-toolbar .apps-filter-controls .category-toolbar-actions{
+    grid-column:1 / -1;
+    grid-row:3;
+    justify-content:flex-end
+  }
+}

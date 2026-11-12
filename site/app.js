@@ -1111,9 +1111,7 @@ function renderRSSCatalogue() {
     };
 
     $("rss-toggle").addEventListener("click", () => setOpen(!state.open));
-    $("rss-toggle").addEventListener("pointerenter", (event) => {
-      if (event.pointerType === "mouse" && !state.open) setOpen(true);
-    });
+
     $("rss-back").addEventListener("click", () => {
       const previous = state.active;
       state.pinned = null;
@@ -2732,7 +2730,39 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   const next=button("next","Next episode",()=>{if(index+1<queue.length)start(index+1);});
   const rate=element("select");rate.setAttribute("aria-label","Podcast playback speed");
   for(const n of [.5,.75,1,1.25,1.5,1.75,2])rate.append(new Option(n+"x",String(n)));rate.value="1";
-  rate.addEventListener("change",()=>{speed=Number(rate.value);audio.playbackRate=speed;});
+  // Device compatibility is independent of the selected visual layout.
+  const lgSpeedLimited = /web[o0]s|netcast/i.test(navigator.userAgent || "");
+  function applyPodcastSpeed() {
+    const requested = Number(rate.value);
+    const target = lgSpeedLimited ? 1 : requested;
+    if (![.5, .75, 1, 1.25, 1.5, 1.75, 2].includes(target)) return;
+    try {
+      audio.playbackRate = target;
+      speed = target;
+      rate.value = String(target);
+    } catch {
+      speed = 1;
+      rate.value = "1";
+      try { audio.playbackRate = 1; } catch {}
+      message("Playback speed unavailable. Use normal speed.");
+    }
+  }
+  rate.addEventListener("change", applyPodcastSpeed);
+  if (lgSpeedLimited) {
+    rate.value = "1";
+    rate.disabled = true;
+    rate.title = "LG/webOS compatibility: podcast audio uses normal speed.";
+    const speedNotice = element(
+      "p", "podcast-speed-notice",
+      "LG/webOS: podcasts use 1× speed because other speeds may silence audio."
+    );
+    speedNotice.id = "podcast-speed-compatibility";
+    rate.setAttribute("aria-describedby", speedNotice.id);
+    $("podcast-player").querySelector(".podcast-transport-area").append(speedNotice);
+    audio.addEventListener("ratechange", () => {
+      if (audio.playbackRate !== 1) applyPodcastSpeed();
+    });
+  }
   // Volume is page-memory only; controls never start playback or set a source.
   let lastAudibleVolume = 1;
   const volumeGroup = element("div", "podcast-volume");
@@ -2808,6 +2838,132 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   };
 }
 
+
+// Device layout is independent of media permissions and playback state.
+function detectMyAppsLayout(userAgent, width, coarsePointer) {
+  const ua = typeof userAgent === "string" ? userAgent : "";
+  // webOS TV identifiers vary; do not classify every LG phone as a TV.
+  const lgTV = /web[o0]s|netcast/i.test(ua);
+  const otherTV = /smart-tv|smarttv|hbbtv|googletv|appletv|aft[a-z0-9]+/i.test(ua);
+  if (lgTV || otherTV) return "tv";
+  const mobile = /iphone|ipod|android.*mobile|windows phone/i.test(ua);
+  if (Number.isFinite(width) &&
+      (width <= 600 || (width <= 750 && (mobile || coarsePointer)))) {
+    return "phone";
+  }
+  return "desktop";
+}
+
+(function initializeMyAppsLayout() {
+  const host = document.querySelector(".myapps-header-actions");
+  if (!host || $("myapps-layout")) return;
+
+  const label = element("label", "myapps-layout-control");
+  const caption = element("span", "", "View");
+  const select = element("select");
+  select.id = "myapps-layout";
+  select.setAttribute("aria-label", "Device layout");
+  select.append(
+    new Option("Auto", "auto"),
+    new Option("TV", "tv"),
+    new Option("Phone", "phone")
+  );
+  label.append(caption, select);
+  host.append(label);
+
+  const userAgent = navigator.userAgent || "";
+  // Compatibility is a separate device signal, never a layout override.
+  const lgWebOS = /web[o0]s|netcast/i.test(userAgent);
+  document.documentElement.dataset.lgWebos = String(lgWebOS);
+
+  // Decorate existing controls; never replace controls or their listeners.
+  function layoutIcon(paths) {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("class", "apps-icon myapps-layout-icon");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    for (const value of paths) {
+      const path = document.createElementNS(ns, "path");
+      path.setAttribute("d", value);
+      svg.append(path);
+    }
+    return svg;
+  }
+  function labelExistingControl(control, name) {
+    if (!control) return;
+    control.setAttribute("aria-label", name);
+    control.title = name;
+    for (const node of Array.from(control.childNodes)) {
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+        const caption = element("span", "myapps-action-caption", node.textContent);
+        node.replaceWith(caption);
+      }
+    }
+  }
+  for (const [id, name] of [
+    ["myapps-tube", "MyTube"],
+    ["myapps-podcasts", "MyPodcasts"],
+    ["configuration-toggle", "Configuration"],
+    ["podcast-config", "Podcast configuration"],
+    ["rss-toggle", "RSS Catalogue"],
+    ["refresh", "Refresh published feed"],
+  ]) {
+    labelExistingControl($(id), name);
+  }
+  const rssButton = $("rss-toggle");
+  if (rssButton) {
+    rssButton.prepend(layoutIcon([
+      "M4 4a16 16 0 0 1 16 16",
+      "M4 10a10 10 0 0 1 10 10",
+      "M4 19h1",
+    ]));
+  }
+  const autoNext = $("podcast-auto-next");
+  if (autoNext && autoNext.parentElement) {
+    const label = autoNext.parentElement;
+    label.classList.add("podcast-auto-next-option");
+    labelExistingControl(label, "Auto-next");
+    autoNext.insertAdjacentElement("afterend", layoutIcon([
+      "m4 5 10 7-10 7z",
+      "M18 5v14m-3-3 3 3 3-3",
+    ]));
+  }
+
+  let preference = "auto";
+  function applyLayout() {
+    const width = document.documentElement.clientWidth || window.innerWidth;
+    const coarse = typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: coarse)").matches;
+    const detected = detectMyAppsLayout(userAgent, width, coarse);
+    const effective = preference === "auto" ? detected : preference;
+    document.documentElement.dataset.deviceLayout = effective;
+    const rssToggle = $("rss-toggle");
+    const rssHome = $("rss-catalogue");
+    const toolbar = document.querySelector(
+      "#tube-page .category-toolbar-actions"
+    );
+    if (rssToggle && rssHome && toolbar) {
+      const destination = toolbar;
+      if (rssToggle.parentElement !== destination) {
+        destination.append(rssToggle);
+      }
+    }
+    document.documentElement.dataset.layoutPreference = preference;
+    select.title = preference === "auto"
+      ? "Automatic layout: " + effective
+      : "Manual layout: " + effective;
+  }
+
+  select.addEventListener("change", () => {
+    if (!["auto", "tv", "phone"].includes(select.value)) return;
+    preference = select.value;
+    applyLayout();
+  });
+  window.addEventListener("resize", applyLayout);
+  applyLayout();
+})();
 
 // Public GitHub request forms only: no token, persistent draft or source lookup.
 function initializePodcastConfiguration(shows) {
