@@ -1,336 +1,414 @@
-# MyTube — Your channels, your feed
+# MyApps — All your favourites, one place
 
-A static, whitelist-based YouTube browsing app hosted on GitHub Pages, with repository-backed channel approvals and shared categories.
+**Attention Is All You Need.** A shared, RSS-style home for browsing approved YouTube channels and listening to public podcasts—without added analytics or advertising scripts.
 
-Browse approved channels through a searchable video grid, an image-free text feed, or an RSS-style catalogue. Videos play inside MyTube by default, with an option to open official YouTube or its app.
+[Launch MyApps](https://linyuli303.github.io/Apps/)
 
-**The repository, channel IDs, category names and assignments, published feed, and change-request Issues are public. Never commit API keys, tokens, cookies, passwords, or raw Takeout exports.**
+MyApps brings together:
 
-## View MyTube
+- **MyTube** — approved YouTube channels, searchable text feeds, shared categories, and embedded playback.
+- **MyPodcasts** — approved public RSS shows, episode browsing, and a shared audio player with an editable playlist.
+- **MySpotify** — coming soon; account connection is not implemented.
 
-https://linyuli303.github.io/Apps/
+Switch between applications within one shared shell, or bookmark a section directly:
 
-The public viewer uses the owner’s approved channels and published categories. To create your own feed, follow the fork setup below.
+- MyTube: https://linyuli303.github.io/Apps/MyTube/
+- MyPodcasts: https://linyuli303.github.io/Apps/MyPodcasts/
 
-## Features
+Clean section URLs support direct opening, reload, and browser Back/Forward. Switching sections does not reload the application shell; podcast playback and its playlist remain available until explicitly stopped or the page reloads.
 
-### Browsing and playback
+> **Public by design:** the repository, approved source configurations, category names and assignments, published metadata, and change-request Issues are public. Never commit API keys, tokens, cookies, passwords, private subscription links, or raw Takeout exports.
 
-- Search, channel/category filters, sorting, and 48-card pagination.
-- Optional thumbnails; turn them off for a compact text feed without placeholder images.
+The public viewer uses the owner’s approved sources and published categories. To create your own installation, review the fork setup below.
+
+## MyTube
+
+### Browsing
+
+- Search, channel/category filters, sorting, and 48-item pagination.
+- Image-free text feed by default; YouTube thumbnails are opt-in.
+- Text-feed columns show **Date | Channel | Title | Category tags | Views and duration**.
+- Multiple categories per channel, displayed across browsing views.
+- Disabled “Coming soon” provider entries do not represent implemented integrations.
+
+The current configuration requests **15 recent uploads per channel**, not full history. Private, unavailable, upcoming, or non-embeddable videos may be excluded. Short-video filtering can reduce the visible count further.
+
+### Playback
+
 - Embedded playback with **Kino mode**, video-only fullscreen, and **Open in YouTube / App**.
-- **Previous / Next** icon buttons navigate the current filtered, sorted list, wrapping at its ends.
-- **Auto-play next** advances when a video ends and stops at the end of the list. It is off by default, with the preference remembered on that browser.
-- **Loop** repeats the current video and takes priority over Auto-play next. It is off initially and lasts for the page session.
-- **Skip videos <60s** is enabled by default, with the preference remembered on that browser. It filters the grid, text feed, RSS catalogue, playback Feed menu, and navigation. Videos exactly 60 seconds long and videos with unknown durations remain included. Changing the setting does not interrupt the current video.
-- The skip rule uses duration, not YouTube’s official Shorts classification. It does not fetch older videos to replace skipped uploads.
-- A collapsible **Feed** menu beside **Channel categories** previews the current filtered list, highlights the playing video, and shows channel, publication date, views, and duration. Select a row to play it. Click the menu again, click outside, or press Escape to collapse it. The panel uses 48-row pagination and overlays the player without resizing the video window.
-- Video durations appear in the grid, text feed, RSS catalogue, and playback Feed menu. Missing or unsupported durations display **Unavailable**.
-- Remembered preferred speed from **0.25× to 2×**, in **0.25 increments** for both the dropdown and slider. No custom-rate option. YouTube determines supported rates; MyTube uses a supported fallback and reports failures or mismatches rather than claiming an unsupported rate worked.
-- The current configuration requests **15 recent uploads per channel**, not full history. Skipping short videos can leave fewer than 15 visible videos per channel. Private, unavailable, upcoming, or non-embeddable videos may also be excluded.
-- Playback controls, duration display, and short-video filtering use the existing snapshot and official iframe API; they do not make additional YouTube Data API requests. Browser autoplay restrictions can still require pressing Play manually.
+- **Previous / Next** follows the current filtered, sorted list and wraps at its ends.
+- **Auto-play next** is off by default, advances when a video ends, and stops at the end of the list.
+- **Loop** repeats the current video and takes priority over Auto-play next.
+- **Skip videos <60s** is enabled by default. Videos exactly 60 seconds long and videos with unknown durations remain included.
+- Short-video filtering applies to browsing, the RSS catalogue, playback Feed menu, and navigation. Changing it does not interrupt the current video.
+- The duration rule is not YouTube’s official Shorts classification and does not fetch older uploads to replace skipped videos.
+- Preferred speed ranges from **0.25× to 2×**, in **0.25 increments**. YouTube determines supported rates; unavailable selections use a supported fallback or display a status message.
+- Video durations appear throughout browsing and playback views. Missing or unsupported values display **Unavailable**.
+- Playback preferences remain in page memory and reset on reload.
+
+The collapsible **Feed** menu previews the current filtered list, highlights the playing video, and shows channel, publication date, views, and duration. It uses 48-row pagination and overlays the player without resizing the video window.
+
+Playback controls and filtering use the published snapshot and official iframe API; they do not make additional YouTube Data API requests. Browser autoplay restrictions may still require pressing Play.
 
 ### RSS-style catalogue
 
 - Left-edge catalogue, collapsed by default, with hover, click, and keyboard support.
-- Channels ranked by newest available upload; click a channel to pin its adjacent feed.
-- Compact rows showing **Published date | Video title | Views**.
-- Theme-tinted backgrounds and hover/focus highlights.
+- Channels ranked by newest available upload.
+- Click a channel to pin its adjacent feed.
+- Compact rows with publication date, title, views, and duration.
 - **Back to channels** navigation on narrow screens.
 
 This is an RSS-style webpage, **not an XML subscription feed**.
 
-### Shared categories
+## MyPodcasts
 
-Categories are stored in **`categories.json`** and published with the website, so devices load the same saved labels without importing a backup.
+### Sources and browsing
 
-- Eight defaults: **Data & AI, IT & Cyber, Travel, Music, Skills, News, Talk Shows & Podcasts, Entertainment**.
-- Open **☰** beside the category filter to add, rename, delete, or assign categories. Search channels by name or immutable ID.
-- Label the current channel through **Channel categories** beneath the video, without restarting playback.
-- Assign multiple categories per channel. Labels apply to **every video from that channel**, across the grid, text feed, and RSS catalogue.
-- Rename categories without losing assignments. Deleting a category removes its assignments, not channels or videos.
-- Export/import JSON backups; explicitly import previous browser-only labels when migrating.
+- Browse approved public HTTPS RSS shows.
+- Search episodes and shows, filter by show, sort, and paginate results.
+- View unavailable or pending sources under source availability and Config.
+- No automatic artwork loading.
+- No upcoming-audio preloading.
+- Audio is requested only after an explicit playback action; Auto-next may request the next episode after the current one ends.
 
-#### Edit locally, then save for all devices
+The collector includes all eligible entries supplied by each approved RSS feed, subject to explicit safety limits. This is **not a guarantee of the publisher’s complete historical archive**.
 
-1. Make changes in **Manage categories** or the player’s category panel. For a rename, click **Save name** to apply it to the draft.
-2. Make further edits if needed; several changes can be submitted together.
-3. Click **Save to GitHub…** and review the human-readable changes. Technical JSON is collapsed under **Technical details / Copy fallback**.
-4. Open the prefilled GitHub Issue, review the public request, check its confirmation, and submit using the authorized owner account. Large requests may require copying the payload into the form.
-5. Check **Apply owner category request**, then its separate **Refresh and publish** run.
-6. Reload MyTube on each device. **Published categories loaded. No unsaved changes.** indicates that device has no pending draft against its loaded published snapshot; it is not a continuous live-sync indicator.
+### Audio player and playlist
 
-**Checking a category or clicking Save name updates a browser-local draft, not the repository. Opening the GitHub form does not submit it.** Shared saving requires successful request processing and publication.
+- Play/Pause, Previous/Next, seeking, speed selection, and −15/+15 seconds.
+- Auto-next enabled after playback starts.
+- Repeat **Off / List / One**; Repeat One takes priority.
+- Initial Play creates a queue from the current filtered results, starting at the selected episode.
+- Playing another library episode silently replaces the queue.
+- Playing the current library episode toggles Play/Pause.
+- **Add to playlist** appends an episode without starting playback.
+- Changing library sorting does not reorder an established playlist.
+- Reorder upcoming episodes by drag/drop or arrow controls.
+- **Move to top** means next-to-play, not before the current episode or listening history.
+- Double-click a playlist title—or use Enter/Space—to play that item without rebuilding the queue.
+- Large playlists render in chunks of 100.
+- Close stops playback and clears the playlist and audio source.
 
-Compact requests send changed assignments rather than the entire assignment map. Category definitions are included when edited. Owner authorization, unchanged-Issue checks, and revision checks protect updates; stale requests are rejected rather than overwriting newer data. Export a draft backup before discarding or rebuilding stale edits.
+Starting YouTube playback pauses podcast audio. Starting a podcast closes the YouTube player. Switching application sections alone does not stop podcast playback.
 
-Category requests explicitly dispatch **reuse-only publication**, with no YouTube Data API calls. Reuse must still pass the feed’s freshness and validation checks. A repository commit can succeed even if the later publication fails; inspect both workflows.
+Queue, progress, repeat, and speed state are memory-only and reset on reload. A dedicated podcast volume control is not implemented yet; use browser or device volume controls.
 
-### Channel management
+### Podcast requests and automatic onboarding
 
-- Search approved channels by name or immutable ID; channel names link to official YouTube pages.
-- Browser-local whitelist drafts support Remember, Forget, and export controls. Local changes do not update the shared whitelist.
-- Request shared additions/removals through prefilled, owner-authorized GitHub Issues.
-- **Each channel request currently covers one channel.** Multi-channel or combined channel/category requests are not implemented.
+Open **MyPodcasts → Config** to review additions or removals through public GitHub Issues.
+
+- Additions accept public Apple Podcasts show links or plain public HTTPS RSS URLs.
+- Removals use stable show IDs.
+- Opening a prefilled Issue does **not** submit it.
+- Only owner-authorized requests are eligible.
+- Private subscription URLs, credentials, and tokenized links are not accepted.
+
+Automatic onboarding resolves the source and validates RSS metadata using an isolated read-only job. Sources using existing approved initial media hosts can activate automatically. Unfamiliar media hosts, unsupported redirects, or validation failures require review.
+
+The privileged apply job rechecks the live unchanged Issue and current configuration before a SHA-aware write. Resolution is bound to the Issue snapshot and configuration digest; concurrent changes fail closed.
+
+Onboarding does not download audio, automatically expand CSP permissions, or probe downstream audio redirect chains. Podcast configuration publication explicitly requests YouTube feed reuse.
+
+The onboarding implementation has passed offline and real-source resolver tests. Deployment success alone does not establish end-to-end verification of a genuinely new Issue-based activation.
+
+## Shared YouTube categories
+
+Categories are stored in **`categories.json`** and embedded in the published application, so devices load the same saved definitions and assignments.
+
+- Open **Config → Manage categories** to add, rename, delete, or assign categories.
+- Search channels by name or immutable ID.
+- Label the current channel through **Channel categories** beneath the video without restarting playback.
+- Assign multiple categories per channel; labels apply to every video from that channel.
+- Renaming preserves category IDs and assignments.
+- Deleting a category removes its assignments, not channels or videos.
+- Export/import JSON backups.
+- Explicitly recover older browser category drafts, including the previous `/MyTube/` scope, without deleting the stored originals.
+
+Shared podcast category assignments are not implemented.
+
+### Edit locally, then save for all devices
+
+1. Edit in **Manage categories** or the player’s category panel. Click **Save name** to apply a rename to the draft.
+2. Click **Save to GitHub…** and review the human-readable changes.
+3. Open the prefilled GitHub Issue, review the public request, check its confirmation, and submit as the authorized owner.
+4. Check **Apply owner category request**, then its separate **Refresh and publish** run.
+5. Reload MyApps on other devices.
+
+**Category edits remain in page memory until reload.** Export unfinished edits or complete publication before leaving. Opening a GitHub form does not submit or save anything.
+
+Compact requests send changed assignments rather than the entire assignment map. Owner authorization, unchanged-Issue checks, and revision checks protect updates; stale requests are rejected.
+
+Category requests dispatch **reuse-only publication**. The feed must still pass freshness and validation checks. A configuration commit can succeed even if the later publication fails—inspect both workflows.
+
+## YouTube channel management
+
+- Search approved channels by name or immutable ID.
+- Channel names link to official YouTube pages.
+- Local whitelist changes affect that browser’s draft only.
+- Whitelist drafts are session-only by default; **Remember** explicitly enables browser storage.
+- Export and Forget controls are available.
+- Shared additions/removals use prefilled owner-authorized GitHub Issues.
+- Each request currently covers one channel.
 - Accepted channel requests—including removals and no-ops—currently dispatch a **full refresh**.
 
-Channel approvals live in **`channels.json`**. Category labels do not approve channels or alter this whitelist.
+Approvals live in **`channels.json`**. Category labels do not approve channels.
 
-### Appearance
+Existing browser drafts are not silently migrated from `/MyTube/` to `/Apps/`. Export important whitelist drafts before a path migration. Do not clear all origin storage: GitHub Pages projects share an origin.
 
-- **51 palettes**, with **Yugure / 夕暮れ (Twilight)** as the default for users without a saved preference.
-- Shared **Light, Dark, and System** appearance across browsing and playback.
-- Existing saved palette and appearance choices are preserved. Theme, appearance, and preferred playback speed remain browser-local; repository-backed category sync does not sync those preferences.
+## Appearance and privacy
 
-## How storage and hosting work
+- **51 palettes**, with **Yugure / 夕暮れ** and light appearance as defaults.
+- Shared Light, Dark, and System appearance.
+- Palette and appearance selections remain in page memory.
+- No added analytics, advertising scripts, service worker, or app-managed offline cache.
+- No new persistent listening history or progress storage.
 
-| Component                 | Responsibility                                                                        |
-| ------------------------- | ------------------------------------------------------------------------------------- |
-| `channels.json`           | Shared approved-channel configuration                                                 |
-| `categories.json`         | Shared category definitions and channel assignments                                   |
-| GitHub Issues and Actions | Owner-authorized validation, repository updates, and publication                      |
-| GitHub Pages              | Static website hosting                                                                |
-| Browser storage           | Local category drafts, optional whitelist drafts, and playback/appearance preferences |
+Native audio playback may use normal buffering and browser-managed caching. Audio providers may use cookies, and publisher-inserted advertising may remain. **MyApps does not guarantee cookie-free or ad-free provider playback.**
 
-The Issue processors use GitHub’s REST API and workflow-provided token. The public frontend contains no repository-write token. There is **no application database, continuously running backend, or direct authenticated frontend save API**.
+YouTube thumbnails contact YouTube’s image servers when enabled. Opening a video contacts YouTube and loads its official iframe API for playback controls.
 
-Publication retains the five-file allowlist: `index.html`, `style.css`, `app.js`, `icon.svg`, and `data/feed.json`. Validated shared categories are embedded in the published `app.js`; `categories.json` is not a sixth website asset, but remains public in the repository.
+Embedded playback may not recognize YouTube Premium. Use **Open in YouTube / App** while signed in for official playback; app opening depends on device settings. MyApps does not authenticate to your Google account or read your membership status.
 
-## Playback and YouTube Premium
+## Architecture and publication
 
-Videos play inside MyTube by default. Embedded playback may not recognize Premium; use **Open in YouTube / App** while signed in to your Premium account for official playback. App opening depends on device settings, and creator-included sponsorships may remain.
+| Component | Responsibility |
+| --- | --- |
+| `channels.json` | Approved YouTube channels |
+| `categories.json` | Shared YouTube category definitions and assignments |
+| `podcasts.json` | Approved/pending podcast source configuration |
+| GitHub Issues and Actions | Owner-authorized processing, collection, and publication |
+| GitHub Pages | Static hosting |
+| Page memory | Current drafts, filters, appearance, queue, and playback state |
+| Optional browser storage | Explicitly remembered whitelist drafts and legacy saved data |
 
-MyTube does not access your Google login, cookies, or membership. Its API key retrieves public metadata, not Premium authentication. Preferred speed applies only inside MyTube, not external playback.
+There is **no application database, continuously running backend, or direct authenticated frontend save API**.
 
-Thumbnails contact YouTube’s image servers; the image-free text feed and RSS catalogue do not load thumbnails. Playback speed control loads YouTube’s official iframe API when a video opens. This does not consume YouTube **Data API** quota.
+Issue processors use workflow-provided GitHub tokens. The public frontend contains no repository-write token.
 
-## Refresh schedule
+Publication allows exactly **seven files**:
 
-The current repository variable is:
+```text
+index.html
+MyTube/index.html
+MyPodcasts/index.html
+style.css
+app.js
+icon.svg
+data/feed.json
+```
+
+Both section pages use the same shared application assets. Validated category data and podcast metadata/media URLs are embedded in `app.js`.
+
+Raw generated podcast catalogues, configuration files, exports, and credentials are not copied into the website artifact. Public configurations remain accessible in the repository.
+
+## Collection and refresh
+
+### YouTube schedule
+
+The configured repository variable is:
 
 ```text
 YOUTUBE_REFRESH_HOURS_UTC=08,11,15,19
 ```
 
-Set it under **Settings → Secrets and variables → Actions → Variables**. Enter two-digit UTC hours separated by commas, **without spaces**.
+| UTC | Germany: winter/CET | Germany: summer/CEST |
+| --- | --- | --- |
+| 08:00 | 09:00 | 10:00 |
+| 11:00 | 12:00 | 13:00 |
+| 15:00 | 16:00 | 17:00 |
+| 19:00 | 20:00 | 21:00 |
 
-| UTC   | Germany: winter (CET) | Germany: summer (CEST) |
-| ----- | --------------------- | ---------------------- |
-| 08:00 | 09:00                 | 10:00                  |
-| 11:00 | 12:00                 | 13:00                  |
-| 15:00 | 16:00                 | 17:00                  |
-| 19:00 | 20:00                 | 21:00                  |
+These are fixed UTC hours and do not adjust automatically for daylight saving time.
 
-The intended German refresh times are **09:00, 12:00, 16:00 and 20:00**.
-The winter setting above uses fixed UTC hours and does not adjust automatically.
-To keep those local times during summer (CEST), change the variable to
-`07,10,14,18` and update the frontend notice accordingly.
+The workflow contains 24 hourly cron entries. The existing gate selects scheduled runs by their intended cron hour, not their delayed actual start time. A missing or empty variable defaults to `09,12,18,22`; an empty value does not disable scheduling.
 
-The workflow has 24 hourly schedule entries. Only selected schedule hours proceed; other entries can appear as **Skipped**, without executing the feed builder. Selection uses the intended cron hour, not a delayed actual start time.
+Pushes and manual dispatches bypass the scheduled-hour gate. Start times are targets, not guarantees. Scheduling diagnostics remain unchanged; irregular scheduling has not been established as resolved.
 
-**The hour gate applies only to scheduled events. Pushes and manual dispatches bypass it.** A missing or empty variable defaults to `09,12,18,22`; an empty value does not disable scheduling. Start times are targets, not guarantees. Update the site’s static schedule notice separately when changing the variable.
+### What triggers YouTube collection?
 
-### What triggers YouTube requests?
+| Event | New YouTube data? |
+| --- | --- |
+| Selected scheduled hour | Yes |
+| Unselected scheduled hour | No—build skipped |
+| Ordinary manual run, reuse unchecked | Yes |
+| Accepted owner channel request, including removal/no-op | Yes |
+| Push changing `channels.json`, `scripts/build_feed.py`, or `scripts/reuse_public_feed.py` | Yes |
+| Other pushes, including frontend, packaging, or category-only changes | No—validated feed reuse |
+| Owner category publication | No—explicit reuse-only dispatch |
+| Podcast configuration publication | No—explicit reuse-only dispatch |
+| Manual run with reuse checked | No—validated feed reuse |
+| Browsing, searching, editing drafts, or using website Refresh | No |
+| Local commit without pushing | No |
 
-| Event                                                                                | Fetches new YouTube data?       |
-| ------------------------------------------------------------------------------------ | ------------------------------- |
-| Selected scheduled hour                                                              | Yes                             |
-| Unselected scheduled hour                                                            | No—build skipped                |
-| Ordinary manual run, reuse unchecked                                                 | Yes                             |
-| Accepted owner channel request, including removal or no-op                           | Yes                             |
-| Push changing `channels.json`, `scripts/build_feed.py`, or `scripts/prepare_site.py` | Yes                             |
-| Other pushes, including category-data-only changes                                   | No—reuse validated public feed  |
-| Accepted owner category request                                                      | No—explicit reuse-only dispatch |
-| Manual run with reuse checked                                                        | No—reuse validated public feed  |
-| Browsing, searching, editing labels, or expanding RSS panels                         | No                              |
-| Refresh button inside MyTube                                                         | No—reload published snapshot    |
-| Local Git commit without pushing                                                     | No—no GitHub workflow triggered |
+If changed-file detection is unreliable, the selector conservatively chooses a full refresh. Multi-commit pushes are evaluated by their overall changes.
 
-If Git cannot reliably determine changed files, the selector conservatively chooses a full refresh. A push containing multiple commits is evaluated for its overall changes, not just the final commit message.
+Podcast RSS collection runs independently during publication builds that reach its collection step. It fetches metadata, not audio or artwork, and does not use the YouTube API key.
 
-## Publish without refreshing YouTube
-
-For an explicit reuse-only deployment:
+### Publish without refreshing YouTube
 
 1. Open **Actions → Refresh and publish → Run workflow**.
 2. Select `main`.
 3. Check **Deploy frontend using published feed; no YouTube calls**.
-4. Run the workflow and verify both build and deployment.
+4. Verify both build and deployment.
 
-The checkbox defaults to **unchecked**. Category automation supplies the reuse input automatically; its resulting run can be labelled **Manually run by github-actions[bot]**.
+The checkbox defaults to unchecked. Category and podcast automation supply the reuse input where appropriate.
 
 ### Feed-reuse safeguards
 
-Reuse downloads the snapshot from the fixed configured public Pages URL. It validates schema, size, credentials, configuration consistency, and freshness before publication.
+Reuse downloads only the fixed configured snapshot:
 
-- The feed must be no more than **24 hours old**, with bounded future-time tolerance.
-- Removal-only changes can filter deleted channels and their videos from a validated snapshot.
-- Newly approved channels missing from the snapshot require a live refresh.
-- The original generation timestamp is preserved: reuse does not make old data fresh.
-- Invalid, unavailable, or inconsistent snapshots stop publication.
-- Reuse never silently falls back to YouTube requests; failed API refreshes do not automatically fall back to reuse.
+```text
+https://linyuli303.github.io/Apps/data/feed.json
+```
 
-**The current channel-Issue workflow still requests a full refresh for removals.** Removal-only reuse is available through an appropriate reuse-mode deployment, not automatically selected by that processor.
+- Redirects are refused.
+- Schema, size, credential patterns, configuration consistency, and freshness are checked.
+- The snapshot must be no more than **24 hours old**, with bounded future-time tolerance.
+- Removal-only reconciliation can filter deleted channels and their videos.
+- Newly approved channels missing from the snapshot require live collection.
+- The original generation timestamp is preserved.
+- Invalid, unavailable, expired, or inconsistent snapshots stop publication.
+- Reuse never silently falls back to YouTube requests.
 
-The website’s **Feed built** timestamp is shown in browser-local time. A successful reuse-only deployment leaves that feed timestamp unchanged.
+The channel-Issue processor still requests a full refresh for removals. Removal-only reuse is not automatically selected by that processor.
 
-## API quota and view counts
+## YouTube quota, freshness, and view counts
 
-MyTube does not use AI tokens. YouTube Data API consumption is measured in **quota units**, separate from Premium viewing allowances.
+The configured project allowance is **10,000 YouTube Data API units per day**, resetting at midnight Pacific Time. Fork owners must verify their own project allowance.
 
-The current project has a **10,000-unit daily allowance**, resetting at **midnight Pacific Time**. This corresponds to 09:00 in Germany when both regions use their usual winter or summer offsets, and 08:00 during the short periods when their daylight-saving transitions differ. Fork owners must check their own project’s quota.
+Collection uses channel metadata, uploads playlists, and batched video-detail requests. Statistics are included in the video-detail requests rather than fetched separately.
 
-The builder performs:
+- View counts reflect the last successful collection, not live totals.
+- Missing statistics display **Unavailable**, not zero.
+- Frontend-only publication does not update view counts.
+- Failed collection publishes no new feed.
+- Playback is blocked after the feed exceeds the application’s 24-hour freshness limit.
+- The site’s quota notice describes the configured allowance, not remaining quota.
 
-- One channel-metadata request per approved channel.
-- One uploads-playlist request per channel.
-- Video-detail requests in batches of up to **50 video IDs**, including view statistics in the same request.
+Avoid repeated retries without diagnosis. HTTP 403 or 400 alone does not prove quota exhaustion.
 
-These list methods each cost one quota unit per request. For example, **188 channels × up to 15 uploads** implies up to **188 + 188 + 57 = 433 units** for a normal complete refresh, excluding retries. Fewer returned or deduplicated videos can reduce the detail-batch count. This is an estimate, not a measured per-run report.
-
-All live refreshes, retries, and other applications using the project contribute to usage. Quota dashboards are not live per-request counters and can show delayed updates. A per-minute rate limit is separate from the daily allowance; it does not increase that allowance.
-
-Official method costs and quota rules:
+Official quota documentation:
 https://developers.google.com/youtube/v3/determine_quota_cost
 
-### Failed refreshes
+## Set up your own MyApps fork
 
-- No new feed is deployed when the builder fails.
-- Avoid repeated retries before diagnosing the failure. HTTP 403 alone does not establish quota exhaustion; HTTP 400 is not proof of quota exhaustion either.
-- Once quota is exhausted, new metadata cannot be fetched until quota becomes available.
-- Reuse-only publication can still work while the existing feed passes validation.
-- Playback is blocked after the feed exceeds the app’s 24-hour freshness limit.
+### 1. Review before enabling automation
 
-The website’s quota notice describes the configured allowance, **not remaining quota**. Private per-run quota reporting and email notifications are not implemented.
+Adding an API key is not sufficient. Review all workflows, public source configurations, repository URLs, owner checks, and deployment permissions.
 
-### View counts
+The supplied request workflows assume a **personal-account-owned repository**. Organization ownership requires an authorization redesign.
 
-View counts reflect the **last successful feed refresh**, not live totals. Missing statistics show **Unavailable**, not zero. A failed refresh leaves previous counts unchanged; frontend-only publication does not update them.
+### 2. Replace installation-specific references
 
-## Set up your own MyTube fork
+Search tracked files for:
 
-### 1. Fork and review
-
-Review the source and workflows before enabling automation. **Adding an API key alone is not enough:** repository URLs, owner guards, and supplied public configurations must be replaced or reviewed.
-
-### 2. Replace repository and owner references
-
-| File                                         | Configuration to review                                                      |
-| -------------------------------------------- | ---------------------------------------------------------------------------- |
-| `site/app.js`                                | Channel/category request-form destinations                                   |
-| `scripts/reuse_public_feed.py`               | Fixed public feed URL                                                        |
-| `scripts/select_feed_mode.py`                | Runner repository identity                                                   |
-| `scripts/channel_request.py`                 | Repository and personal-owner authorization                                  |
-| `scripts/process_channel_request.py`         | Repository and immutable numeric owner ID                                    |
-| `scripts/category_request.py`                | Category authorization and numeric owner guard; reuses channel authorization |
-| `scripts/process_category_request.py`        | Imported repository/owner constants and category processing                  |
-| `.github/workflows/channel-change.yml`       | Channel-request repository, actor, author, and owner guards                  |
-| `.github/workflows/category-change.yml`      | Category-request repository, actor, author, and owner guards                 |
-| Tests, documentation, and optional templates | Installation-specific expectations                                           |
-
-Search tracked files for the original repository name, username, and numeric account ID. Update references and their tests consistently; do not weaken authorization checks merely to make a fork run.
-
-Both request workflows assume a **personal-account-owned repository**. Organization-owned repositories require an authorization redesign.
-
-### 3. Configure channels and categories
-
-Review or replace **both** `channels.json` and `categories.json`. A fork inherits the original public whitelist and labels unless you change them.
-
-```json
-{
-  "title": "MyTube",
-  "max_videos_per_channel": 15,
-  "channels": [{ "id": "UCVuR4hBxX3zWY_xUCZeIc3A" }]
-}
+```text
+linyuli303/Apps
+linyuli303.github.io/Apps/
+42029941
 ```
 
-Replace the example with independently reviewed immutable channel IDs. Handles can be resolved locally using `scripts/resolve_handle.py`; review the identity before approval. Resolution may consume YouTube quota.
+Review at least:
 
-Takeout conversion is local-only. Commit reviewed JSON, **not the CSV**. For removal-only reconciliation, retain the intersection of approved IDs and export IDs; do not automatically approve CSV-only channels.
+- Frontend Issue destinations and advanced-editor hints.
+- `scripts/select_feed_mode.py` runner identity.
+- `scripts/reuse_public_feed.py` fixed snapshot URL.
+- Channel/category/podcast validators and processors.
+- Podcast resolution and privileged apply boundaries.
+- Repository, actor, author, and numeric-owner guards in request workflows.
+- Tests, documentation, and recovery paths.
 
-Shared category data uses this structure:
+Update tests consistently. Do not weaken authorization merely to make a fork run.
 
-```json
-{
-  "version": 1,
-  "categories": [{ "id": "cat-0", "name": "Music" }],
-  "assignments": {}
-}
-```
+### 3. Review public configurations
 
-Preserve stable category IDs when renaming. Review imported assignments against your whitelist. Keep export backups outside tracked files if you do not intend to publish them.
+Review or replace:
 
-### 4. Configure Google Cloud
+- `channels.json`
+- `categories.json`
+- `podcasts.json`
 
-1. Create/select a project and enable **YouTube Data API v3**.
-2. Create an API key restricted to **YouTube Data API v3**.
-3. Use **Application restrictions: None** for the supplied GitHub-hosted runner setup.
-4. Monitor quota and rotate exposed credentials.
+Use independently reviewed immutable channel IDs. Preserve stable category IDs when renaming.
 
-Do not apply home-IP or website-referrer restrictions: metadata requests originate from the runner. Fixed-egress restrictions require a separate design. Keep the key secret even with application restrictions set to None.
+Takeout conversion is local-only. Commit reviewed JSON, **not raw exports**. Do not automatically approve channels merely because they appear in an imported CSV.
 
-Google OAuth and a browser-side GitHub personal access token are not required by the supplied workflow.
+Podcast feeds must be public HTTPS sources. New feed/media hosts require review; never bypass certificate validation or add unrestricted media-source permissions.
 
-### 5. Configure environments and request permissions
+### 4. Configure Google Cloud and GitHub
 
-| Environment       | Configuration                                           |
-| ----------------- | ------------------------------------------------------- |
-| `youtube-refresh` | Allow `main` only; environment secret `YOUTUBE_API_KEY` |
-| `github-pages`    | Allow `main` only                                       |
+Enable YouTube Data API v3 and create an API key restricted to that API.
 
-For unattended operation, leave required reviewers and wait timers disabled unless intentional. Keep the API key in the **environment secret**, not frontend files, variables, or duplicate repository secrets. It is injected only into the feed-building step.
+For the supplied GitHub-hosted runner design, application restrictions are **None**. Home-IP and website-referrer restrictions do not match runner-side collection. Fixed-egress restrictions require a separate design.
 
-Enable Issues if using request forms. The request processors use the workflow-provided GitHub token; users never enter credentials into Issues. Confirm repository and branch policies permit the declared permissions and direct configuration commits.
+| Environment | Configuration |
+| --- | --- |
+| `youtube-refresh` | Allow `main`; environment secret `YOUTUBE_API_KEY` |
+| `github-pages` | Allow `main` |
 
-### 6. Configure Pages and schedule
+Keep the API key out of frontend files, repository variables, and Issues. It is injected only into the YouTube collection step.
+
+Enable Issues and confirm policies permit declared workflow permissions and configuration commits. Review required reviewers and wait timers if unattended operation is intended.
+
+### 5. Configure Pages and scheduling
 
 - Select **GitHub Actions** under **Settings → Pages**.
-- Set `YOUTUBE_REFRESH_HOURS_UTC` to your desired hours, without spaces.
-- Configure the final HTTPS reuse URL to match your Pages address/custom domain. The downloader refuses redirects.
-- Update static schedule/quota notices.
-- Review branch rules: required pull requests or restrictions on workflow commits can require redesigning both request processors.
+- Configure the final HTTPS snapshot URL; redirects are not accepted.
+- Set desired scheduled hours and update static notices consistently.
+- Review branch rules that may prevent direct workflow commits.
 
-### 7. Test locally
+A repository rename does **not** guarantee a redirect for the old GitHub Pages website.
+
+### 6. Test locally
 
 Python **3.12** matches CI. Runtime scripts use the standard library.
 
 ```powershell
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests -q
 python scripts/security_check.py
 git diff --check
+git diff --cached --check
 ```
 
-The security checker scans Git-tracked files. Stage new files before relying on its coverage and review the staged diff. Node-dependent tests are skipped if Node.js is unavailable locally; CI must execute those checks.
+The security checker scans Git-tracked files. Stage new files before relying on its coverage.
 
-Offline tests do not establish live API authorization, publication success, browser behaviour, or end-to-end request processing.
+Node-dependent tests are skipped when Node is unavailable. Review CI logs to determine which checks actually ran; do not assume local skips were covered.
 
-### 8. First deployment and verification
+Offline tests do not prove browser correctness, live authorization, network behavior, or deployment success.
 
-Run **Refresh and publish** manually with reuse **unchecked**. A new fork has no published feed to reuse.
+### 7. First deployment and verification
+
+A new installation has no published feed to reuse. Run the first publication with reuse unchecked.
 
 Verify:
 
-- Feed build and Pages deployment both succeed.
-- Grid, text feed, RSS navigation, embedded playback, Kino, and fullscreen work.
-- Themes, appearance, and quarter-step playback speeds work.
-- Reuse-only deployment skips the YouTube fetch step.
-- Owner channel requests work end to end.
-- A small category edit produces a compact request, commits successfully, publishes through reuse, and appears on another device after reload.
+- Collection, packaging, and deployment succeed.
+- The main URL and both section URLs open directly.
+- Reload and browser Back/Forward select the correct section.
+- Section navigation preserves the shared shell.
+- Podcast playback and queue survive section navigation.
+- YouTube playback, Kino, fullscreen, filters, and speed controls work.
+- Reuse-only publication skips YouTube collection.
+- Owner request processing and its separate publication succeed.
+- Published changes appear on another device after reload.
 
-## Security boundaries
+## Security boundaries and limitations
 
-- Main-only guards and commit-pinned Actions are included; configure environment restrictions separately.
-- Only five approved public assets are published, never the repository root. Shared category data is intentionally public inside the script.
-- Whitelist drafts are session-only by default; Remember persists them. Category edits are stored separately as browser-local drafts until shared saving succeeds.
-- Path-scoped storage reduces collisions but is **not same-origin isolation**. A dedicated origin offers stronger separation from other projects.
-- Local whitelist removals affect that browser only. Shared changes require successful processing and publication; old clients are not remotely upgraded.
-- Safe text rendering, restrictive meta CSP, local-only conversion, and credential/path checks are retained. Script permissions narrowly allow YouTube’s official iframe API.
-- Owner checks run in the request processors and workflows; frontend editing controls are not an authentication boundary.
-- Optional HTTP-header and CODEOWNERS templates are not automatically enforced.
-- This is **not parental access control, private hosting, instant revocation, or a direct authenticated frontend editor**. Official YouTube can expose content outside the whitelist.
-- Passing tests and pinned Actions do not prove complete security. Review updates and upstream identities before changing pins.
+- Fixed repository boundaries, main-branch guards, numeric owner authorization, and SHA/revision-aware writes are retained.
+- Resolver work is separated from privileged podcast configuration writes.
+- Live unchanged-Issue checks protect request processing.
+- Only the explicit seven-file website artifact is published.
+- Safe text rendering, restrictive CSP, credential-pattern checks, and export/path checks remain in place.
+- Podcast collection uses pinned public-IP HTTPS connections, checked redirects, certificate validation, bounded inputs, and safe XML handling.
+- Media CSP permissions use explicit hosts, not unrestricted HTTPS wildcards.
+- Browser controls are not an authentication boundary.
+- Path-scoped storage is not same-origin isolation.
+- Existing browser data is not erased globally.
+- Optional header/CODEOWNERS templates are not automatically enforced.
+- Passing tests and pinned Actions do not establish complete security.
 
-See `VERIFICATION.md` for testing scope and limitations.
+This is **not private hosting, parental access control, instant revocation, or a cookie-free playback guarantee**. Official providers may expose content outside the approved catalogue.
+
+See `VERIFICATION.md` for additional testing scope and limitations.
 
 ## Acknowledgements
 
@@ -338,8 +416,8 @@ The palette collection is inspired by the traditional Japanese colors presented 
 
 https://nipponcolors.com/
 
-MyTube’s interface and palette adaptations are independent work; no affiliation or endorsement is implied.
+MyApps’ interface and palette adaptations are independent work; no affiliation or endorsement is implied.
 
 ## License
 
-MIT licensed. Not affiliated with or endorsed by YouTube, Google, GitHub, or Nippon Colors.
+MIT licensed. Not affiliated with or endorsed by YouTube, Google, GitHub, Apple, Spotify, podcast publishers, or Nippon Colors.
