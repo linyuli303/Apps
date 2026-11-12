@@ -167,6 +167,18 @@
       "mediaHosts": [
         "podcast-mp3.dradio.de"
       ]
+    },
+    {
+      "id": "apple-1574676417",
+      "title": "Wild Wild Web - Geschichten aus dem Internet",
+      "enabled": true,
+      "feedUrl": "https://feeds.br.de/wild-wild-web/feed.xml",
+      "feedHosts": [
+        "feeds.br.de"
+      ],
+      "mediaHosts": [
+        "media.neuland.br.de"
+      ]
     }
   ]
 }

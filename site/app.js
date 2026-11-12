@@ -2607,7 +2607,7 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   audio.hidden = true;
   $("podcast-player").append(audio);
   const byID = new Map(episodes.map(e => [e.id, e]));
-  const allowedHosts = new Set(["adswizz.podigee-cdn.net", "anchor.fm", "audio.podigee-cdn.net", "cdn.audiorella.com", "d3ctxlq1ktw2nl.cloudfront.net", "dcs-cached.megaphone.fm", "dts.podtrac.com", "npr.simplecastaudio.com", "play.podtrac.com", "podcast-mp3.dradio.de", "podfileszdf-a.akamaihd.net", "prfx.byspotify.com", "radiodownloaddw-a.akamaihd.net", "traffic.megaphone.fm", "wdrmedien-a.akamaihd.net"]);
+  const allowedHosts = new Set(["adswizz.podigee-cdn.net", "anchor.fm", "audio.podigee-cdn.net", "cdn.audiorella.com", "d3ctxlq1ktw2nl.cloudfront.net", "dcs-cached.megaphone.fm", "dts.podtrac.com", "npr.simplecastaudio.com", "play.podtrac.com", "podcast-mp3.dradio.de", "podfileszdf-a.akamaihd.net", "prfx.byspotify.com", "radiodownloaddw-a.akamaihd.net", "traffic.megaphone.fm", "wdrmedien-a.akamaihd.net", "cdn-storage.br.de", "media.neuland.br.de"]);
   let queue = [], index = -1, repeat = "off", speed = 1, generation = 0, drag = null;
   const icons = {
     play:["M8 5l11 7-11 7z"], pause:["M9 5v14M16 5v14"],
