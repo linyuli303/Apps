@@ -49,7 +49,7 @@ process.on("beforeExit", () => {
 });
 """
         result = subprocess.run(
-            [NODE, "-e", prelude + template.replace(marker, helpers)],
+            [NODE, "-"], input=prelude + template.replace(marker, helpers),
             capture_output=True, text=True, encoding="utf-8", timeout=40,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

@@ -35,7 +35,7 @@ const crypto = require("node:crypto").webcrypto;
 });
 """
         result = subprocess.run(
-            [NODE, "-e", script], capture_output=True,
+            [NODE, "-"], input=script, capture_output=True,
             text=True, encoding="utf-8", timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stderr)

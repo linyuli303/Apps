@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+ content="default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Spotify playlist renderer tests</title>
+<h1>Spotify playlist renderer tests</h1>
+<p>Real DOM, fake playlist controller. No network, tokens, or account access.</p>
+<pre id="results">Running… Execution is unverified if this remains visible.</pre>
+<div id="fixture" hidden></div>
+<script>
+"use strict";
+// MYAPPS_SPOTIFY_PLAYLIST_RENDERER_SOURCE
+
+
+const $ = id => document.getElementById(id);
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function assert(value) {
+  if (!value) throw new Error("Assertion failed");
+}
+function deferred() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return {promise, resolve};
+}
+function page(ids = ["a"], nextOffset = null) {
+  return {
+    status:"ready", nextOffset,
+    items:ids.map(id => ({
+      id:id.repeat(22),
+      name:'<img src=x onerror="alert(1)"> ' + id,
+      ownerName:"Sample owner",
+      collaborative:false,
+      spotifyURL:"https://open.spotify.com/playlist/" + id.repeat(22)
+    }))
+  };
+}
+function resetDOM() {
+  $("fixture").replaceChildren();
+  const panel = element("section");
+  panel.id = "spotify-playlists";
+  panel.hidden = true;
+  for (const [tag,id] of [
+    ["button","spotify-playlists-refresh"],
+    ["div","spotify-playlist-rows"],
+    ["p","spotify-playlist-status"],
+    ["button","spotify-playlists-more"]
+  ]) {
+    const node = element(tag);
+    node.id = id;
+    panel.append(node);
+  }
+  $("fixture").append(panel);
+}
+const results = [];
+let activeView = null;
+async function test(name, run) {
+  resetDOM();
+  try {
+    await run();
+    results.push("PASS: " + name);
+  } catch {
+    results.push("FAIL: " + name);
+  } finally {
+    if (activeView) activeView.clear();
+    activeView = null;
+  }
+}
+(async () => {
+  await test("Names render as text; links retain privacy attributes", async () => {
+    activeView = createSpotifyPlaylistView({
+      readPlaylists:async () => page()
+    }, () => {});
+    await activeView.load();
+    const rows = $("spotify-playlist-rows");
+    assert(rows.children.length === 1);
+    assert(rows.querySelector("img") === null);
+    assert(rows.textContent.includes("<img"));
+    const link = rows.querySelector("a");
+    assert(link.origin === "https://open.spotify.com");
+    assert(link.rel === "noopener noreferrer");
+    assert(link.referrerPolicy === "no-referrer");
+    assert(!$("spotify-playlists").hidden);
+  });
+
+  await test("Load more appends unique records and stops at final page", async () => {
+    const offsets = [];
+    activeView = createSpotifyPlaylistView({
+      async readPlaylists(offset) {
+        offsets.push(offset);
+        return offset === 0 ? page(["a"],20) : page(["a","b"]);
+      }
+    }, () => {});
+    await activeView.load();
+    assert(!$("spotify-playlists-more").hidden);
+    await activeView.load(true);
+    assert(offsets.join(",") === "0,20");
+    assert($("spotify-playlist-rows").children.length === 2);
+    assert($("spotify-playlists-more").hidden);
+  });
+
+  await test("Clear removes private metadata and ignores late responses", async () => {
+    const pending = deferred();
+    let reads = 0;
+    activeView = createSpotifyPlaylistView({
+      readPlaylists() { reads++; return pending.promise; }
+    }, () => {});
+    const work = activeView.load();
+    activeView.clear();
+    pending.resolve(page());
+    await work;
+    assert($("spotify-playlists").hidden);
+    assert($("spotify-playlist-rows").children.length === 0);
+    assert($("spotify-playlist-status").textContent === "");
+    await activeView.load();
+    $("spotify-playlists-refresh").click();
+    assert(reads === 1);
+  });
+
+  await test("Newer refresh wins over an older response", async () => {
+    const old = deferred();
+    let reads = 0;
+    activeView = createSpotifyPlaylistView({
+      readPlaylists() {
+        reads++;
+        return reads === 1 ? old.promise : Promise.resolve(page(["b"]));
+      }
+    }, () => {});
+    const first = activeView.load();
+    await activeView.load();
+    old.resolve(page(["a"]));
+    await first;
+    const link = $("spotify-playlist-rows").querySelector("a");
+    assert(link.pathname.endsWith("b".repeat(22)));
+    assert($("spotify-playlist-rows").children.length === 1);
+  });
+
+  await test("Expired session delegates cleanup and leaves no rows", async () => {
+    let expired = 0;
+    activeView = createSpotifyPlaylistView({
+      readPlaylists:async () => ({status:"reauthorize"})
+    }, () => {
+      expired++;
+      activeView.clear();
+    });
+    await activeView.load();
+    assert(expired === 1);
+    assert($("spotify-playlists").hidden);
+    assert($("spotify-playlist-rows").children.length === 0);
+  });
+
+  await test("Rate limits and failures show fixed messages without retry", async () => {
+    for (const state of ["restricted","rate_limited","failed"]) {
+      let reads = 0;
+      activeView = createSpotifyPlaylistView({
+        async readPlaylists() {
+          reads++;
+          return {status:state, privateDetails:"DO NOT DISPLAY"};
+        }
+      }, () => {});
+      await activeView.load();
+      assert(reads === 1);
+      assert(!$("spotify-playlists-refresh").disabled);
+      assert($("spotify-playlists-more").hidden);
+      assert(!$("spotify-playlist-status").textContent.includes("DO NOT DISPLAY"));
+      activeView.clear();
+    }
+  });
+
+  const failed = results.filter(line => line.startsWith("FAIL:")).length;
+  $("results").textContent = results.join("\n") + "\n\n" +
+    (failed ? failed + " failed" : "6 passed; 0 failed");
+})();
+</script>

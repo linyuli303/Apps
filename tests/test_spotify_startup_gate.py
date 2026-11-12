@@ -50,7 +50,7 @@ globalThis.document = {
             + '\nif (!reported) throw new Error("Missing startup summary");\n'
         )
         result = subprocess.run(
-            [NODE, "-e", script],
+            [NODE, "-"], input=script,
             capture_output=True, text=True, encoding="utf-8", timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

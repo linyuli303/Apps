@@ -4106,24 +4106,30 @@ async function exchangeSpotifyAuthorization(
 function createSpotifyCallbackController({
   clientId, store, replaceURL,
   exchange = exchangeSpotifyAuthorization,
+  playlistReader = readSpotifyPlaylistPage,
   clock = Date.now,
 }) {
   if (typeof clientId !== "string" || !/^[a-f0-9]{32}$/.test(clientId) ||
       !store || typeof store.consume !== "function" ||
       typeof store.clear !== "function" ||
       typeof replaceURL !== "function" ||
-      typeof exchange !== "function" || typeof clock !== "function") {
+      typeof exchange !== "function" ||
+      typeof playlistReader !== "function" ||
+      typeof clock !== "function") {
     throw new Error("Invalid Spotify callback controller.");
   }
 
   let generation = 0;
   let pending = null;
+  let playlistPending = null;
   let session = null;
   let status = "disconnected";
 
   function invalidate() {
     generation++;
     if (pending) pending.abort();
+    if (playlistPending) playlistPending.abort();
+    playlistPending = null;
     pending = null;
     session = null;
     status = "disconnected";
@@ -4213,7 +4219,73 @@ function createSpotifyCallbackController({
     return status;
   }
 
-  return Object.freeze({completeCallback, disconnect, getStatus});
+  async function readPlaylists(offset = 0) {
+    if (!Number.isSafeInteger(offset) ||
+        offset < 0 || offset > 10000 || offset % 20 !== 0) {
+      return Object.freeze({status:"failed"});
+    }
+    if (getStatus() !== "connected") {
+      return Object.freeze({status:"reauthorize"});
+    }
+
+    if (playlistPending) playlistPending.abort();
+    const requestController = new AbortController();
+    playlistPending = requestController;
+    const token = generation;
+    const currentSession = session;
+
+    const current = () =>
+      token === generation &&
+      session === currentSession &&
+      playlistPending === requestController &&
+      !requestController.signal.aborted;
+
+    try {
+      const page = await playlistReader(currentSession.accessToken, offset, {
+        signal:requestController.signal,
+      });
+      if (!current()) return Object.freeze({status:"cancelled"});
+      if (getStatus() !== "connected") {
+        return Object.freeze({status:"reauthorize"});
+      }
+
+      if (!page || typeof page !== "object") {
+        throw new Error("Invalid playlist result");
+      }
+      if (page.status === "reauthorize") {
+        invalidate();
+        status = "expired";
+        return Object.freeze({status:"reauthorize"});
+      }
+      if (["restricted", "rate_limited"].includes(page.status)) {
+        return Object.freeze({status:page.status});
+      }
+      if (page.offset !== offset) {
+        throw new Error("Playlist page mismatch");
+      }
+
+      const checked = validateSpotifyPlaylistPage(page);
+      return Object.freeze({
+        status:"ready",
+        ...checked,
+      });
+    } catch {
+      if (!current()) return Object.freeze({status:"cancelled"});
+      if (getStatus() !== "connected") {
+        return Object.freeze({status:"reauthorize"});
+      }
+      return Object.freeze({status:"failed"});
+    } finally {
+      requestController.abort();
+      if (playlistPending === requestController) {
+        playlistPending = null;
+      }
+    }
+  }
+
+  return Object.freeze({
+    completeCallback, disconnect, getStatus, readPlaylists,
+  });
 }
 
 // Unwired Connect lifecycle. Navigation and temporary storage are injected.
@@ -4362,6 +4434,314 @@ function captureSpotifyStartupCallback({readURL, replaceURL}) {
   return Object.freeze({status, take, discard});
 }
 
+// Unwired read-only adapter. Never log tokens, bodies or private playlist data.
+// Callers must establish a current session and discard stale results.
+async function readSpotifyPlaylistPage(
+  accessToken, offset = 0, {request = globalThis.fetch, signal} = {}
+) {
+  if (typeof accessToken !== "string" ||
+      accessToken.length < 1 || accessToken.length > 8192 ||
+      !/^[A-Za-z0-9._~+\/-]+=*$/.test(accessToken) ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 || offset > 10000 || offset % 20 !== 0 ||
+      typeof request !== "function") {
+    throw new Error("Invalid Spotify playlist request.");
+  }
+
+  // Construct pagination locally. Never send credentials to a supplied URL.
+  const url = new URL("https://api.spotify.com/v1/me/playlists");
+  url.search = new URLSearchParams({
+    limit:"20", offset:String(offset),
+  }).toString();
+
+  const controller = new AbortController();
+  let listening = false;
+  let reader = null;
+  let complete = false;
+  let timer;
+  const cancel = () => controller.abort();
+
+  try {
+    if (signal) {
+      if (typeof signal.aborted !== "boolean" ||
+          typeof signal.addEventListener !== "function" ||
+          typeof signal.removeEventListener !== "function") {
+        throw new Error("Invalid cancellation signal");
+      }
+      signal.addEventListener("abort", cancel, {once:true});
+      listening = true;
+      if (signal.aborted) cancel();
+    }
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    timer = setTimeout(cancel, 15000);
+
+    const response = await request(url.href, {
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"no-store",
+      redirect:"error",
+      referrerPolicy:"no-referrer",
+      headers:{
+        Authorization:"Bearer " + accessToken,
+        Accept:"application/json",
+      },
+      signal:controller.signal,
+    });
+
+    if (controller.signal.aborted || !response ||
+        response.redirected || response.url !== url.href) {
+      throw new Error("Invalid response destination");
+    }
+
+    // Return fixed states only, without reading provider error bodies.
+    const stopped = {
+      401:"reauthorize",
+      403:"restricted",
+      429:"rate_limited",
+    }[response.status];
+    if (stopped) {
+      return Object.freeze({status:stopped});
+    }
+
+    if (response.status !== 200 ||
+        !/^application\/json(?:\s*;|$)/i.test(
+          response.headers.get("Content-Type") || ""
+        ) ||
+        !response.body || typeof response.body.getReader !== "function") {
+      throw new Error("Invalid playlist response");
+    }
+
+    reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    while (true) {
+      const part = await reader.read();
+      if (controller.signal.aborted) throw new Error("Cancelled");
+      if (part.done) break;
+      if (!(part.value instanceof Uint8Array)) {
+        throw new Error("Invalid response chunk");
+      }
+      size += part.value.byteLength;
+      if (size > 1000000) throw new Error("Playlist response too large");
+      chunks.push(part.value);
+    }
+
+    const bytes = new Uint8Array(size);
+    let position = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, position);
+      position += chunk.byteLength;
+    }
+    const data = JSON.parse(
+      new TextDecoder("utf-8", {fatal:true}).decode(bytes)
+    );
+    if (!data || typeof data !== "object" || Array.isArray(data) ||
+        !Array.isArray(data.items) || data.items.length > 20 ||
+        data.offset !== offset || data.limit !== 20 ||
+        !Number.isSafeInteger(data.total) || data.total < 0 ||
+        data.total > 100000) {
+      throw new Error("Invalid playlist page");
+    }
+
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    complete = true;
+
+    // Untrusted item metadata still requires validation before rendering.
+    // Do not retain or follow provider-supplied href/next/previous values.
+    return Object.freeze({
+      status:"received",
+      offset,
+      total:data.total,
+      items:data.items,
+    });
+  } catch {
+    throw new Error("Spotify playlists could not be loaded or were cancelled.");
+  } finally {
+    clearTimeout(timer);
+    if (listening) signal.removeEventListener("abort", cancel);
+    if (!complete) {
+      controller.abort();
+      if (reader) {
+        try { Promise.resolve(reader.cancel()).catch(() => {}); } catch {}
+      }
+    }
+  }
+}
+
+// Pure metadata reduction. Render returned labels with textContent only.
+// No artwork requests, HTML descriptions, provider links, or account storage.
+function validateSpotifyPlaylistPage(page) {
+  if (!page || typeof page !== "object" || Array.isArray(page) ||
+      page.status !== "received" ||
+      !Number.isSafeInteger(page.offset) ||
+      page.offset < 0 || page.offset > 10000 || page.offset % 20 !== 0 ||
+      !Number.isSafeInteger(page.total) ||
+      page.total < 0 || page.total > 100000 ||
+      !Array.isArray(page.items) || page.items.length > 20) {
+    throw new Error("Invalid Spotify playlist metadata.");
+  }
+
+  function label(value, maximum) {
+    return typeof value === "string" &&
+      value.length <= maximum &&
+      !/[\u0000-\u001f\u007f]/.test(value);
+  }
+
+  const seen = new Set();
+  const items = page.items.map(item => {
+    if (!item || typeof item !== "object" || Array.isArray(item) ||
+        typeof item.id !== "string" ||
+        !/^[A-Za-z0-9]{22}$/.test(item.id) ||
+        seen.has(item.id) ||
+        !label(item.name, 300) || !item.name.trim() ||
+        !item.owner || typeof item.owner !== "object" ||
+        Array.isArray(item.owner) ||
+        !label(item.owner.id, 128) || !item.owner.id.trim() ||
+        (item.owner.display_name !== undefined &&
+         item.owner.display_name !== null &&
+         !label(item.owner.display_name, 200)) ||
+        (item.collaborative !== undefined &&
+         typeof item.collaborative !== "boolean")) {
+      throw new Error("Invalid Spotify playlist record.");
+    }
+
+    seen.add(item.id);
+    const ownerName = typeof item.owner.display_name === "string"
+      ? item.owner.display_name.trim() : "";
+
+    return Object.freeze({
+      id: item.id,
+      name: item.name.trim(),
+      ownerId: item.owner.id,
+      ownerName: ownerName || "Spotify user",
+      collaborative: item.collaborative === true,
+      spotifyURL: "https://open.spotify.com/playlist/" + item.id,
+    });
+  });
+
+  // Do not follow provider pagination URLs. An empty page never advances.
+  const nextOffset = page.offset + 20;
+  const hasMore = page.items.length === 20 &&
+    page.offset + page.items.length < page.total &&
+    nextOffset <= 10000;
+
+  return Object.freeze({
+    offset: page.offset,
+    total: page.total,
+    items: Object.freeze(items),
+    nextOffset: hasMore ? nextOffset : null,
+  });
+}
+
+// Playlist UI receives reduced data only, never credentials.
+// All rendering is text/node based; provider HTML and image URLs are discarded.
+function createSpotifyPlaylistView(controller, onReauthorize) {
+  const panel = $("spotify-playlists");
+  const rows = $("spotify-playlist-rows");
+  const status = $("spotify-playlist-status");
+  const refresh = $("spotify-playlists-refresh");
+  const more = $("spotify-playlists-more");
+  let generation = 0;
+  let nextOffset = null;
+  let disposed = false;
+  const shown = new Set();
+
+  async function load(append = false) {
+    if (disposed) return;
+    const offset = append ? nextOffset : 0;
+    if (offset === null) return;
+    const token = ++generation;
+    panel.hidden = false;
+    refresh.disabled = true;
+    more.disabled = true;
+    more.hidden = true;
+    if (!append) {
+      rows.replaceChildren();
+      shown.clear();
+      nextOffset = null;
+    }
+    status.textContent = "Loading playlists...";
+
+    try {
+      const result = await controller.readPlaylists(offset);
+      if (disposed || token !== generation) return;
+      if (result.status === "reauthorize") {
+        onReauthorize();
+        return;
+      }
+      if (result.status !== "ready") {
+        const messages = {
+          restricted:"Spotify did not permit this playlist request.",
+          rate_limited:"Spotify rate limit reached. Wait before refreshing.",
+          failed:"Playlists could not be loaded. Try Refresh.",
+          cancelled:"Playlist request cancelled.",
+        };
+        status.textContent = messages[result.status] || messages.failed;
+        return;
+      }
+
+      const fragment = document.createDocumentFragment();
+      for (const item of result.items) {
+        if (shown.has(item.id)) continue;
+        shown.add(item.id);
+        const row = element("div", "podcast-managed-show");
+        const text = element("span", "", item.name);
+        text.append(element(
+          "small", "",
+          "By " + item.ownerName +
+          (item.collaborative ? " | Collaborative" : "")
+        ));
+        const link = element("a", "official", "Open in Spotify");
+        link.href = item.spotifyURL;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.referrerPolicy = "no-referrer";
+        link.setAttribute(
+          "aria-label", "Open " + item.name + " in Spotify (new tab)"
+        );
+        row.append(text, link);
+        fragment.append(row);
+      }
+      rows.append(fragment);
+      nextOffset = result.nextOffset;
+      more.hidden = nextOffset === null;
+      status.textContent = shown.size
+        ? shown.size + " playlists loaded. Track lists are not enabled yet."
+        : "No playlists returned by Spotify.";
+    } catch {
+      if (!disposed && token === generation) {
+        status.textContent = "Playlists could not be loaded. Try Refresh.";
+      }
+    } finally {
+      if (!disposed && token === generation) {
+        refresh.disabled = false;
+        more.disabled = false;
+      }
+    }
+  }
+
+  const refreshClick = () => load(false);
+  const moreClick = () => load(true);
+  refresh.addEventListener("click", refreshClick);
+  more.addEventListener("click", moreClick);
+
+  function clear() {
+    disposed = true;
+    generation++;
+    shown.clear();
+    nextOffset = null;
+    rows.replaceChildren();
+    status.textContent = "";
+    panel.hidden = true;
+    more.hidden = true;
+    refresh.removeEventListener("click", refreshClick);
+    more.removeEventListener("click", moreClick);
+  }
+
+  return Object.freeze({load, clear});
+}
+
 // Public GitHub request forms only: no token, persistent draft or source lookup.
 function initializePodcastConfiguration(shows) {
   const dialog=$("podcast-config-dialog"), opener=$("podcast-config");
@@ -4411,11 +4791,14 @@ function initializePodcastConfiguration(shows) {
   const connectButton = $("spotify-connect");
   const disconnectButton = $("spotify-disconnect");
   const statusNode = $("spotify-status");
-  if (!connectButton || !disconnectButton || !statusNode) return;
+  const connectWarning = $("spotify-connect-warning");
+  if (!connectButton || !disconnectButton || !statusNode ||
+      !connectWarning) return;
 
   let connector = null;
   let callbackController = null;
   let uiGeneration = 0;
+  let playlistView = null;
 
   const expected = new URL(MYAPPS_SPOTIFY_CONFIG.redirectUri);
   const supportedOrigin =
@@ -4427,7 +4810,7 @@ function initializePodcastConfiguration(shows) {
     preparing: "Preparing secure Spotify authorization...",
     redirecting: "Opening Spotify authorization...",
     connecting: "Completing Spotify authorization...",
-    connected: "Spotify authorization succeeded. Library and playback integration are not enabled yet.",
+    connected: "Connected · Track browsing and playback are not available yet.",
     denied: "Spotify authorization was declined. No connection was established.",
     failed: "Spotify connection failed. Connect again.",
     cleanup_failed: "Connection cancelled, but temporary login cleanup could not be confirmed. Close this tab before reconnecting.",
@@ -4437,7 +4820,24 @@ function initializePodcastConfiguration(shows) {
 
   function display(state) {
     statusNode.textContent = messages[state] || messages.failed;
+    if (state === "connected" && !playlistView) {
+      playlistView = createSpotifyPlaylistView(
+        callbackController,
+        () => {
+          uiGeneration++;
+          display(cancelBoth() === "cleanup_failed" ? "cleanup_failed" : "expired");
+        }
+      );
+      playlistView.load();
+    }
+    if (["expired", "failed", "cleanup_failed", "disconnected"].includes(state) &&
+        playlistView) {
+      playlistView.clear();
+      playlistView = null;
+    }
     const busy = ["preparing", "connecting", "redirecting"].includes(state);
+    connectButton.hidden = state === "connected";
+    connectWarning.hidden = state === "connected";
     connectButton.disabled =
       !supportedOrigin || busy || state === "connected" ||
       state === "cleanup_failed";
@@ -4465,6 +4865,10 @@ function initializePodcastConfiguration(shows) {
   }
 
   function cancelBoth() {
+    if (playlistView) {
+      playlistView.clear();
+      playlistView = null;
+    }
     // Always attempt both cancellations, regardless of cleanup outcome.
     const connectStatus = connector ? connector.cancel() : "cancelled";
     const callbackStatus = callbackController

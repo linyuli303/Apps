@@ -8,11 +8,11 @@
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; script-src-elem 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/ https://s.ytimg.com/yts/jsbin/; style-src 'self'; img-src 'self' https://i.ytimg.com; frame-src https://www.youtube-nocookie.com; connect-src 'self' https://accounts.spotify.com/api/token; media-src https://adswizz.podigee-cdn.net https://anchor.fm https://audio.podigee-cdn.net https://cdn.audiorella.com https://d3ctxlq1ktw2nl.cloudfront.net https://dcs-cached.megaphone.fm https://dts.podtrac.com https://npr.simplecastaudio.com https://play.podtrac.com https://podcast-mp3.dradio.de https://podfileszdf-a.akamaihd.net https://prfx.byspotify.com https://radiodownloaddw-a.akamaihd.net https://traffic.megaphone.fm https://wdrmedien-a.akamaihd.net https://cdn-storage.br.de https://media.neuland.br.de; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; script-src 'self'; script-src-elem 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/ https://s.ytimg.com/yts/jsbin/; style-src 'self'; img-src 'self' https://i.ytimg.com; frame-src https://www.youtube-nocookie.com; connect-src 'self' https://accounts.spotify.com/api/token https://api.spotify.com/v1/me/playlists; media-src https://adswizz.podigee-cdn.net https://anchor.fm https://audio.podigee-cdn.net https://cdn.audiorella.com https://d3ctxlq1ktw2nl.cloudfront.net https://dcs-cached.megaphone.fm https://dts.podtrac.com https://npr.simplecastaudio.com https://play.podtrac.com https://podcast-mp3.dradio.de https://podfileszdf-a.akamaihd.net https://prfx.byspotify.com https://radiodownloaddw-a.akamaihd.net https://traffic.megaphone.fm https://wdrmedien-a.akamaihd.net https://cdn-storage.br.de https://media.neuland.br.de; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>MyApps</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=podcast-privacy-1" />
+    <link rel="stylesheet" href="style.css?v=spotify-owner-note-3" />
     <script src="app.js?v=myapps-shell-1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
@@ -25,7 +25,7 @@
             <h1 id="title">MyApps</h1><sup>Yuli</sup>
           </div>
         </div>
-<nav class="myapps-nav" aria-label="Applications"><button type="button" class="myapps-nav-item" id="myapps-tube" aria-controls="tube-page" aria-current="page"><svg class="apps-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="4"/><path d="m10 8 6 4-6 4z"/></svg><span>MyTube</span></button><button type="button" class="myapps-nav-item" id="myapps-spotify" aria-controls="spotify-page" aria-label="MySpotify"><svg class="apps-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 17V5l11-2v12M9 9l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="16" rx="3" ry="2"/></svg><span>MySpotify</span></button><button type="button" class="myapps-nav-item" id="myapps-podcasts" aria-controls="podcast-page"><svg class="apps-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"/></svg><span>MyPodcasts</span></button></nav><div class="myapps-header-actions"></div></div>
+<nav class="myapps-nav" aria-label="Applications"><button type="button" class="myapps-nav-item" id="myapps-tube" aria-controls="tube-page" aria-current="page"><svg class="apps-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="4"/><path d="m10 8 6 4-6 4z"/></svg><span>MyTube</span></button><button type="button" class="myapps-nav-item" id="myapps-spotify" aria-controls="spotify-page" aria-label="MySpotify — Owner only"><svg class="apps-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 17V5l11-2v12M9 9l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="16" rx="3" ry="2"/></svg><span>MySpotify</span><small class="spotify-owner-note">Owner only</small></button><button type="button" class="myapps-nav-item" id="myapps-podcasts" aria-controls="podcast-page"><svg class="apps-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M9 22h6"/></svg><span>MyPodcasts</span></button></nav><div class="myapps-header-actions"></div></div>
 
 
       <div id="tube-page">
@@ -146,32 +146,43 @@
         <nav class="pagination" aria-label="Podcast episode pages"><button id="podcast-prev" type="button">Previous page</button><span id="podcast-page-status" role="status"></span><button id="podcast-next" type="button">Next page</button></nav>
         <details class="podcast-shows"><summary>Source availability</summary><ul id="podcast-sources"></ul></details>
       </section>
-      <section id="spotify-page" aria-label="MySpotify" hidden>
-        <div class="configuration-heading">
-          <h2>MySpotify</h2>
-          <button id="spotify-disconnect" type="button" hidden>
-            Disconnect
-          </button>
-        </div>
+      <section id="spotify-page" aria-label="MySpotify — Owner only" hidden>
+          <section id="spotify-connect-panel" class="manager">
+            <div class="configuration-heading">
+              <h2>MySpotify — Your music, in one place.</h2>
+              <button id="spotify-disconnect" type="button" hidden>
+                Disconnect
+              </button>
+            </div>
 
-        <section id="spotify-connect-panel" class="manager">
-          <h3>Your music, in one place.</h3>
-          <p>
-            Recent releases from followed artists and playlists you created
-            or saved. Playlist contents and browser playback depend on
-            Spotify access and device support.
-          </p>
+          <p id="spotify-introduction">Your playlists, read-only. Listen in Spotify.</p>
           <button id="spotify-connect" type="button" disabled>
             Connect Spotify
           </button>
-          <p>
-            Connection navigates to Spotify and reloads this page on return. Finish or export any unsaved edits first. Library and playback integration are not enabled yet.
-          </p>
+          <p id="spotify-connect-warning">
+              Connecting opens Spotify and reloads this page on return.
+              Finish or export unsaved edits first.
+            </p>
         </section>
 
         <p id="spotify-status" role="status" aria-live="polite">
           Spotify is disconnected.
         </p>
+
+        <section id="spotify-playlists" aria-label="Spotify playlists" hidden>
+          <div class="configuration-heading">
+            <h3>Playlists</h3>
+            <button id="spotify-playlists-refresh" type="button"
+              aria-label="Refresh playlists" title="Refresh playlists">
+              Refresh
+            </button>
+          </div>
+          <div id="spotify-playlist-rows"></div>
+          <p id="spotify-playlist-status" role="status" aria-live="polite"></p>
+          <button id="spotify-playlists-more" type="button" hidden>
+            Load more
+          </button>
+        </section>
 
         <details class="feed-information">
           <summary>
@@ -192,11 +203,12 @@
             Access and refresh tokens remain in page memory.
           </p>
           <p>
-            Permissions cover followed artists, playlists, saved-song status,
-            Like/Unlike, playback, and the account permissions required by
-            Spotify's player integration. Like/Unlike changes your actual
-            Spotify library only after an explicit action.
-          </p>
+              Approved permissions cover followed artists, playlists,
+              saved-song status, Like/Unlike, playback, and the account
+              permissions required by Spotify's player integration.
+              This version only lists playlists. Track browsing, artist
+              releases, Like/Unlike, and playback are not enabled yet.
+            </p>
           <p>
             Reloading loses the in-memory connection. Disconnect clears
             MyApps' connection but does not sign you out of Spotify globally

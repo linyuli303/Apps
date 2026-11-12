@@ -13,7 +13,7 @@ class SpotifyAuthorizationScreenTests(unittest.TestCase):
     @unittest.skipUnless(
         NODE, "Node.js unavailable; authorization screen execution skipped"
     )
-    def test_six_screen_scenarios(self):
+    def test_eight_screen_scenarios(self):
         source = (ROOT / "site/app.js").read_text(encoding="utf-8")
         start = "(function initializeSpotifyAuthorizationScreen() {"
         self.assertEqual(source.count(start), 1)
@@ -35,7 +35,7 @@ globalThis.document = {
       set textContent(value) {
         reported = true;
         console.log(value);
-        if (!value.endsWith("6 passed; 0 failed")) process.exitCode = 1;
+        if (!value.endsWith("8 passed; 0 failed")) process.exitCode = 1;
       }
     };
   }
@@ -49,8 +49,8 @@ process.on("beforeExit", () => {
 """
         declaration = "const initializer = " + json.dumps(initializer) + ";\n"
         result = subprocess.run(
-            [NODE, "-e", prelude + template.replace(marker, declaration)],
+            [NODE, "-"], input=prelude + template.replace(marker, declaration),
             capture_output=True, text=True, encoding="utf-8", timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("6 passed; 0 failed", result.stdout)
+        self.assertIn("8 passed; 0 failed", result.stdout)

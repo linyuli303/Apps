@@ -30,9 +30,12 @@ function fixture(options = {}) {
   const history = {
     replaceState() { calls.push("history"); }
   };
+  const documentListeners = {};
   const document = {
     hidden:false,
-    addEventListener() {}
+    addEventListener(name, callback) {
+      documentListeners[name] = callback;
+    }
   };
   const window = {
     location, history,
@@ -66,6 +69,7 @@ function fixture(options = {}) {
     "$", "MYAPPS_SPOTIFY_CONFIG", "location", "history", "document", "window",
     "SPOTIFY_STARTUP_CALLBACK", "openSpotifyLoginStore",
     "createSpotifyCallbackController", "createSpotifyConnectController",
+    "createSpotifyPlaylistView",
     initializer
   );
   run(
@@ -75,10 +79,25 @@ function fixture(options = {}) {
     {take() { return options.callback ? "FAKE-CALLBACK" : null; }},
     () => { calls.push("storage"); return {}; },
     () => callbackController,
-    () => connector
+    () => connector,
+    receivedController => {
+      assert(receivedController === callbackController);
+      calls.push("playlist-create");
+      return {
+        load() {
+          calls.push("playlist-load");
+          return Promise.resolve();
+        },
+        clear() { calls.push("playlist-clear"); }
+      };
+    }
   );
   return {
     calls, $, pending,
+    expire() {
+      callbackStatus = "expired";
+      documentListeners.visibilitychange();
+    },
     click(id) { return $(id).listeners.click(); }
   };
 }
@@ -91,6 +110,8 @@ async function test(name, run) {
 (async () => {
   await test("Disconnected startup never opens storage or connects", () => {
     const f = fixture();
+    assert(!f.$("spotify-connect").hidden);
+    assert(!f.$("spotify-connect-warning").hidden);
     assert(f.calls.length === 0);
     assert(!f.$("spotify-connect").disabled);
     assert(f.$("spotify-disconnect").hidden);
@@ -140,8 +161,48 @@ async function test(name, run) {
     assert(f.$("spotify-status").textContent === "Spotify is disconnected.");
   });
 
+  await test("Successful callback creates playlist view; Disconnect clears it", async () => {
+    const f = fixture({callback:true});
+    f.pending.resolve("connected");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert(f.calls.filter(x => x === "playlist-create").length === 1);
+    assert(f.calls.filter(x => x === "playlist-load").length === 1);
+    assert(f.$("spotify-connect").disabled);
+    assert(f.$("spotify-connect").hidden);
+    assert(f.$("spotify-connect-warning").hidden);
+    assert(!f.$("spotify-disconnect").hidden);
+
+    f.click("spotify-disconnect");
+    assert(!f.$("spotify-connect").hidden);
+    assert(!f.$("spotify-connect-warning").hidden);
+    assert(f.$("spotify-disconnect").hidden);
+    assert(f.calls.filter(x => x === "playlist-clear").length === 1);
+    assert(f.calls.includes("cancel-connect"));
+    assert(f.calls.includes("cancel-callback"));
+    assert(f.$("spotify-status").textContent === "Spotify is disconnected.");
+    assert(!f.$("spotify-connect").disabled);
+  });
+
+  await test("Visibility expiry clears displayed playlist view", async () => {
+    const f = fixture({callback:true});
+    f.pending.resolve("connected");
+    await Promise.resolve();
+    await Promise.resolve();
+
+    f.expire();
+    assert(!f.$("spotify-connect").hidden);
+    assert(!f.$("spotify-connect-warning").hidden);
+    assert(f.$("spotify-disconnect").hidden);
+    assert(f.calls.filter(x => x === "playlist-clear").length === 1);
+    assert(f.$("spotify-status").textContent ===
+      "Spotify authorization expired. Connect again.");
+    assert(!f.$("spotify-connect").disabled);
+  });
+
   const failures = results.filter(line => line.startsWith("FAIL:")).length;
   globalThis.document.getElementById("results").textContent =
     results.join("\n") + "\n\n" +
-    (failures ? failures + " failed" : "6 passed; 0 failed");
+    (failures ? failures + " failed" : "8 passed; 0 failed");
 })();
