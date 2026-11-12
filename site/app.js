@@ -2513,7 +2513,7 @@ const PODCAST_PUBLIC_SNAPSHOT = null;
     return hours ? hours + ":" + String(Math.floor(seconds % 3600 / 60)).padStart(2, "0") + ":" + String(seconds % 60).padStart(2, "0") : Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
   }
   for (const show of shows) {
-    $("podcast-show").append(new Option(show.title, show.id));
+    if (show.status === "ok") $("podcast-show").append(new Option(show.title, show.id));
     $("podcast-sources").append(element("li", "", show.title + " - " + (show.status === "ok" ? show.episodeCount + " episodes" : show.status === "pending" ? "Pending source verification" : "Unavailable at collection")));
   }
   function renderPodcasts(reset = false) {
@@ -2734,7 +2734,7 @@ function initializePodcastConfiguration(shows) {
     $("podcast-request-link").href=url.href;
     $("podcast-request-fallback").hidden=false;
     window.open(url.href,"_blank","noopener,noreferrer");
-    $("podcast-config-status").textContent="GitHub form opened if popups are allowed. Nothing submitted yet. Review the public request, confirm and submit as the repository owner. Check processing and publication. Additions remain pending until feed/media approval.";
+    $("podcast-config-status").textContent="GitHub form opened if popups are allowed. Nothing submitted yet. Review the public request, confirm and submit as the repository owner. Check processing and publication. Validated additions activate automatically with existing media permissions; unfamiliar hosts require approval.";
   }
   function renderShows() {
     const query=$("podcast-source-search").value.trim().toLocaleLowerCase();
@@ -2759,7 +2759,7 @@ function initializePodcastConfiguration(shows) {
       const u=new URL(source);
       if(source.length>2048||/[^\x21-\x7e]/.test(source)||source.includes("\\")||u.protocol!=="https:"||u.username||u.password||u.search||u.hash||(u.port&&u.port!=="443"))throw new Error();
       if(u.hostname==="podcasts.apple.com"&&!/^\/(?:[a-z]{2}\/)?podcast\/(?:[^/]+\/)?id[0-9]{1,20}\/?$/.test(u.pathname))throw new Error();
-      if(!confirm("Confirm this is a PUBLIC show/feed URL with no private tokens or subscription credentials. The URL will be public in a GitHub Issue and repository. The new source stays pending until feed and media hosts are reviewed."))return;
+      if(!confirm("Confirm this is a PUBLIC show/feed URL with no private tokens or subscription credentials. The URL will be public in a GitHub Issue and repository. The source will be validated; unfamiliar media hosts require explicit approval."))return;
       request({operation:"Add",sourceUrl:source});
     }catch {$("podcast-config-status").textContent="Use a public HTTPS RSS or Apple show URL without credentials, query parameters or a fragment. Query-based/private feeds require separate review; do not submit them here.";}
   });

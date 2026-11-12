@@ -4,7 +4,39 @@ on:
     types: [opened]
 permissions: {}
 jobs:
+  resolve:
+    if: >-
+      github.repository == 'linyuli303/MyTube' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor_id == '42029941' &&
+      github.event.issue.user.id == 42029941 &&
+      github.event.repository.owner.id == 42029941 &&
+      github.event.issue.title == '[MyApps] Podcast change'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      resolution: ${{ steps.resolve.outputs.resolution }}
+    steps:
+      - name: Checkout trusted main only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Run offline checks
+        run: |
+          python scripts/security_check.py
+          python -m unittest discover -s tests -q
+      - name: Resolve public source without write credentials
+        id: resolve
+        run: python scripts/podcast_resolution.py
   apply:
+    needs: resolve
     if: >-
       github.repository == 'linyuli303/MyTube' &&
       github.ref == 'refs/heads/main' &&
@@ -16,7 +48,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-      issues: read
+      issues: write
       actions: write
     steps:
       - name: Checkout trusted main only
@@ -35,4 +67,5 @@ jobs:
       - name: Validate unchanged request, update podcast config, and request publication
         env:
           GH_TOKEN: ${{ github.token }}
+          PODCAST_RESOLUTION: ${{ needs.resolve.outputs.resolution }}
         run: python scripts/process_podcast_request.py

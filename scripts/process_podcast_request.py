@@ -6,7 +6,7 @@ from pathlib import Path
 from podcast_request import authorize_event, apply_change, REPO, OWNER_ID
 from process_channel_request import github
 
-def process(event,call=github):
+def process(event,call=github,resolution=None):
     number,data=authorize_event(event)
     def check_live():
         live=call('GET',f'/repos/{REPO}/issues/{number}')
@@ -22,7 +22,14 @@ def process(event,call=github):
     raw=base64.b64decode(encoded.replace('\n',''),validate=True)
     if len(raw)>500000:raise ValueError('Configuration size')
     config=json.loads(raw.decode('utf-8'))
-    updated,changed=apply_change(config,data)
+    if resolution is None:
+        # Compatibility path for existing offline tests; production main always requires an envelope.
+        updated,changed=apply_change(config,data)
+        feedback=None
+        publish=True
+    else:
+        from podcast_resolution import apply_validated
+        updated,changed,feedback,publish=apply_validated(event,config,resolution)
     # Reauthorize immediately before the SHA-aware write; never interpolate issue text into a shell.
     check_live()
     if changed:
@@ -31,14 +38,19 @@ def process(event,call=github):
             'message':f'Apply owner podcast request #{number}',
             'content':base64.b64encode(content).decode('ascii'),'sha':record['sha'],'branch':'main'})
     # Explicitly preserve YouTube feed reuse on podcast configuration publication.
-    call('POST',f'/repos/{REPO}/actions/workflows/publish.yml/dispatches',{'ref':'main','inputs':{'reuse_published_feed':'true'}})
-    print('Podcast request processed. Additions remain pending source/media approval. Check separate publication run.')
+    if publish:
+        call('POST',f'/repos/{REPO}/actions/workflows/publish.yml/dispatches',{'ref':'main','inputs':{'reuse_published_feed':'true'}})
+    if feedback:
+        call('POST',f'/repos/{REPO}/issues/{number}/comments',{'body':feedback})
+    print('Podcast request processed. Check Issue feedback and any separate publication run.')
 
 def main():
     try:
         if os.environ.get('GITHUB_REPOSITORY')!=REPO or os.environ.get('GITHUB_ACTOR_ID')!=str(OWNER_ID) or os.environ.get('GITHUB_REF')!='refs/heads/main':
             raise ValueError('Unauthorized runner context')
-        process(json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8')))
+        from podcast_resolution import decode
+        resolution=decode(os.environ['PODCAST_RESOLUTION'])
+        process(json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8')),resolution=resolution)
         return 0
     except Exception:
         print('Podcast request stopped. No request bodies, URLs or credentials logged. Check owner authorization, unchanged issue and concurrent edits. If commit succeeded but dispatch failed, manually publish with YouTube feed reuse selected.')
