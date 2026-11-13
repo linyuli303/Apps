@@ -8,7 +8,7 @@ from pathlib import Path
 import sys
 import urllib.error
 import urllib.request
-from channel_request import authorize_event, apply_change
+from channel_request import authorize_event, apply_change, apply_additions
 
 REPO = "linyuli303/Apps"
 OWNER_ID = 42029941
@@ -41,13 +41,20 @@ def github(method, path, payload=None):
         raise RuntimeError("GitHub request failed with HTTP " + str(status)) from None
 
 def process(event, call=github):
-    number, operation, channel_id = authorize_event(event)
+    # Bulk and single requests share all authorization checks.
+    # Neither attempt performs network requests or writes.
+    bulk = False
+    try:
+        number, operation, channel_id = authorize_event(event)
+    except ValueError:
+        number, operation, channel_id = authorize_event(event, bulk=True)
+        bulk = True
     if event["repository"]["owner"]["id"] != OWNER_ID:
         raise ValueError("Unexpected owner ID")
     live = call("GET", f"/repos/{REPO}/issues/{number}")
     checked = dict(event)
     checked["issue"] = live
-    if authorize_event(checked) != (number, operation, channel_id):
+    if authorize_event(checked, bulk=bulk) != (number, operation, channel_id):
         raise ValueError("Request changed")
     if live.get("body") != event["issue"].get("body") or live.get("updated_at") != event["issue"].get("updated_at"):
         raise ValueError("Issue edited since submission; submit a new request")
@@ -58,7 +65,12 @@ def process(event, call=github):
     if len(raw) > 200_000:
         raise ValueError("Configuration too large")
     config = json.loads(raw.decode("utf-8"))
-    updated, changed = apply_change(config, operation, channel_id)
+    if bulk:
+        updated, changed = apply_additions(
+            config, list(channel_id)
+        )
+    else:
+        updated, changed = apply_change(config, operation, channel_id)
     if changed:
         content = (json.dumps(updated, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
         call("PUT", f"/repos/{REPO}/contents/channels.json", {

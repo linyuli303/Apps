@@ -3871,3 +3871,101 @@ body,button,input,select,textarea{font-family:system-ui,-apple-system,"Segoe UI"
     min-height:44px;
   }
 }
+
+/* mytube-bulk-channel-review-v1 */
+#whitelist-dialog #channel-bulk-manager {
+  margin:18px 0;
+  padding:14px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--surface);
+  color:var(--text);
+}
+#whitelist-dialog #channel-bulk-manager > summary {
+  display:list-item;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:600;
+}
+#channel-bulk-manager > p {
+  margin:10px 0;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.6;
+}
+#channel-bulk-manager > label {
+  display:block;
+  margin:10px 0 6px;
+}
+#channel-bulk-manager textarea {
+  display:block;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  min-height:120px;
+  padding:10px;
+  resize:vertical;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:var(--surface);
+  color:var(--text);
+  font:12px/1.7 ui-monospace,Consolas,monospace;
+}
+#channel-bulk-manager .manager-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:12px 0;
+}
+#channel-bulk-manager ol {
+  max-height:260px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  margin:12px 0;
+  padding-left:28px;
+}
+#channel-bulk-manager li {
+  padding:7px 4px;
+  border-bottom:1px solid var(--divider);
+  overflow-wrap:anywhere;
+  font-size:12px;
+}
+#channel-bulk-manager > div > label {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  margin:14px 0;
+  font-size:12px;
+}
+#channel-bulk-manager input[type="checkbox"] {
+  flex:0 0 17px;
+  width:17px;
+  height:17px;
+  min-height:17px;
+  margin:3px 0 0;
+  padding:0;
+  accent-color:var(--accent);
+}
+#channel-bulk-manager > div > details {
+  margin-top:12px;
+}
+#channel-bulk-manager > div > details > summary {
+  cursor:pointer;
+  font-size:12px;
+  color:var(--muted);
+}
+#channel-bulk-manager > div > details > textarea {
+  margin-top:8px;
+}
+#channel-bulk-manager :is(button,textarea,input,summary):focus-visible {
+  outline:3px solid var(--accent);
+  outline-offset:3px;
+}
+@media(max-width:600px) {
+  #whitelist-dialog #channel-bulk-manager {
+    padding:12px;
+  }
+  #channel-bulk-manager .manager-actions > button {
+    flex:1 1 auto;
+  }
+}

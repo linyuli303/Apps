@@ -57,7 +57,7 @@ def apply_change(config, operation, channel_id):
     return result, result != config
 
 
-def authorize_event(event):
+def authorize_event(event, *, bulk=False):
     """Fail closed; only a new issue opened by the expected personal owner.
 
     The workflow must independently gate execution and fetch/check the live
@@ -88,5 +88,71 @@ def authorize_event(event):
             or type(issue.get("number")) is not int or issue["number"] <= 0
             or issue.get("title") != "[MyTube] Channel change"):
         raise ValueError("Unauthorized event")
+    if type(bulk) is not bool:
+        raise ValueError("Invalid authorization mode")
+    if bulk:
+        ids = parse_additions_request(issue.get("body"))
+        return issue["number"], "Add multiple", ids
     operation, channel_id = parse_request(issue.get("body"))
     return issue["number"], operation, channel_id
+
+def apply_additions(config, channel_ids):
+    """Return a fully validated batch result without mutating the input."""
+    existing = validate_config(config)
+    if not isinstance(channel_ids, list) or not 1 <= len(channel_ids) <= 50:
+        raise ValueError("Use between 1 and 50 channel IDs")
+
+    seen = set()
+    additions = []
+    for cid in channel_ids:
+        if (not isinstance(cid, str)
+                or not CHANNEL_ID.fullmatch(cid)
+                or cid in seen):
+            raise ValueError("Invalid or duplicate batch channel ID")
+        seen.add(cid)
+        if cid not in existing:
+            additions.append(cid)
+
+    if len(existing) + len(additions) > 1000:
+        raise ValueError("Channel limit reached")
+
+    result = copy.deepcopy(config)
+    result["channels"].extend({"id": cid} for cid in additions)
+    validate_config(result)
+    return result, bool(additions)
+
+BULK_CONFIRMATION = (
+    "I reviewed these channel IDs and want to add them "
+    "to the shared whitelist on all devices."
+)
+
+
+def parse_additions_request(body):
+    """Parse a bounded bulk-add form; no authorization or side effects."""
+    if not isinstance(body, str) or len(body) > 4096:
+        raise ValueError("Invalid bulk request body")
+
+    normalized = body.replace("\r\n", "\n").strip()
+    pattern = (
+        r"### Operation\n+[ \t]*Add multiple[ \t]*\n+"
+        r"### Channel IDs\n+(?P<ids>.*?)\n+"
+        r"### Confirmation\n+- \[x\] " + re.escape(BULK_CONFIRMATION)
+    )
+    match = re.fullmatch(pattern, normalized, re.DOTALL)
+    if not match:
+        raise ValueError("Use the reviewed bulk channel request form")
+
+    lines = match.group("ids").split("\n")
+    if not 1 <= len(lines) <= 50:
+        raise ValueError("Use between 1 and 50 channel IDs")
+
+    ids = []
+    seen = set()
+    for line in lines:
+        cid = line.strip(" \t")
+        if not CHANNEL_ID.fullmatch(cid) or cid in seen:
+            raise ValueError("Invalid or duplicate batch channel ID")
+        seen.add(cid)
+        ids.append(cid)
+
+    return tuple(ids)

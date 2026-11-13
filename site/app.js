@@ -669,6 +669,103 @@ function updateAfterEdit() {
   render();
   renderManager();
 }
+function reviewMyTubeChannelBatch(text, approvedIds) {
+  const validID = value =>
+    typeof value === "string" && /^UC[A-Za-z0-9_-]{22}$/.test(value);
+
+  if (typeof text !== "string" || text.length > 16000 ||
+      !Array.isArray(approvedIds) || approvedIds.length > 1000 ||
+      !approvedIds.every(validID)) {
+    throw new Error("Invalid batch review input.");
+  }
+
+  const lines = text.split(/\r?\n/)
+    .map((value, index) => ({value:value.trim(), line:index + 1}))
+    .filter(item => item.value);
+
+  if (!lines.length || lines.length > 50) {
+    throw new Error("Use between 1 and 50 nonempty lines.");
+  }
+
+  const approved = new Set(approvedIds);
+  const seen = new Set();
+  const additions = [];
+  let invalid = 0;
+
+  const rows = lines.map(item => {
+    let id = null;
+    try {
+      if (validID(item.value)) {
+        id = item.value;
+      } else {
+        // Reject credentials, ports, query strings and alternate encodings.
+        const match = /^https:\/\/(?:www\.|m\.|music\.)?youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})\/?$/
+          .exec(item.value);
+        if (!match) throw new Error("Invalid channel URL");
+        id = match[1];
+      }
+    } catch {
+      invalid++;
+      return Object.freeze({
+        line:item.line, input:item.value, id:null, status:"invalid",
+      });
+    }
+
+    let status;
+    if (seen.has(id)) status = "duplicate";
+    else if (approved.has(id)) status = "existing";
+    else {
+      status = "new";
+      additions.push(id);
+    }
+    seen.add(id);
+    return Object.freeze({
+      line:item.line, input:item.value, id, status,
+    });
+  });
+
+  const capacityExceeded = approved.size + additions.length > 1000;
+  return Object.freeze({
+    rows:Object.freeze(rows),
+    additions:Object.freeze(additions),
+    invalidCount:invalid,
+    capacityExceeded,
+    canSubmit:invalid === 0 && !capacityExceeded && additions.length > 0,
+  });
+}
+
+function buildMyTubeBulkRequest(channelIds) {
+  if (!Array.isArray(channelIds) ||
+      channelIds.length < 1 || channelIds.length > 50 ||
+      !channelIds.every(id =>
+        typeof id === "string" && /^UC[A-Za-z0-9_-]{22}$/.test(id)) ||
+      new Set(channelIds).size !== channelIds.length) {
+    throw new Error("Use between 1 and 50 unique immutable channel IDs.");
+  }
+
+  const channelText = channelIds.join("\n");
+  const url = new URL(
+    "https://github.com/linyuli303/Apps/issues/new"
+  );
+  url.search = new URLSearchParams({
+    template:"channel-bulk-add.yml",
+    title:"[MyTube] Channel change",
+    operation:"Add multiple",
+    channel_ids:channelText,
+  }).toString();
+
+  // Do not pre-check the confirmation: the owner must review it on GitHub.
+  const requiresPaste = url.href.length > 6500;
+  if (requiresPaste) url.searchParams.delete("channel_ids");
+
+  return Object.freeze({
+    url:url.href,
+    channelText,
+    count:channelIds.length,
+    requiresPaste,
+  });
+}
+
 function channelRequestURL(operation, channelID) {
   if (
     !["Add", "Remove"].includes(operation) ||
@@ -8297,4 +8394,195 @@ function readyTubeExtras() {
   });
   observer.observe(page, {childList:true, subtree:true});
   updateAll();
+})();
+
+
+// Bulk additions use public owner-reviewed Issues, not direct frontend writes.
+(function initializeMyTubeBulkChannels() {
+  const input = $("new-channel");
+  const existingControls = input && input.closest(".manager-input");
+  if (!existingControls || $("channel-bulk-input")) return;
+
+  const panel = element("details", "manager");
+  panel.id = "channel-bulk-manager";
+  const summary = element("summary", "", "Add multiple channels");
+  const instructions = element("p", "",
+    "One channel ID or HTTPS /channel/ID URL per line. " +
+    "Up to 50 lines. Requests are public; no channel lookup occurs.");
+
+  const label = element("label", "", "Channels");
+  label.htmlFor = "channel-bulk-input";
+  const textarea = element("textarea");
+  textarea.id = "channel-bulk-input";
+  textarea.rows = 6;
+  textarea.maxLength = 16000;
+  textarea.autocomplete = "off";
+  textarea.spellcheck = false;
+
+  const actions = element("div", "manager-actions");
+  const review = element("button", "", "Review channels");
+  const reset = element("button", "", "Clear");
+  review.type = reset.type = "button";
+  actions.append(review, reset);
+
+  const status = element("p", "");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+
+  const results = element("div", "");
+  results.hidden = true;
+  const list = element("ol", "");
+
+  const confirmLabel = element("label", "");
+  const confirmation = element("input");
+  confirmation.type = "checkbox";
+  confirmation.autocomplete = "off";
+  confirmLabel.append(confirmation, document.createTextNode(
+    " I reviewed the additions and understand these channel IDs will be public."
+  ));
+
+  const request = element("button", "", "Review request on GitHub");
+  request.type = "button";
+  request.disabled = true;
+
+  const fallback = element("details", "");
+  fallback.hidden = true;
+  fallback.append(element("summary", "", "Channel IDs / copy fallback"));
+  const copy = element("textarea");
+  copy.rows = 4;
+  copy.readOnly = true;
+  copy.spellcheck = false;
+  copy.setAttribute("aria-label", "Reviewed channel IDs to copy");
+  fallback.append(copy);
+
+  results.append(list, confirmLabel, request, fallback);
+  panel.append(summary, instructions, label, textarea, actions, status, results);
+  existingControls.before(panel);
+
+  let reviewed = null;
+  let reviewedText = null;
+  let reviewedSnapshot = null;
+
+  function snapshot() {
+    if (!feed || !freshFeed(feed)) {
+      throw new Error("Load a fresh published feed before reviewing channels.");
+    }
+    return feed.channels.map(channel => channel.id).sort();
+  }
+
+  function invalidate() {
+    reviewed = null;
+    reviewedText = null;
+    reviewedSnapshot = null;
+    confirmation.checked = false;
+    confirmation.disabled = true;
+    request.disabled = true;
+    results.hidden = true;
+    list.replaceChildren();
+    copy.value = "";
+    fallback.hidden = true;
+    fallback.open = false;
+    status.textContent = "";
+  }
+
+  textarea.addEventListener("input", invalidate);
+
+  review.addEventListener("click", () => {
+    invalidate();
+    try {
+      const approved = snapshot();
+      const result = reviewMyTubeChannelBatch(textarea.value, approved);
+      const counts = {new:0, duplicate:0, existing:0, invalid:0};
+      const labels = {
+        new:"New addition",
+        duplicate:"Duplicate - excluded",
+        existing:"Already approved - excluded",
+        invalid:"Invalid - correct this line",
+      };
+
+      for (const row of result.rows) {
+        counts[row.status]++;
+        const item = element("li", "");
+        item.append(
+          element("strong", "", "Line " + row.line + ": "),
+          document.createTextNode(
+            (row.id || row.input) + " - " + labels[row.status]
+          )
+        );
+        list.append(item);
+      }
+
+      results.hidden = false;
+      status.textContent =
+        counts.new + " additions; " +
+        counts.existing + " already approved; " +
+        counts.duplicate + " duplicates; " +
+        counts.invalid + " invalid.";
+
+      if (result.capacityExceeded) {
+        status.textContent += " Batch exceeds the 1,000-channel limit.";
+      }
+
+      confirmation.disabled = !result.canSubmit;
+      if (!result.canSubmit) return;
+
+      reviewed = result;
+      reviewedText = textarea.value;
+      reviewedSnapshot = JSON.stringify(approved);
+      copy.value = result.additions.join("\n");
+      fallback.hidden = false;
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  });
+
+  confirmation.addEventListener("change", () => {
+    request.disabled = !reviewed || !confirmation.checked;
+  });
+
+  request.addEventListener("click", () => {
+    if (!reviewed || !confirmation.checked || request.disabled) return;
+
+    try {
+      const approved = snapshot();
+      const current = reviewMyTubeChannelBatch(textarea.value, approved);
+
+      if (textarea.value !== reviewedText ||
+          JSON.stringify(approved) !== reviewedSnapshot ||
+          !current.canSubmit ||
+          JSON.stringify(current.additions) !==
+            JSON.stringify(reviewed.additions)) {
+        invalidate();
+        status.textContent = "Input or published channels changed. Review again.";
+        return;
+      }
+
+      const prepared = buildMyTubeBulkRequest(current.additions);
+      copy.value = prepared.channelText;
+      fallback.hidden = false;
+      fallback.open = prepared.requiresPaste;
+
+      // Directly tied to this explicit user action. Never auto-submit.
+      window.open(prepared.url, "_blank", "noopener,noreferrer");
+
+      status.textContent = prepared.requiresPaste
+        ? "GitHub form requested. Copy these IDs into Channel IDs, then review, confirm and submit as owner."
+        : "GitHub form requested. Review the IDs, check confirmation and submit as owner. Nothing is saved by opening the form.";
+
+      status.textContent +=
+        " If the form did not open, allow popups and try again. " +
+        "Check processing and the separate publication run afterward.";
+    } catch {
+      invalidate();
+      status.textContent = "Request stopped. Load a fresh feed and review again.";
+    }
+  });
+
+  reset.addEventListener("click", () => {
+    textarea.value = "";
+    invalidate();
+    textarea.focus();
+  });
+
+  invalidate();
 })();

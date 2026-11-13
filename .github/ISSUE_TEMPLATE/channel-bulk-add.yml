@@ -1,0 +1,38 @@
+name: Add multiple MyTube channels
+description: Request one reviewed batch of up to 50 channel additions.
+title: "[MyTube] Channel change"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Only requests opened by the authorized repository owner are eligible.
+        This request and all channel IDs are public. Never enter credentials.
+        Enter immutable channel IDs only, one per line.
+        Do not include URLs, handles, names, bullets or code fences.
+        Duplicate IDs and invalid entries reject the entire batch.
+        Already-approved IDs are no-ops.
+        Changes require successful processing, collection and deployment.
+        Adding a channel approves its uploads, not videos from its curated playlists.
+  - type: dropdown
+    id: operation
+    attributes:
+      label: Operation
+      options:
+        - Add multiple
+    validations:
+      required: true
+  - type: textarea
+    id: channel_ids
+    attributes:
+      label: Channel IDs
+      description: Between 1 and 50 unique immutable channel IDs, one per line.
+      placeholder: "UC followed by 22 letters, digits, underscores or hyphens"
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I reviewed these channel IDs and want to add them to the shared whitelist on all devices.
+          required: true
