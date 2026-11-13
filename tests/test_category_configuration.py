@@ -114,7 +114,7 @@ class CategoryConfigurationTests(unittest.TestCase):
             self.html,
         )
         self.assertIn(
-            'placeholder="UC channel ID or YouTube channel URL"',
+            'placeholder="UC followed by 22 letters, digits, underscores or hyphens"',
             self.html,
         )
         self.assertIn("<title>MyApps</title>", self.html)

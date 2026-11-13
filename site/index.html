@@ -544,12 +544,12 @@
           this is not parental access control.
         </p>
         <div class="manager-input">
-          <label for="new-channel">Immutable channel ID or /channel/ID URL</label>
+          <label for="new-channel">UC channel ID</label>
           <input
             id="new-channel"
             maxlength="240"
             autocomplete="off"
-            placeholder="UC channel ID or YouTube channel URL"
+            placeholder="UC followed by 22 letters, digits, underscores or hyphens"
           />
           <button id="add-channel" type="button">Add locally</button>
           <button id="request-add-channel" type="button">
@@ -557,9 +557,8 @@
           </button>
         </div>
         <p>
+          Paste a UC channel ID, not a URL, @handle or channel name.
           GitHub requests open in a new tab and do not submit automatically.
-          Channel names are search labels, not approval identifiers.
-          Resolve handles and review their immutable channel IDs before adding.
         </p>
         <div class="manager-input manager-search">
           <label for="whitelist-search">Search whitelist by name or channel ID</label>
