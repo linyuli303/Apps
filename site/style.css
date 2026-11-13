@@ -3136,3 +3136,74 @@ body.podcast-player-open main{padding-bottom:220px}
  background:var(--accent);color:var(--page);font:inherit;font-size:23px;
 }
 #spotify-page .spotify-embed-restore:focus-visible {outline-offset:-4px;}
+
+/* MyTube controls and configurable preview v2. */
+:root[data-device-layout="tv"] #tube-page #grid .card:focus:not(:focus-visible){outline:none;box-shadow:none}
+#player .tube-volume-control{display:inline-flex;align-items:center;gap:5px}
+#player #tube-volume{width:90px;min-height:26px;padding:0;border:0;accent-color:var(--accent)}
+#tube-volume-value{font-size:11px;min-width:32px;font-variant-numeric:tabular-nums}
+#player #tube-captions[aria-pressed="true"],#player #tube-mute[aria-pressed="true"]{border-color:var(--accent);background:var(--hover);color:var(--label-accent)}
+#player .tube-popover{position:fixed;right:12px;bottom:110px;z-index:114;width:min(540px,calc(100vw - 24px));max-height:calc(100dvh - 130px);overflow:auto;overscroll-behavior:contain;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 8px 30px #0004;font-size:12px}
+#player .tube-panel-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+#player .tube-panel-heading h3{margin:0;font-size:14px}
+#player .tube-panel-heading button{min-height:32px;padding:4px 10px}
+#tube-description-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
+#tube-description-title{font-weight:600}
+#tube-preview-settings label{display:grid;grid-template-columns:1fr auto;gap:5px;margin:15px 0}
+#tube-preview-settings input{grid-column:1/-1;width:100%;min-height:28px;padding:0;border:0;accent-color:var(--accent)}
+#tube-preview-settings p{color:var(--muted);line-height:1.5}
+/* Only the background is translucent, never the preview's text or controls. */
+#player #player-feed-panel{width:min(var(--tube-preview-width,720px),calc(100vw - 24px));height:min(var(--tube-preview-height,55vh),calc(100dvh - 130px));max-height:calc(100dvh - 130px);background:var(--tube-preview-bg,var(--surface))}
+#player-feed-panel .player-feed-row{background:transparent}
+#player-feed-panel .player-feed-row:hover,#player-feed-panel .player-feed-row:focus-visible,#player-feed-panel .player-feed-row[aria-current="true"]{background:color-mix(in srgb,var(--hover) 75%,transparent)}
+#player-feed-panel .player-feed-title{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+@media(max-height:450px){#player .tube-popover{bottom:85px;max-height:calc(100dvh - 100px)}#player #player-feed-panel{height:min(var(--tube-preview-height,55vh),calc(100dvh - 100px));max-height:calc(100dvh - 100px)}}
+
+/* Compact MyTube toolbar v3: intrinsic button widths, one row, original Feed markup. */
+#player .player-bottom,#player.kino .player-bottom{display:flex;flex-flow:row nowrap;align-items:center;justify-content:flex-start;gap:5px;padding:5px 8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+#player .player-bottom>*{flex:0 0 auto;white-space:nowrap;min-width:0}
+#player .player-bottom button,#player .player-bottom .official{width:auto;min-width:0;max-width:none;min-height:30px;margin:0;padding:5px 7px;font-size:11px;line-height:1.25;white-space:nowrap;box-sizing:border-box}
+#player .player-bottom label{display:inline-flex;align-items:center;gap:4px;margin:0;font-size:11px;white-space:nowrap}
+#player .player-bottom select{width:auto;min-width:0;max-width:96px;min-height:30px;padding:4px 5px;font-size:11px}
+#player .player-bottom .playback-icon,#player .player-bottom #tube-preview-config{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;width:30px;height:30px;padding:5px}
+#player .player-bottom #tube-preview-config svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#player .player-bottom .speed-control input[type=range]{width:76px;min-width:0;padding:0;margin:0}
+#player .player-bottom .speed-control output{min-width:18px}
+#player .player-bottom .tube-volume-control{display:inline-flex;align-items:center;gap:4px;flex:0 0 auto}
+#player .player-bottom #tube-mute{display:inline-flex;align-items:center;justify-content:center;width:28px;height:30px;min-height:30px;padding:4px;margin:0;background:transparent;border:0;border-radius:50%;color:var(--text);box-shadow:none}
+#player .player-bottom #tube-mute:hover{background:var(--hover)}
+#player .player-bottom #tube-mute svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#player .player-bottom #tube-volume{width:64px;min-width:0;height:30px;min-height:30px;padding:0;margin:0;accent-color:var(--accent);border:0;background:transparent}
+#player #tube-volume-value{min-width:30px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;color:var(--muted)}
+#player .player-bottom #tube-captions[aria-pressed="true"]{background:var(--hover);border-color:var(--accent);color:var(--label-accent)}
+#player .player-bottom #player-feed-toggle{display:inline-flex;align-items:center;gap:5px;width:auto}
+
+/* Universal MyApps display density. Compact is the baseline in every app. */
+:root{--myapps-row-padding:6px;--myapps-row-height:36px;--myapps-content-gap:8px;--myapps-card-padding:10px;--myapps-body-font:13px;--myapps-control-font:12px;--myapps-control-height:38px}
+:root[data-display-density="compact"]{--myapps-row-padding:6px;--myapps-row-height:36px;--myapps-content-gap:8px;--myapps-card-padding:10px}
+:root[data-display-density="comfort"]{--myapps-row-padding:13px;--myapps-row-height:52px;--myapps-content-gap:14px;--myapps-card-padding:16px}
+:root[data-display-density="spacious"]{--myapps-row-padding:20px;--myapps-row-height:68px;--myapps-content-gap:20px;--myapps-card-padding:22px}
+/* Form and button typography use the same family throughout the experience. */
+body,button,input,select,textarea{font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+#tube-page,#podcast-page,#spotify-page{font-size:var(--myapps-body-font)}
+.myapps-header .myapps-layout-control,.myapps-header .myapps-density-control{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:var(--myapps-control-font);white-space:nowrap}
+.myapps-header .myapps-layout-control select,.myapps-header .myapps-density-control select{height:var(--myapps-control-height);min-height:var(--myapps-control-height);max-width:none;width:auto;padding:6px 8px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font-size:var(--myapps-control-font);line-height:1.3}
+.myapps-header button,#tube-page button,#podcast-page button,#spotify-page button{font-size:var(--myapps-control-font);line-height:1.3}
+#tube-page .toolbar button,#podcast-page .podcast-toolbar button,#spotify-page .configuration-heading button,#spotify-connect-panel>button,#spotify-page .manager button,.myapps-nav button{min-height:var(--myapps-control-height);padding:7px 10px}
+#tube-page .toolbar input,#tube-page .toolbar select,#podcast-page .podcast-toolbar input,#podcast-page .podcast-toolbar select{min-height:var(--myapps-control-height);font-size:var(--myapps-control-font)}
+/* Identical density spacing for text-feed items, podcast items and Spotify items. */
+:root[data-display-density] #tube-page #grid.plain-feed .card,
+:root[data-display-density] #podcast-page .podcast-row,
+:root[data-display-density] #spotify-page .music-library-card,
+:root[data-display-density] #spotify-page .spotify-playlist-row{min-height:var(--myapps-row-height);padding:var(--myapps-row-padding) 12px;font-size:var(--myapps-body-font)}
+:root[data-display-density] #tube-page #grid.plain-feed .text-feed-title,
+:root[data-display-density] #podcast-page .podcast-title,
+:root[data-display-density] #podcast-page .podcast-row-title{font-size:var(--myapps-body-font);line-height:1.5}
+:root[data-display-density] #tube-page #grid:not(.plain-feed){gap:var(--myapps-content-gap)}
+:root[data-display-density] #tube-page #grid:not(.plain-feed) .card-body{padding:var(--myapps-card-padding)}
+:root[data-display-density] #spotify-page .music-library{gap:var(--myapps-content-gap)}
+:root[data-display-density] #player-feed-panel .player-feed-row{padding:var(--myapps-row-padding) 7px;min-height:var(--myapps-row-height)}
+:root[data-display-density] .podcast-queue-row{padding-top:var(--myapps-row-padding);padding-bottom:var(--myapps-row-padding)}
+/* Keep content text and icon controls legible and consistent in TV view. */
+:root[data-device-layout="tv"]{--myapps-body-font:14px;--myapps-control-font:13px}
+@media(pointer:coarse){.myapps-header .myapps-layout-control select,.myapps-header .myapps-density-control select{height:44px;min-height:44px}}

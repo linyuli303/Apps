@@ -16,9 +16,16 @@ class SpotifyAuthorizationScreenTests(unittest.TestCase):
     def test_eight_screen_scenarios(self):
         source = (ROOT / "site/app.js").read_text(encoding="utf-8")
         start = "(function initializeSpotifyAuthorizationScreen() {"
+        end = "\n})();"
+
         self.assertEqual(source.count(start), 1)
-        initializer = source[source.index(start):].strip()
+        first = source.index(start)
+        last = source.index(end, first) + len(end)
+        initializer = source[first:last].strip()
+
         self.assertTrue(initializer.endswith("})();"))
+        self.assertNotIn("initializeTubeExtras", initializer)
+        self.assertNotIn("initializeUniversalDensity", initializer)
 
         template = (
             ROOT / "tests/spotify_authorization_screen.js"

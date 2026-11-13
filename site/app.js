@@ -276,6 +276,7 @@ function openPlayer(id) {
   current = id;
   closePlayerCategories(false);
   renderPlayerCategories();
+  resetTubeExtrasForVideo(video);
   $("playing-title").textContent = video.title;
   $("official").href = `https://www.youtube.com/watch?v=${id}`;
   stopSpeedController();
@@ -415,6 +416,9 @@ document.addEventListener("keydown", (event) => {
         $("player-appearance"),
         $("speed-preset"),
         $("speed-slider"),
+        $("tube-description-toggle"), $("tube-captions"), $("tube-mute"), $("tube-volume"),
+        ...Array.from(document.querySelectorAll(".tube-popover:not([hidden]) button, .tube-popover:not([hidden]) input, .tube-popover:not([hidden]) a")),
+        $("tube-preview-config"),
         $("skip-short-videos"),
         $("player-category-toggle"),
         ...(
@@ -1820,6 +1824,7 @@ function setPreferredSpeed(value) {
 }
 
 function stopSpeedController() {
+  stopTubeExtras();
   const state = speedState();
   clearTimeout(state.timer);
   const player = state.player;
@@ -1882,6 +1887,7 @@ function attachSpeedController(iframe, id) {
         onReady: () => {
           if (!valid()) return;
           state.ready = true;
+          readyTubeExtras();
           applyPreferredSpeed();
         },
         onStateChange: event => {
@@ -1921,6 +1927,7 @@ function attachSpeedController(iframe, id) {
           if (valid()) $("playback-mode-status").textContent =
             "Autoplay blocked. Press Play in the video.";
         },
+        onApiChange: () => { if (valid()) syncTubeCaptions(); },
         onPlaybackRateChange: () => {
           if (valid()) reportPlaybackSpeed();
         },
@@ -5064,4 +5071,179 @@ function initializePodcastConfiguration(shows) {
     uiGeneration++;
     display(cancelBoth() === "cleanup_failed" ? "cleanup_failed" : "failed");
   }
+})();
+
+
+// MyTube extras use the existing, approved YouTube iframe only. No new API requests.
+function tubeExtrasState() {
+  return tubeExtrasState.saved ||= {volume:100, muted:false, captions:false, timer:null};
+}
+function closeTubePopover(id, restore=false) {
+  $(id).hidden = true;
+  const trigger = $(id === "tube-description-panel" ? "tube-description-toggle" : "tube-preview-config");
+  trigger.setAttribute("aria-expanded", "false");
+  if (restore) trigger.focus();
+}
+function resetTubeExtrasForVideo(video) {
+  closeTubePopover("tube-description-panel");
+  closeTubePopover("tube-preview-settings");
+  $("tube-description-title").textContent = video.title || "";
+  const description = typeof video.description === "string" ? video.description.trim() : "";
+  $("tube-description-text").textContent = description || "This feed does not include the video description. Open the original YouTube page to read it.";
+  $("tube-description-original").href = "https://www.youtube.com/watch?v=" + encodeURIComponent(video.id);
+}
+function stopTubeExtras() {
+  const state = tubeExtrasState();
+  clearInterval(state.timer); state.timer = null;
+  for (const id of ["tube-captions", "tube-mute", "tube-volume"]) $(id).disabled = true;
+  closeTubePopover("tube-description-panel");
+  closeTubePopover("tube-preview-settings");
+}
+function syncTubeVolume() {
+  const state = tubeExtrasState(), player = speedState().player;
+  if (!speedState().ready || !player) return;
+  try {
+    const volume = player.getVolume();
+    if (Number.isFinite(volume)) state.volume = Math.max(0,Math.min(100,volume));
+    state.muted = player.isMuted();
+    const percent = state.muted ? 0 : Math.round(state.volume);
+    $("tube-volume").value = String(percent);
+    $("tube-volume").setAttribute("aria-valuetext", percent + " percent");
+    $("tube-volume-value").textContent = percent + "%";
+    $("tube-mute").setAttribute("aria-pressed", String(state.muted || !percent));
+    const label = state.muted || !percent ? "Unmute" : "Mute";
+    $("tube-mute").setAttribute("aria-label", label); $("tube-mute").title = label;
+  } catch {}
+}
+function syncTubeCaptions() {
+  const state = tubeExtrasState(), player = speedState().player;
+  if (!speedState().ready || !player) return;
+  try {
+    const available = player.getOptions().includes("captions");
+    $("tube-captions").setAttribute("aria-pressed", String(state.captions && available));
+    $("tube-captions").title = state.captions && available ? "Turn captions off" : "Turn captions on (when available)";
+    $("tube-captions").setAttribute("aria-label", $("tube-captions").title);
+  } catch {}
+}
+function readyTubeExtras() {
+  const state = tubeExtrasState(), player = speedState().player;
+  for (const id of ["tube-captions", "tube-mute", "tube-volume"]) $(id).disabled = false;
+  try { player.setVolume(state.volume); state.muted ? player.mute() : player.unMute(); } catch {}
+  try { state.captions ? player.loadModule("captions") : player.unloadModule("captions"); } catch {}
+  syncTubeVolume(); syncTubeCaptions();
+  clearInterval(state.timer);
+  state.timer = setInterval(() => { syncTubeVolume(); syncTubeCaptions(); }, 700);
+}
+(function initializeTubeExtras() {
+  for (const [trigger,id] of [["tube-description-toggle","tube-description-panel"],["tube-preview-config","tube-preview-settings"]]) {
+    $(trigger).addEventListener("click", () => {
+      const open = $(id).hidden;
+      closeTubePopover("tube-description-panel"); closeTubePopover("tube-preview-settings");
+      if (open) { $(id).hidden=false; $(trigger).setAttribute("aria-expanded","true"); $(id).querySelector("button").focus(); }
+    });
+  }
+  $("tube-description-close").addEventListener("click",()=>closeTubePopover("tube-description-panel",true));
+  $("tube-preview-settings-close").addEventListener("click",()=>closeTubePopover("tube-preview-settings",true));
+  $("tube-description-original").addEventListener("click",()=>{
+    stopSpeedController(); $("frame").replaceChildren();
+  });
+  // Capture Escape so it dismisses a popover before the existing player handler.
+  document.addEventListener("keydown",event=>{
+    if (event.key !== "Escape" || $("player").hidden) return;
+    const id = ["tube-preview-settings","tube-description-panel"].find(id=>!$(id).hidden);
+    if (id) { event.preventDefault(); event.stopImmediatePropagation(); closeTubePopover(id,true); }
+  },true);
+  $("tube-volume").addEventListener("input",()=>{
+    const state=tubeExtrasState(), player=speedState().player;
+    if (!speedState().ready || !player) return;
+    state.volume=Number($("tube-volume").value); state.muted=state.volume===0;
+    try { player.setVolume(state.volume); state.muted ? player.mute() : player.unMute(); syncTubeVolume(); }
+    catch { $("playback-mode-status").textContent="Volume adjustment unavailable. Use device volume controls."; }
+  });
+  $("tube-mute").addEventListener("click",()=>{
+    const state=tubeExtrasState(), player=speedState().player;
+    if (!speedState().ready || !player) return;
+    try {
+      if (player.isMuted() || player.getVolume()===0) { if (!state.volume) {state.volume=50;player.setVolume(50);} player.unMute(); }
+      else player.mute();
+      syncTubeVolume();
+    } catch { $("playback-mode-status").textContent="Use YouTube or device volume controls."; }
+  });
+  $("tube-captions").addEventListener("click",()=>{
+    const state=tubeExtrasState(), player=speedState().player;
+    if (!speedState().ready || !player) return;
+    try {
+      state.captions=!state.captions;
+      state.captions ? player.loadModule("captions") : player.unloadModule("captions");
+      syncTubeCaptions();
+      $("playback-mode-status").textContent=state.captions ? "Captions requested. Availability and language are controlled by YouTube; use its CC/settings menu if needed." : "Captions off.";
+    } catch { $("playback-mode-status").textContent="Use YouTube's CC control for this video."; }
+  });
+  const settings={width:720,height:55,transparency:25};
+  function applyPreview() {
+    const panel=$("player-feed-panel");
+    panel.style.setProperty("--tube-preview-width",settings.width+"px");
+    panel.style.setProperty("--tube-preview-height",settings.height+"vh");
+    // Concrete rgba fallback also works on TVs without CSS color-mix support.
+    const color=getComputedStyle(panel).getPropertyValue("--surface").trim();
+    const match=/^#([0-9a-f]{6})$/i.exec(color);
+    if (match) {
+      const hex=match[1], rgb=[0,2,4].map(i=>parseInt(hex.slice(i,i+2),16));
+      panel.style.setProperty("--tube-preview-bg",`rgba(${rgb.join(",")},${1-settings.transparency/100})`);
+    } else panel.style.setProperty("--tube-preview-bg",`color-mix(in srgb, var(--surface) ${100-settings.transparency}%, transparent)`);
+    for (const [key,unit] of [["width","px"],["height","vh"],["transparency","%"]]) {
+      $("tube-preview-"+key).value=String(settings[key]);
+      $("tube-preview-"+key+"-value").textContent=settings[key]+unit;
+    }
+  }
+  for (const key of Object.keys(settings)) $("tube-preview-"+key).addEventListener("input",()=>{settings[key]=Number($("tube-preview-"+key).value);applyPreview();});
+  $("tube-preview-reset").addEventListener("click",()=>{Object.assign(settings,{width:720,height:55,transparency:25});applyPreview();});
+  new MutationObserver(applyPreview).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme","data-appearance"]});
+  applyPreview();
+})();
+
+(function refineMyTubeToolbar(){
+  const button=$("tube-mute");
+  function updateSpeaker(){
+    const muted=button.getAttribute("aria-pressed")==="true";
+    button.querySelector("svg path:last-child").setAttribute("d",muted?"M16 9l6 6M22 9l-6 6":"M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14");
+  }
+  new MutationObserver(updateSpeaker).observe(button,{attributes:true,attributeFilter:["aria-pressed"]});updateSpeaker();
+  // Keep focused controls visible when the single-row toolbar overflows on narrow devices.
+  document.querySelector("#player .player-bottom").addEventListener("focusin",event=>{
+    event.target.scrollIntoView({block:"nearest",inline:"nearest"});
+  });
+})();
+
+
+// Universal display density: one browser preference for all MyApps applications.
+(function initializeUniversalDensity() {
+  const root=document.documentElement, view=$("myapps-layout");
+  if(!view || $("myapps-density"))return;
+  const allowed=new Set(["compact","comfort","spacious"]);
+  const storageKey="myapps-display-density-v1";
+  const label=element("label","myapps-density-control");
+  const caption=element("span","","Display");
+  const select=element("select");select.id="myapps-density";
+  select.setAttribute("aria-label","Display density for all apps");
+  select.title="Display density for all apps";
+  select.append(new Option("Compact","compact"),new Option("Comfort","comfort"),new Option("Spacious","spacious"));
+  label.append(caption,select);view.closest("label").after(label);
+  const status=element("span","sr-only");status.id="myapps-density-status";status.setAttribute("role","status");
+  label.after(status);
+  function apply(value,announce=false) {
+    const density=allowed.has(value)?value:"compact";
+    root.dataset.displayDensity=density;select.value=density;
+    if(announce)status.textContent=select.selectedOptions[0].textContent+" display applied to all apps.";
+  }
+  let initial="compact";
+  try{initial=localStorage.getItem(storageKey)||"compact";}catch{}
+  apply(initial);
+  select.addEventListener("change",()=>{
+    apply(select.value,true);
+    try{localStorage.setItem(storageKey,select.value);}catch{status.textContent+=" Preference cannot be saved; applied until reload.";}
+  });
+  window.addEventListener("storage",event=>{
+    if(event.key===storageKey || event.key===null)apply(event.newValue||"compact");
+  });
 })();

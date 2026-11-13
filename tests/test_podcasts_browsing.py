@@ -7,19 +7,26 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
 import podcasts_public as p
 def without_spotify_helpers(source):
-    """Exclude only the independent Spotify block, retaining podcast config."""
+    """Retain podcast code, excluding independent Spotify and later UI code."""
     start = "// Spotify authorization foundation:"
-    end = (
+    config_start = (
         "// Public GitHub request forms only: "
         "no token, persistent draft or source lookup."
     )
-    if source.count(start) != 1 or source.count(end) != 1:
-        raise ValueError("Unexpected application boundaries")
+    screen_start = "(function initializeSpotifyAuthorizationScreen() {"
+
+    for marker in (start, config_start, screen_start):
+        if source.count(marker) != 1:
+            raise ValueError("Unexpected application boundaries")
+
     first = source.index(start)
-    last = source.index(end)
-    if last <= first:
+    config = source.index(config_start)
+    screen = source.index(screen_start)
+
+    if not first < config < screen:
         raise ValueError("Unexpected application source order")
-    return source[:first] + source[last:]
+
+    return source[:first] + source[config:screen]
 
 
 class PodcastBrowsingTests(unittest.TestCase):

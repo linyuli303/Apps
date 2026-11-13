@@ -101,10 +101,26 @@ class PodcastProcessorTests(unittest.TestCase):
 
 class PodcastConfigUITests(unittest.TestCase):
     def test_no_browser_credentials_or_storage(self):
-        js=(ROOT/'site/app.js').read_text(encoding='utf-8').split('function initializePodcastConfiguration(shows)',1)[1]
-        for forbidden in ('fetch(', 'localStorage','sessionStorage','innerHTML','GH_TOKEN'):
-            self.assertNotIn(forbidden,js)
-        self.assertIn('podcast-change.yml',js);self.assertIn('window.open(',js)
+        source = (ROOT / 'site/app.js').read_text(encoding='utf-8')
+        start = 'function initializePodcastConfiguration(shows)'
+        end = '(function initializeSpotifyAuthorizationScreen() {'
+
+        self.assertEqual(source.count(start), 1)
+        self.assertEqual(source.count(end), 1)
+
+        first = source.index(start)
+        last = source.index(end, first)
+        self.assertGreater(last, first)
+        js = source[first:last]
+
+        for forbidden in (
+            'fetch(', 'localStorage', 'sessionStorage',
+            'innerHTML', 'GH_TOKEN'
+        ):
+            self.assertNotIn(forbidden, js)
+
+        self.assertIn('podcast-change.yml', js)
+        self.assertIn('window.open(', js)
     def test_workflow_narrow(self):
         workflow=(ROOT/'.github/workflows/podcast-change.yml').read_text(encoding='utf-8')
         self.assertIn("github.actor_id == '42029941'",workflow)

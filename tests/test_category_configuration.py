@@ -123,12 +123,28 @@ class CategoryConfigurationTests(unittest.TestCase):
             'document.title = "MyApps";', self.js
         )
     def test_dialog_and_focus_guards(self):
-        self.assertIn('$("configuration-dialog")?.open || $("whitelist-dialog")?.open',self.js)
-        self.assertIn('$("configuration-toggle").focus()',self.js)
-        self.assertIn('dialog.addEventListener("keydown", event => event.stopPropagation())',self.js)
-        css=(ROOT/'site/style.css').read_text(encoding='utf-8').split('/* Category browsing tabs',1)[1]
-        self.assertNotIn('#player',css)
-        self.assertNotIn('#frame',css)
+        self.assertIn(
+            '$("configuration-dialog")?.open || $("whitelist-dialog")?.open',
+            self.js,
+        )
+        self.assertIn('$("configuration-toggle").focus()', self.js)
+        self.assertIn(
+            'dialog.addEventListener("keydown", event => event.stopPropagation())',
+            self.js,
+        )
+
+        source = (ROOT / 'site/style.css').read_text(encoding='utf-8')
+        start = '/* Category browsing tabs'
+        end = '/* Consistent configuration and management typography. */'
+
+        self.assertEqual(source.count(start), 1)
+        self.assertEqual(source.count(end), 1)
+        first = source.index(start)
+        last = source.index(end, first)
+        css = source[first:last]
+
+        self.assertNotIn('#player', css)
+        self.assertNotIn('#frame', css)
     @unittest.skipUnless(shutil.which('node'),'Node.js unavailable')
     def test_executable_tabs(self):
         function='function renderCategoryTabs('+self.js.split('function renderCategoryTabs(',1)[1].split('(function initializeConfiguration()',1)[0]

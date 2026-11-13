@@ -30,13 +30,22 @@ class PlayerFeedMenuTests(unittest.TestCase):
         self.assertIn('$("player-feed-toggle")',trap)
         self.assertIn('$("player-feed-panel").querySelectorAll("button")',trap)
     def test_overlay_without_frame_rules_or_network(self):
-        css=self.css.split('/* Playback feed popover:',1)[1]
-        self.assertIn('position:fixed',css)
-        self.assertNotIn('#frame',css)
-        self.assertNotIn('.kino',css)
-        js=self.js.split('// Playback Feed menu:',1)[1]
-        self.assertNotIn('fetch(',js)
-        self.assertNotIn('innerHTML',js)
+        start = '/* Playback feed popover:'
+        end = '/* Additional playback controls;'
+
+        self.assertEqual(self.css.count(start), 1)
+        self.assertEqual(self.css.count(end), 1)
+        first = self.css.index(start)
+        last = self.css.index(end, first)
+        css = self.css[first:last]
+
+        self.assertIn('position:fixed', css)
+        self.assertNotIn('#frame', css)
+        self.assertNotIn('.kino', css)
+
+        js = self.js.split('// Playback Feed menu:', 1)[1]
+        self.assertNotIn('fetch(', js)
+        self.assertNotIn('innerHTML', js)
     @unittest.skipUnless(shutil.which('node'),'Node.js unavailable')
     def test_duration_parser_execution(self):
         code='function playbackDurationSeconds('+self.js.split('function playbackDurationSeconds(',1)[1].split('function playbackFeedItems()',1)[0]
