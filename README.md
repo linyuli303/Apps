@@ -1,19 +1,19 @@
 # MyApps — All your favourites, one place
 
-**Attention Is All You Need.** A shared, RSS-style home for browsing approved YouTube channels and listening to public podcasts—without added analytics or advertising scripts.
+**Attention Is All You Need.** A shared, RSS-style home for browsing approved YouTube channels, listening to public podcasts, and accessing Spotify playlists—without added analytics or advertising scripts.
 
 [Launch MyApps](https://linyuli303.github.io/Apps/)
 
 - **MyTube** — approved YouTube channels, searchable text feeds, shared categories, and embedded playback.
 - **MyPodcasts** — approved public RSS shows, episode browsing, and an audio player with an editable playlist.
-- **MySpotify** — under development; the current account-connection and playback implementation should be verified before being described as production-ready.
+- **MySpotify** — Spotify account connection, playlist browsing, and playlist-player integration. Production authorization and playback require separate verification.
 
 Direct section URLs:
 
 - MyTube: https://linyuli303.github.io/Apps/MyTube/
 - MyPodcasts: https://linyuli303.github.io/Apps/MyPodcasts/
 
-Clean URLs support direct opening, reload, and browser Back/Forward. Switching sections does not reload the shared shell; podcast playback and its playlist remain available until stopped or the page reloads.
+Clean URLs support direct opening, reload, and browser Back/Forward. Switching sections does not reload the shared shell; podcast playback and its playlist remain available until stopped or the page reloads. Spotify authorization leaves the page and is an exception to this continuity.
 
 > **Public by design:** source configurations, category names and assignments, published metadata, repository history, and change-request Issues are public. Never submit or commit credentials, cookies, private subscription links, tokenized feeds, or raw Takeout exports.
 
@@ -22,31 +22,34 @@ Clean URLs support direct opening, reload, and browser Back/Forward. Switching s
 The repository includes:
 
 - Automatic device layouts and manual view selection.
+- Shared display-density controls.
 - Responsive RSS catalogue navigation.
 - Podcast volume, collapse, side docking, and phone title gestures.
 - Anonymous-first podcast playback with one disclosed standard-mode fallback.
 - Isolated onboarding preflight and proposal-only draft-PR creation.
 - MyTube playback defaults of enabled Auto-play next, maximum configured Feed height, and 5% Feed background transparency.
 - Removal of the custom MyTube Caption control.
+- Spotify PKCE authorization, playlist browsing, and playlist-player integration.
 
-Latest local verification for the MyTube playback changes:
+### Latest local MyTube verification
 
 - JavaScript syntax check passed.
 - Spotify embed-player regression check passed.
 - Full unit suite passed: **400 tests, no failures or skips**.
 - Browser checks confirmed Feed defaults/reset behavior, custom Caption-button removal, and Auto-play next behavior.
 
-These local results do not establish the current remote CI, deployment, or production status.
+These results apply to the tested local code. They do not establish the current remote CI, deployment, or production status.
 
-Important verification limits:
+### Verification limits
 
-- Anonymous-first playback was pushed in **`31e729b`**. Its production publication and CI results still require confirmation unless separately verified.
+- Anonymous-first podcast playback was pushed in **`31e729b`**. Its production publication and CI results still require confirmation unless separately verified.
 - Local browser tests verified anonymous playback for **KI verstehen** and standard fallback for **AI FIRST Podcast**, including Pause/Resume, seeking, collapse/dock/restore, and Close.
-- Those playback tests used localhost, whose Origin differs from production.
-- Production-origin, iPhone, and LG verification remain necessary for this playback change.
+- Those podcast tests used localhost, whose Origin differs from production.
+- Production-origin, iPhone, and LG verification remain necessary for that playback change.
+- Spotify production authorization, account eligibility, and playback require separate verification.
 - The new-host onboarding path has offline tests and a synthetic committed-code preflight, but its live Issue-to-draft-PR flow has not yet been verified.
 - Actions PR creation was last documented as disabled. Verify the current repository setting; leave it disabled until the proposal flow is ready for controlled live verification.
-- Passing tests or deployment does not establish complete browser, network, or security correctness.
+- Passing tests or deployment does not establish complete browser, network, privacy, or security correctness.
 
 ## Device layouts and appearance
 
@@ -70,6 +73,25 @@ View selection:
 Phone library toolbars place search beside the channel/show selector. Filters and action buttons occupy the following row, with narrow-screen wrapping where needed.
 
 MyTube actions are grouped as **Refresh → RSS Catalogue → Config**, using icon-only buttons with accessible names and tooltips. Podcast Config is also icon-only.
+
+### Display density
+
+**Compact**, **Comfort**, and **Spacious** apply across MyApps, with Compact as the default.
+
+Unlike View, palette, and appearance selections, display density is automatically saved in `localStorage` under:
+
+```text
+myapps-display-density-v1
+```
+
+The preference:
+
+- Persists across reloads.
+- Has no application expiry timer.
+- Synchronizes between same-origin tabs using that key.
+- Still applies to the current page if saving fails.
+
+This is an existing persistent-storage exception to the application's preference for memory-only state.
 
 ### Themes
 
@@ -308,6 +330,87 @@ Preflight environment separation is not an OS-level network sandbox. Hashes alon
 
 Failures may leave Git objects or a proposal branch. Inspect actual GitHub state before retrying; do not blindly repeat writes.
 
+## MySpotify
+
+Spotify authorization, playlist browsing, and playlist-player integration are implemented. Connect is enabled only on the configured production origin/path; local previews do not support real authorization.
+
+Connecting leaves MyApps for Spotify and reloads the application on return. Unsaved edits, playback, and the current podcast queue are lost during that navigation.
+
+Production authorization, account eligibility, and playback availability require separate verification. Implemented code and passing regression tests do not prove successful use with a live Spotify account.
+
+### Authorization and permissions
+
+MyApps uses the authorization-code flow with **PKCE S256**, without an embedded client secret.
+
+The current implementation requests these scopes:
+
+- `user-follow-read`
+- `playlist-read-private`
+- `playlist-read-collaborative`
+- `user-library-read`
+- `user-library-modify`
+- `streaming`
+- `user-modify-playback-state`
+- `user-read-private`
+- `user-read-email`
+
+**These permissions exceed read-only playlist browsing**, including library modification, playback control, and account information. Requested permissions do not establish that every corresponding feature is implemented.
+
+The current introduction’s “read-only” wording describes the browsing intent, not the full permission footprint. Do not rely on it as a complete authorization disclosure.
+
+### Login storage and token lifecycle
+
+A temporary login transaction is stored in `sessionStorage` to survive the Spotify redirect.
+
+It contains:
+
+- PKCE verifier.
+- OAuth state.
+- Client ID.
+- Redirect URI.
+- Creation and expiry timestamps.
+- Transaction format version.
+
+Its storage key is:
+
+```text
+myapps-spotify-auth-v1:/Apps/
+```
+
+Transaction safeguards:
+
+- Transactions are valid for **10 minutes**.
+- This validity limit is not an automatic deletion timer.
+- Starting a new transaction removes the previous one.
+- Callback handling removes the stored transaction before parsing, validation, or token exchange.
+- Exchange stops if removal cannot be confirmed.
+- An abandoned transaction may remain in browser session storage until cleanup or the browser ends that session; session restoration behavior varies.
+- The callback URL is cleaned with the History API before token exchange. This does not guarantee removal from browser-internal records or infrastructure logs.
+
+Token handling in the callback controller:
+
+- Access and refresh tokens are retained in a page-memory session, not persisted by that controller.
+- Reloading loses that in-memory session.
+- The shown controller requires reauthorization after access-token expiry; it does not automatically use the retained refresh token.
+- Expiry is checked during status and playlist operations rather than establishing guaranteed immediate memory erasure.
+- Disconnect invalidates the application session, cancels pending controller operations, and attempts login-transaction cleanup.
+- Disconnect does not revoke Spotify authorization, sign out of Spotify, erase provider cookies, or guarantee secure erasure of JavaScript memory.
+
+### Requests and third-party behavior
+
+The token exchange uses:
+
+- `credentials: "omit"`.
+- `cache: "no-store"`.
+- Redirect rejection.
+- No-referrer policy.
+- Response validation and bounded response size.
+- Cancellation and a timeout.
+
+These settings apply to the token exchange, not every Spotify navigation or embedded-player request.
+
+Spotify authorization pages and embeds are third-party services. MyApps does not guarantee cookie-free, cache-free, tracking-free, or ad-free Spotify use. Playback availability and account requirements remain controlled by Spotify.
+
 ## Shared YouTube categories
 
 Categories live in **`categories.json`** and are embedded into the published application.
@@ -361,20 +464,33 @@ Existing browser drafts are not silently migrated between paths. Avoid clearing 
 
 MyApps adds no analytics, advertising scripts, service worker, or app-managed offline cache.
 
-| Data                                    | Behavior                                                  |
-| --------------------------------------- | --------------------------------------------------------- |
-| Podcast queue and progress              | Page memory only; no persistent listening-history feature |
-| Speed, volume, repeat, presentation     | Page memory only                                          |
-| MyTube Auto-play next and Feed settings | Page memory only                                          |
-| View, theme, appearance                 | Page memory only                                          |
-| Category edits                          | Page memory until publication/reload                      |
-| Optional remembered whitelist draft     | Existing `localStorage` feature                           |
-| Audio buffer/cache                      | Browser-managed; not disabled by MyApps                   |
-| Provider cookies                        | Possible in standard playback, subject to browser rules   |
+It is **not a zero-storage application**. Existing exceptions include optional remembered whitelist data, automatically persisted display density, and temporary Spotify login transactions.
 
-MyApps cannot delete cookies belonging to podcast-provider origins or guarantee deletion of cached audio. Releasing the audio source on Close is not cache erasure.
+| Data                                                    | Behavior                                                                                                   |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Podcast queue and progress                              | Page memory only; no persistent listening-history feature                                                  |
+| Speed, volume, repeat, presentation                     | Page memory only                                                                                           |
+| MyTube Auto-play next and Feed settings                 | Page memory only                                                                                           |
+| View, theme, appearance                                 | Page memory only                                                                                           |
+| Category edits                                          | Page memory until publication/reload                                                                       |
+| Optional remembered whitelist draft/repository settings | Existing `localStorage` functionality                                                                      |
+| Display density                                         | Automatically saved in `localStorage`; no application expiry                                               |
+| Spotify login transaction                               | `sessionStorage`; valid for 10 minutes, removed during callback consumption or explicit cleanup            |
+| Spotify access and refresh tokens                       | Page-memory session in the callback controller; not persisted by that controller                           |
+| Audio buffer/cache                                      | Browser-managed; not disabled by MyApps                                                                    |
+| Provider cookies                                        | Possible during third-party authorization, embeds, and standard podcast playback, subject to browser rules |
 
-Browser privacy settings can block cookies or clear browsing data. Clearing MyApps site data may also erase optional saved drafts. The application does not call `localStorage.clear()` to perform global cleanup.
+Important limitations:
+
+- Transaction expiry does not automatically delete an abandoned Spotify login record.
+- Browser session restoration may preserve session storage.
+- Storage keys containing a path do not provide isolation from other scripts on the same origin.
+- Removing application references does not guarantee secure memory erasure.
+- Disconnecting Spotify locally does not revoke provider-side authorization.
+
+MyApps cannot delete cookies belonging to podcast-provider or Spotify origins, or guarantee deletion of cached media. Releasing a media source is not cache erasure.
+
+Browser privacy settings can block cookies or clear browsing data. Clearing MyApps site data may also erase saved drafts, display density, and temporary login state. The application does not call `localStorage.clear()` to perform global cleanup.
 
 YouTube thumbnails contact its image servers when enabled. Video playback contacts YouTube and loads the official iframe API.
 
@@ -382,19 +498,19 @@ Embedded playback may not recognize Premium. Use official YouTube while signed i
 
 ## Architecture and publication
 
-| Component                | Responsibility                                                 |
-| ------------------------ | -------------------------------------------------------------- |
-| `channels.json`          | Approved YouTube channels                                      |
-| `categories.json`        | Shared YouTube categories                                      |
-| `podcasts.json`          | Approved/pending podcast sources                               |
-| Issues and Actions       | Owner requests, validation, proposals, collection, publication |
-| GitHub Pages             | Static hosting                                                 |
-| Page memory              | Temporary editing, filters, layouts, playback                  |
-| Optional browser storage | Remembered whitelist drafts and legacy data                    |
+| Component          | Responsibility                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `channels.json`    | Approved YouTube channels                                                                     |
+| `categories.json`  | Shared YouTube categories                                                                     |
+| `podcasts.json`    | Approved/pending podcast sources                                                              |
+| Issues and Actions | Owner requests, validation, proposals, collection, publication                                |
+| GitHub Pages       | Static hosting                                                                                |
+| Page memory        | Temporary editing, filters, layouts, playback, Spotify session                                |
+| Browser storage    | Remembered whitelist data, legacy data, display density, temporary Spotify login transactions |
 
-No application database, continuously running backend, or direct authenticated frontend save API is used.
+No application database, continuously running backend, or direct authenticated frontend repository-save API is used.
 
-Workflow-provided tokens stay in processing steps; no repository-write token is embedded in the frontend.
+Workflow-provided tokens stay in processing steps; no repository-write token is embedded in the frontend. The Spotify client ID is public application identification, not a client secret.
 
 The documented publication boundary contains exactly seven public files:
 
@@ -514,6 +630,8 @@ Adding an API key is not enough. Review workflows, public configs, URLs, owner c
 
 The supplied request design assumes a personal-account-owned repository. Organization ownership needs an authorization redesign.
 
+Spotify integration requires its own application configuration and privacy review; the original installation’s public client ID and redirect URI are not a substitute for configuring your fork.
+
 ### 2. Replace installation-specific references
 
 Search tracked files for:
@@ -522,9 +640,18 @@ Search tracked files for:
 linyuli303/Apps
 linyuli303.github.io/Apps/
 42029941
+f900eeb7bfba4a1fa35d0e37ec84c4ec
 ```
 
-Review frontend request destinations, feed selection/reuse URLs, validators, processors, proposal bindings/writer provenance, workflow owner/repository gates, tests, and documentation.
+Review:
+
+- Frontend request destinations.
+- Feed selection/reuse URLs.
+- Validators and processors.
+- Proposal bindings and writer provenance.
+- Workflow owner/repository gates.
+- Spotify client ID, redirect URI, origin/path checks, callback validation, and transaction-storage key.
+- Tests and documentation.
 
 Update tests consistently; do not weaken authorization to make a fork run.
 
@@ -556,7 +683,22 @@ Enable Issues and review policies for declared workflow permissions and configur
 
 For proposal PR creation, the repository’s Actions PR setting must eventually permit creation. Enable it only after implementation/security review and controlled testing. The application must never use that permission to approve or merge PRs. No PAT is required by this design.
 
-### 5. Configure Pages and schedule
+### 5. Review Spotify configuration
+
+If enabling Spotify:
+
+- Configure your Spotify application and exact redirect URI.
+- Update the client ID and all origin/path bindings consistently.
+- Do not embed a client secret.
+- Review the requested scopes against features actually needed.
+- Keep authorization-request scopes and token-response validation consistent.
+- Disclose temporary session storage, memory-only tokens, and third-party behavior.
+- Test denial, expiry, cancellation, cleanup failures, and disconnect.
+- Verify live account authorization and playback separately from offline tests.
+
+The current requested scope set is broader than read-only playlist browsing. Do not describe it as least-privilege without reviewing and justifying each permission.
+
+### 6. Configure Pages and schedule
 
 - Settings → Pages → GitHub Actions.
 - Configure the final HTTPS snapshot URL; reuse refuses redirects.
@@ -564,9 +706,9 @@ For proposal PR creation, the repository’s Actions PR setting must eventually 
 - Review environments, reviewers, timers, and branch rules.
 - Repository renaming does not guarantee old Pages URL redirects.
 
-### 6. Test locally
+### 7. Test locally
 
-Python **3.12** is the documented CI baseline; confirm the current workflow before relying on that version. Runtime Python scripts use the standard library. Node is needed for executable JavaScript tests.
+The inspected workflows use **Python 3.12**. Runtime Python scripts use the standard library. Node is needed for executable JavaScript tests.
 
 Run from PowerShell using your installed executable paths:
 
@@ -615,7 +757,7 @@ Node-dependent tests are skipped if unavailable. Report skips explicitly and rea
 
 Fake-media tests cover retry policy and simulated event ordering, not browser CORS or provider behavior. Offline tests do not prove live authorization, playback, or deployment.
 
-### 7. Commit and synchronize safely
+### 8. Commit and synchronize safely
 
 - Inspect the working tree and review the diff.
 - Run required tests before committing.
@@ -625,11 +767,13 @@ Fake-media tests cover retry policy and simulated event ordering, not browser CO
 - Before pushing, fetch and compare:
 
 ```powershell
-git fetch origin
-if ($LASTEXITCODE -ne 0) { throw "Fetch failed." }
+& {
+    git fetch origin
+    if ($LASTEXITCODE -ne 0) { throw "Fetch failed." }
 
-git rev-list --left-right --count HEAD...origin/main
-if ($LASTEXITCODE -ne 0) { throw "Branch comparison failed." }
+    git rev-list --left-right --count HEAD...origin/main
+    if ($LASTEXITCODE -ne 0) { throw "Branch comparison failed." }
+}
 ```
 
 The first number is local commits ahead; the second is commits behind.
@@ -643,7 +787,7 @@ The first number is local commits ahead; the second is commits behind.
 
 Use the correct upstream when working on a branch other than `main`.
 
-### 8. First publication and verification
+### 9. First publication and verification
 
 Run initial publication with reuse unchecked; a new installation has no published snapshot.
 
@@ -652,6 +796,7 @@ Verify:
 - Tests, collection, packaging, and deploy.
 - Main/section direct URLs, reload, Back/Forward.
 - Device layouts and manual override.
+- Display-density persistence and cross-tab updates.
 - RSS panel geometry, search, Back/Close, phone swipes, and scrolling.
 - MyTube playback, filtering, speed, Kino, fullscreen.
 - MyTube Auto-play next defaults to enabled, remains switchable, and stops at the list end.
@@ -663,6 +808,8 @@ Verify:
 - Disclosure in expanded, collapsed, and docked states.
 - Pause/Close and rapid episode changes do not restart stale attempts.
 - LG normal-speed compatibility and phone seeking.
+- Spotify authorization, playlist browsing, player availability, expiry, and disconnect.
+- Spotify storage behavior and permission disclosure.
 - Feed reuse skips YouTube collection.
 - Existing-host activation/removal still works.
 - New-host PRs contain only intended changes and cannot auto-activate.
@@ -674,16 +821,19 @@ Verify:
 - Live unchanged-Issue checks and SHA/revision/digest bindings.
 - Read-only source resolution and proposal preflight separated from privileged writes.
 - Trusted writer code; no proposal execution with write credentials.
-- Exact seven-file publication boundary.
+- Documented seven-file publication boundary.
 - Safe text rendering and restrictive CSP.
 - Credential-pattern, path, export, and size checks.
 - Public-IP pinned HTTPS, TLS verification, checked redirects, bounded inputs, and safe XML.
 - HEAD-only media inspection; no audio-body downloads during onboarding.
 - Explicit media hosts, never unrestricted HTTPS/wildcard permissions.
+- Spotify PKCE, state validation, one-time transaction consumption, and callback URL cleanup.
 - Network time budgets are bounded intentions, not absolute DNS/socket wall-clock guarantees.
 - Browser controls are not authentication or parental-control boundaries.
+- An owner-only UI label is not an authorization boundary.
 - Shared CSP hosts are not per-show browser isolation.
 - Path-scoped storage is not same-origin isolation.
+- In-memory credentials remain exposed to code executing with equivalent page privileges.
 - Existing browser data is not globally erased.
 - Optional header/CODEOWNERS templates are not automatically enforced.
 - Pinned Actions and passing tests do not establish complete security.
