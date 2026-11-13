@@ -12,8 +12,8 @@
     />
     <title>MyApps</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=feed-preview-transparency-5-v2" />
-    <script src="app.js?v=feed-preview-transparency-5-v2" defer></script>
+    <link rel="stylesheet" href="style.css?v=tube-playback-defaults-v3" />
+    <script src="app.js?v=tube-playback-defaults-v3" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -304,7 +304,7 @@
         <button id="loop-video" class="playback-icon" type="button" aria-label="Repeat current video" title="Repeat current video" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10V1l5 5-5 5V8H7v3H3V8a4 4 0 0 1 4-4zm10 16H7v3l-5-5 5-5v3h10v-3h4v3a4 4 0 0 1-4 4z" /></svg></button>
         <label class="auto-next-control" for="auto-next">
           Auto-play next
-          <input id="auto-next" type="checkbox" role="switch" />
+          <input id="auto-next" type="checkbox" role="switch" checked />
           <span class="auto-next-track" aria-hidden="true"></span>
         </label>
         <label class="player-appearance-label" for="player-appearance">
@@ -325,7 +325,6 @@
           <output id="speed-value" for="speed-slider">1x</output>
         </label>
         <button id="tube-description-toggle" type="button" aria-expanded="false" aria-controls="tube-description-panel" title="Video description">Info</button>
-        <button id="tube-captions" class="playback-icon" type="button" aria-label="Turn captions on" title="Turn captions on" aria-pressed="false" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zm2 2v12h14V6zm5 3v2H7v2h3v2H6V9zm8 0v2h-3v2h3v2h-4V9z" /></svg></button>
         <div class="tube-volume-control podcast-volume" role="group" aria-label="Volume control">
           <button id="tube-mute" class="playback-icon" type="button" aria-label="Mute" title="Mute" aria-pressed="false" disabled><svg class="apps-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg></button>
           <input id="tube-volume" type="range" min="0" max="100" step="1" value="100" aria-label="Volume" disabled />
@@ -368,7 +367,7 @@
       <section id="tube-preview-settings" class="tube-popover" aria-labelledby="tube-preview-settings-heading" hidden>
         <div class="tube-panel-heading"><h3 id="tube-preview-settings-heading">Feed preview settings</h3><button id="tube-preview-settings-close" type="button" aria-label="Close feed preview settings">×</button></div>
         <label for="tube-preview-width">Width <output id="tube-preview-width-value" for="tube-preview-width">720px</output><input id="tube-preview-width" type="range" min="320" max="1400" step="10" value="720" /></label>
-        <label for="tube-preview-height">Height (length) <output id="tube-preview-height-value" for="tube-preview-height">55vh</output><input id="tube-preview-height" type="range" min="20" max="85" step="1" value="55" /></label>
+        <label for="tube-preview-height">Height (length) <output id="tube-preview-height-value" for="tube-preview-height">85vh</output><input id="tube-preview-height" type="range" min="20" max="85" step="1" value="85" /></label>
         <label for="tube-preview-transparency">
           Transparency
           <output id="tube-preview-transparency-value"

@@ -14,9 +14,9 @@ class AutoNextTests(unittest.TestCase):
         self.assertIn('id="auto-next" type="checkbox" role="switch"',self.html)
         trap=self.js.split('const controls = [',1)[1].split('];',1)[0]
         self.assertIn('$("auto-next")',trap)
-    def test_default_off_and_private_preference(self):
+    def test_default_on_and_private_preference(self):
         block=self.js.split('function autoNextState()',1)[1].split('function nextAutoVideoID(',1)[0]
-        self.assertIn('enabled:false',block)
+        self.assertIn('enabled:true',block)
         self.assertNotIn('localStorage',block)
         initializer=self.js.split('(function initializeAutoNext()',1)[1].split('})();',1)[0]
         self.assertIn('state.enabled = toggle.checked',initializer)

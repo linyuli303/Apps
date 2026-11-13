@@ -3142,7 +3142,7 @@ body.podcast-player-open main{padding-bottom:220px}
 #player .tube-volume-control{display:inline-flex;align-items:center;gap:5px}
 #player #tube-volume{width:90px;min-height:26px;padding:0;border:0;accent-color:var(--accent)}
 #tube-volume-value{font-size:11px;min-width:32px;font-variant-numeric:tabular-nums}
-#player #tube-captions[aria-pressed="true"],#player #tube-mute[aria-pressed="true"]{border-color:var(--accent);background:var(--hover);color:var(--label-accent)}
+#player #tube-mute[aria-pressed="true"]{border-color:var(--accent);background:var(--hover);color:var(--label-accent)}
 #player .tube-popover{position:fixed;right:12px;bottom:110px;z-index:114;width:min(540px,calc(100vw - 24px));max-height:calc(100dvh - 130px);overflow:auto;overscroll-behavior:contain;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 8px 30px #0004;font-size:12px}
 #player .tube-panel-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
 #player .tube-panel-heading h3{margin:0;font-size:14px}
@@ -3153,11 +3153,11 @@ body.podcast-player-open main{padding-bottom:220px}
 #tube-preview-settings input{grid-column:1/-1;width:100%;min-height:28px;padding:0;border:0;accent-color:var(--accent)}
 #tube-preview-settings p{color:var(--muted);line-height:1.5}
 /* Only the background is translucent, never the preview's text or controls. */
-#player #player-feed-panel{width:min(var(--tube-preview-width,720px),calc(100vw - 24px));height:min(var(--tube-preview-height,55vh),calc(100dvh - 130px));max-height:calc(100dvh - 130px);background:var(--tube-preview-bg,var(--surface))}
+#player #player-feed-panel{width:min(var(--tube-preview-width,720px),calc(100vw - 24px));height:min(var(--tube-preview-height,85vh),calc(100dvh - 130px));max-height:calc(100dvh - 130px);background:var(--tube-preview-bg,var(--surface))}
 #player-feed-panel .player-feed-row{background:transparent}
 #player-feed-panel .player-feed-row:hover,#player-feed-panel .player-feed-row:focus-visible,#player-feed-panel .player-feed-row[aria-current="true"]{background:color-mix(in srgb,var(--hover) 75%,transparent)}
 #player-feed-panel .player-feed-title{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-@media(max-height:450px){#player .tube-popover{bottom:85px;max-height:calc(100dvh - 100px)}#player #player-feed-panel{height:min(var(--tube-preview-height,55vh),calc(100dvh - 100px));max-height:calc(100dvh - 100px)}}
+@media(max-height:450px){#player .tube-popover{bottom:85px;max-height:calc(100dvh - 100px)}#player #player-feed-panel{height:min(var(--tube-preview-height,85vh),calc(100dvh - 100px));max-height:calc(100dvh - 100px)}}
 
 /* Compact MyTube toolbar v3: intrinsic button widths, one row, original Feed markup. */
 #player .player-bottom,#player.kino .player-bottom{display:flex;flex-flow:row nowrap;align-items:center;justify-content:flex-start;gap:5px;padding:5px 8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
@@ -3175,7 +3175,6 @@ body.podcast-player-open main{padding-bottom:220px}
 #player .player-bottom #tube-mute svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 #player .player-bottom #tube-volume{width:64px;min-width:0;height:30px;min-height:30px;padding:0;margin:0;accent-color:var(--accent);border:0;background:transparent}
 #player #tube-volume-value{min-width:30px;text-align:right;font-size:10px;font-variant-numeric:tabular-nums;color:var(--muted)}
-#player .player-bottom #tube-captions[aria-pressed="true"]{background:var(--hover);border-color:var(--accent);color:var(--label-accent)}
 #player .player-bottom #player-feed-toggle{display:inline-flex;align-items:center;gap:5px;width:auto}
 
 /* Universal MyApps display density. Compact is the baseline in every app. */

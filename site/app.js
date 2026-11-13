@@ -416,7 +416,7 @@ document.addEventListener("keydown", (event) => {
         $("player-appearance"),
         $("speed-preset"),
         $("speed-slider"),
-        $("tube-description-toggle"), $("tube-captions"), $("tube-mute"), $("tube-volume"),
+        $("tube-description-toggle"), $("tube-mute"), $("tube-volume"),
         ...Array.from(document.querySelectorAll(".tube-popover:not([hidden]) button, .tube-popover:not([hidden]) input, .tube-popover:not([hidden]) a")),
         $("tube-preview-config"),
         $("skip-short-videos"),
@@ -1927,7 +1927,6 @@ function attachSpeedController(iframe, id) {
           if (valid()) $("playback-mode-status").textContent =
             "Autoplay blocked. Press Play in the video.";
         },
-        onApiChange: () => { if (valid()) syncTubeCaptions(); },
         onPlaybackRateChange: () => {
           if (valid()) reportPlaybackSpeed();
         },
@@ -2328,7 +2327,7 @@ function prepareSharedCategoryRequest() {
 // Page-memory auto-next preference; never changes channel approval.
 function autoNextState() {
   if (autoNextState.saved) return autoNextState.saved;
-  return autoNextState.saved = {enabled:false};
+  return autoNextState.saved = {enabled:true};
 }
 
 function nextAutoVideoID(items, playing, eligible) {
@@ -5082,7 +5081,7 @@ function initializePodcastConfiguration(shows) {
 
 // MyTube extras use the existing, approved YouTube iframe only. No new API requests.
 function tubeExtrasState() {
-  return tubeExtrasState.saved ||= {volume:100, muted:false, captions:false, timer:null};
+  return tubeExtrasState.saved ||= {volume:100, muted:false, timer:null};
 }
 function closeTubePopover(id, restore=false) {
   $(id).hidden = true;
@@ -5101,7 +5100,7 @@ function resetTubeExtrasForVideo(video) {
 function stopTubeExtras() {
   const state = tubeExtrasState();
   clearInterval(state.timer); state.timer = null;
-  for (const id of ["tube-captions", "tube-mute", "tube-volume"]) $(id).disabled = true;
+  for (const id of ["tube-mute", "tube-volume"]) $(id).disabled = true;
   closeTubePopover("tube-description-panel");
   closeTubePopover("tube-preview-settings");
 }
@@ -5121,24 +5120,13 @@ function syncTubeVolume() {
     $("tube-mute").setAttribute("aria-label", label); $("tube-mute").title = label;
   } catch {}
 }
-function syncTubeCaptions() {
-  const state = tubeExtrasState(), player = speedState().player;
-  if (!speedState().ready || !player) return;
-  try {
-    const available = player.getOptions().includes("captions");
-    $("tube-captions").setAttribute("aria-pressed", String(state.captions && available));
-    $("tube-captions").title = state.captions && available ? "Turn captions off" : "Turn captions on (when available)";
-    $("tube-captions").setAttribute("aria-label", $("tube-captions").title);
-  } catch {}
-}
 function readyTubeExtras() {
   const state = tubeExtrasState(), player = speedState().player;
-  for (const id of ["tube-captions", "tube-mute", "tube-volume"]) $(id).disabled = false;
+  for (const id of ["tube-mute", "tube-volume"]) $(id).disabled = false;
   try { player.setVolume(state.volume); state.muted ? player.mute() : player.unMute(); } catch {}
-  try { state.captions ? player.loadModule("captions") : player.unloadModule("captions"); } catch {}
-  syncTubeVolume(); syncTubeCaptions();
+  syncTubeVolume();
   clearInterval(state.timer);
-  state.timer = setInterval(() => { syncTubeVolume(); syncTubeCaptions(); }, 700);
+  state.timer = setInterval(() => { syncTubeVolume(); }, 700);
 }
 (function initializeTubeExtras() {
   for (const [trigger,id] of [["tube-description-toggle","tube-description-panel"],["tube-preview-config","tube-preview-settings"]]) {
@@ -5175,17 +5163,7 @@ function readyTubeExtras() {
       syncTubeVolume();
     } catch { $("playback-mode-status").textContent="Use YouTube or device volume controls."; }
   });
-  $("tube-captions").addEventListener("click",()=>{
-    const state=tubeExtrasState(), player=speedState().player;
-    if (!speedState().ready || !player) return;
-    try {
-      state.captions=!state.captions;
-      state.captions ? player.loadModule("captions") : player.unloadModule("captions");
-      syncTubeCaptions();
-      $("playback-mode-status").textContent=state.captions ? "Captions requested. Availability and language are controlled by YouTube; use its CC/settings menu if needed." : "Captions off.";
-    } catch { $("playback-mode-status").textContent="Use YouTube's CC control for this video."; }
-  });
-  const settings={width:720,height:55,transparency:5};
+  const settings={width:720,height:85,transparency:5};
   function applyPreview() {
     const panel=$("player-feed-panel");
     panel.style.setProperty("--tube-preview-width",settings.width+"px");
@@ -5203,7 +5181,7 @@ function readyTubeExtras() {
     }
   }
   for (const key of Object.keys(settings)) $("tube-preview-"+key).addEventListener("input",()=>{settings[key]=Number($("tube-preview-"+key).value);applyPreview();});
-  $("tube-preview-reset").addEventListener("click",()=>{Object.assign(settings,{width:720,height:55,transparency:5});applyPreview();});
+  $("tube-preview-reset").addEventListener("click",()=>{Object.assign(settings,{width:720,height:85,transparency:5});applyPreview();});
   new MutationObserver(applyPreview).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme","data-appearance"]});
   applyPreview();
 })();
