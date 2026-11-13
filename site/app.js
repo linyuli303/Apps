@@ -2474,7 +2474,13 @@ function renderPlayerFeed() {
     }
   });
   document.addEventListener("pointerdown", event => {
-    if (!panel.hidden && !panel.contains(event.target) && !toggle.contains(event.target)) {
+    if (
+      !panel.hidden &&
+      !panel.contains(event.target) &&
+      !toggle.contains(event.target) &&
+      !$("tube-preview-settings")?.contains(event.target) &&
+      !$("tube-preview-config")?.contains(event.target)
+    ) {
       closePlayerFeed(panel.contains(document.activeElement));
     }
   });
@@ -5179,7 +5185,7 @@ function readyTubeExtras() {
       $("playback-mode-status").textContent=state.captions ? "Captions requested. Availability and language are controlled by YouTube; use its CC/settings menu if needed." : "Captions off.";
     } catch { $("playback-mode-status").textContent="Use YouTube's CC control for this video."; }
   });
-  const settings={width:720,height:55,transparency:25};
+  const settings={width:720,height:55,transparency:75};
   function applyPreview() {
     const panel=$("player-feed-panel");
     panel.style.setProperty("--tube-preview-width",settings.width+"px");
@@ -5197,7 +5203,7 @@ function readyTubeExtras() {
     }
   }
   for (const key of Object.keys(settings)) $("tube-preview-"+key).addEventListener("input",()=>{settings[key]=Number($("tube-preview-"+key).value);applyPreview();});
-  $("tube-preview-reset").addEventListener("click",()=>{Object.assign(settings,{width:720,height:55,transparency:25});applyPreview();});
+  $("tube-preview-reset").addEventListener("click",()=>{Object.assign(settings,{width:720,height:55,transparency:75});applyPreview();});
   new MutationObserver(applyPreview).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme","data-appearance"]});
   applyPreview();
 })();

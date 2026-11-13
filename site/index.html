@@ -12,8 +12,8 @@
     />
     <title>MyApps</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=myapps-universal-density-4" />
-    <script src="app.js?v=myapps-universal-density-4" defer></script>
+    <link rel="stylesheet" href="style.css?v=feed-preview-transparency-75-v1" />
+    <script src="app.js?v=feed-preview-transparency-75-v1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -369,7 +369,13 @@
         <div class="tube-panel-heading"><h3 id="tube-preview-settings-heading">Feed preview settings</h3><button id="tube-preview-settings-close" type="button" aria-label="Close feed preview settings">×</button></div>
         <label for="tube-preview-width">Width <output id="tube-preview-width-value" for="tube-preview-width">720px</output><input id="tube-preview-width" type="range" min="320" max="1400" step="10" value="720" /></label>
         <label for="tube-preview-height">Height (length) <output id="tube-preview-height-value" for="tube-preview-height">55vh</output><input id="tube-preview-height" type="range" min="20" max="85" step="1" value="55" /></label>
-        <label for="tube-preview-transparency">Transparency <output id="tube-preview-transparency-value" for="tube-preview-transparency">25%</output><input id="tube-preview-transparency" type="range" min="0" max="90" step="1" value="25" /></label>
+        <label for="tube-preview-transparency">
+          Transparency
+          <output id="tube-preview-transparency-value"
+            for="tube-preview-transparency">75%</output>
+          <input id="tube-preview-transparency" type="range"
+            min="0" max="90" step="1" value="75" />
+        </label>
         <p>Changes apply immediately in every view. Text stays opaque. Settings last until reload; size is limited to the available screen.</p>
         <button id="tube-preview-reset" type="button">Reset defaults</button>
       </section>
