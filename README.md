@@ -6,7 +6,7 @@
 
 - **MyTube** — approved YouTube channels, searchable text feeds, shared categories, and embedded playback.
 - **MyPodcasts** — approved public RSS shows, episode browsing, and an audio player with an editable playlist.
-- **MySpotify** — coming soon; account connection is not implemented.
+- **MySpotify** — under development; the current account-connection and playback implementation should be verified before being described as production-ready.
 
 Direct section URLs:
 
@@ -26,15 +26,26 @@ The repository includes:
 - Podcast volume, collapse, side docking, and phone title gestures.
 - Anonymous-first podcast playback with one disclosed standard-mode fallback.
 - Isolated onboarding preflight and proposal-only draft-PR creation.
+- MyTube playback defaults of enabled Auto-play next, maximum configured Feed height, and 5% Feed background transparency.
+- Removal of the custom MyTube Caption control.
+
+Latest local verification for the MyTube playback changes:
+
+- JavaScript syntax check passed.
+- Spotify embed-player regression check passed.
+- Full unit suite passed: **400 tests, no failures or skips**.
+- Browser checks confirmed Feed defaults/reset behavior, custom Caption-button removal, and Auto-play next behavior.
+
+These local results do not establish the current remote CI, deployment, or production status.
 
 Important verification limits:
 
-- Anonymous-first playback was pushed in **`31e729b`**. Its production publication and CI results still require confirmation.
+- Anonymous-first playback was pushed in **`31e729b`**. Its production publication and CI results still require confirmation unless separately verified.
 - Local browser tests verified anonymous playback for **KI verstehen** and standard fallback for **AI FIRST Podcast**, including Pause/Resume, seeking, collapse/dock/restore, and Close.
 - Those playback tests used localhost, whose Origin differs from production.
 - Production-origin, iPhone, and LG verification remain necessary for this playback change.
 - The new-host onboarding path has offline tests and a synthetic committed-code preflight, but its live Issue-to-draft-PR flow has not yet been verified.
-- Actions PR creation is currently disabled. Leave it disabled until the proposal flow is ready for controlled live verification.
+- Actions PR creation was last documented as disabled. Verify the current repository setting; leave it disabled until the proposal flow is ready for controlled live verification.
 - Passing tests or deployment does not establish complete browser, network, or security correctness.
 
 ## Device layouts and appearance
@@ -88,7 +99,7 @@ The current configuration requests **15 recent uploads per channel**, not full h
 - Embedded playback through **`youtube-nocookie.com`**, YouTube’s privacy-enhanced embed domain.
 - **Kino mode**, video-only fullscreen, and **Open in YouTube / App**.
 - Previous/Next follows the filtered, sorted list and wraps at its ends.
-- **Auto-play next** is off by default and stops at the end of the list.
+- **Auto-play next** is enabled by default, can be switched off, and stops at the end of the list.
 - **Loop** repeats the current video and takes priority over Auto-play next.
 - **Skip videos <60s** is enabled by default. Exactly 60-second videos and unknown durations remain included.
 - Short filtering applies to browsing, RSS catalogue, playback Feed menu, and navigation without interrupting the current video.
@@ -96,8 +107,20 @@ The current configuration requests **15 recent uploads per channel**, not full h
 - Preferred speed: **0.25×–2×**, in 0.25 increments. YouTube determines supported rates.
 - Missing durations display **Unavailable**.
 - Playback preferences reset on reload.
+- The custom Caption button is not displayed. Captions remain controlled through YouTube’s native player when available.
 
 The collapsible **Feed** menu previews the filtered list, highlights the current video, and shows channel, date, views, and duration. It uses 48-row pagination and overlays rather than resizes the video window.
+
+Feed preview defaults:
+
+| Setting                 | Default                                                          |
+| ----------------------- | ---------------------------------------------------------------- |
+| Width                   | 720px, constrained to fit the screen                             |
+| Height                  | 85vh, the current slider maximum, capped to the available screen |
+| Background transparency | 5% transparency, equivalent to 95% opacity                       |
+| Text and controls       | Fully opaque                                                     |
+
+**Reset defaults** restores these Feed settings. Changes apply immediately and remain in page memory until reload.
 
 Playback controls use the published snapshot and official iframe API, not additional YouTube Data API collection requests. Autoplay restrictions may require pressing Play.
 
@@ -322,7 +345,7 @@ Current functionality still includes:
 - Published-channel search and official channel links.
 - Owner-authorized GitHub addition/removal requests, one channel per request.
 - Local whitelist draft controls.
-- Session-only drafts by default.
+- Page-memory drafts by default.
 - Optional Remember storage.
 - Export, Forget, and advanced repository/editor controls.
 
@@ -338,15 +361,16 @@ Existing browser drafts are not silently migrated between paths. Avoid clearing 
 
 MyApps adds no analytics, advertising scripts, service worker, or app-managed offline cache.
 
-| Data                                       | Behavior                                                  |
-| ------------------------------------------ | --------------------------------------------------------- |
-| Podcast queue/progress/history preferences | Page memory only; no persistent listening-history feature |
-| Speed, volume, repeat, presentation        | Page memory only                                          |
-| View, theme, appearance                    | Page memory only                                          |
-| Category edits                             | Page memory until publication/reload                      |
-| Optional remembered whitelist draft        | Existing `localStorage` feature                           |
-| Audio buffer/cache                         | Browser-managed; not disabled by MyApps                   |
-| Provider cookies                           | Possible in standard playback, subject to browser rules   |
+| Data                                    | Behavior                                                  |
+| --------------------------------------- | --------------------------------------------------------- |
+| Podcast queue and progress              | Page memory only; no persistent listening-history feature |
+| Speed, volume, repeat, presentation     | Page memory only                                          |
+| MyTube Auto-play next and Feed settings | Page memory only                                          |
+| View, theme, appearance                 | Page memory only                                          |
+| Category edits                          | Page memory until publication/reload                      |
+| Optional remembered whitelist draft     | Existing `localStorage` feature                           |
+| Audio buffer/cache                      | Browser-managed; not disabled by MyApps                   |
+| Provider cookies                        | Possible in standard playback, subject to browser rules   |
 
 MyApps cannot delete cookies belonging to podcast-provider origins or guarantee deletion of cached audio. Releasing the audio source on Close is not cache erasure.
 
@@ -372,7 +396,7 @@ No application database, continuously running backend, or direct authenticated f
 
 Workflow-provided tokens stay in processing steps; no repository-write token is embedded in the frontend.
 
-Exactly seven public files are packaged:
+The documented publication boundary contains exactly seven public files:
 
 ```text
 index.html
@@ -390,15 +414,19 @@ Raw podcast catalogues, repository configs, exports, and credentials are exclude
 
 Publication is main-only. Proposal branches are not a Pages deployment path.
 
+Verify the packaging implementation and generated artifact when changing this boundary.
+
 ## Collection, scheduling, and feed reuse
 
 ### Scheduled YouTube refresh
 
-Current repository variable:
+The repository variable was last documented as:
 
 ```text
 YOUTUBE_REFRESH_HOURS_UTC=08,11,15,19
 ```
+
+Verify the live repository setting before relying on this schedule.
 
 | UTC   | Germany winter/CET | Germany summer/CEST |
 | ----- | ------------------ | ------------------- |
@@ -461,7 +489,7 @@ The channel processor still requests full refresh for removals; it does not auto
 
 ## Quota, freshness, and collection failures
 
-Configured YouTube allowance: **10,000 units/day**, resetting at midnight Pacific Time. Fork owners must verify their own allowance.
+The YouTube allowance was last documented as **10,000 units/day**, resetting at midnight Pacific Time. Verify the actual allowance in the relevant Google Cloud project; fork owners must check their own quota.
 
 Collection uses channel metadata, uploads playlists, and batched video details including statistics.
 
@@ -538,22 +566,84 @@ For proposal PR creation, the repository’s Actions PR setting must eventually 
 
 ### 6. Test locally
 
-Python **3.12** matches CI. Runtime Python scripts use the standard library. Node is needed for executable JavaScript tests.
+Python **3.12** is the documented CI baseline; confirm the current workflow before relying on that version. Runtime Python scripts use the standard library. Node is needed for executable JavaScript tests.
+
+Run from PowerShell using your installed executable paths:
 
 ```powershell
-python -m unittest discover -s tests -q
-python scripts/security_check.py
-git diff --check
-git diff --cached --check
+$nodeExe = 'C:\path\to\node.exe'
+$pythonExe = 'C:\path\to\python.exe'
+
+foreach ($$exe in @($$nodeExe, $pythonExe)) {
+    if (-not (Test-Path -LiteralPath $exe)) {
+        throw "Executable missing: $exe"
+    }
+}
+
+# Allow Python tests to discover Node in this session.
+$$nodeDir = Split-Path -Parent $$nodeExe
+if (($$env:Path -split ';') -notcontains $$nodeDir) {
+    $$env:Path = "$$nodeDir;$env:Path"
+}
+
+& {
+    git diff --check
+    if ($LASTEXITCODE -ne 0) { throw "Whitespace check failed." }
+
+    & $nodeExe --check site/app.js
+    if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed." }
+
+    & $nodeExe tests/spotify_embed_player_regression.cjs
+    if ($LASTEXITCODE -ne 0) { throw "Spotify regression test failed." }
+
+    & $pythonExe -m unittest discover -s tests -v
+    if ($LASTEXITCODE -ne 0) { throw "Unit test suite failed." }
+
+    & $pythonExe scripts/security_check.py
+    if ($LASTEXITCODE -ne 0) { throw "Security check failed." }
+
+    git diff --cached --check
+    if ($LASTEXITCODE -ne 0) { throw "Staged whitespace check failed." }
+
+    Write-Host "`nAll validation commands passed." -ForegroundColor Green
+}
 ```
 
-Stage new files before relying on security-check coverage; it scans tracked files.
+Review and stage intended new files before relying on security-check coverage; it scans tracked files.
 
-Node-dependent tests are skipped if unavailable. Read actual CI logs rather than assume skips were covered.
+Node-dependent tests are skipped if unavailable. Report skips explicitly and read actual CI logs rather than assuming those checks ran.
 
 Fake-media tests cover retry policy and simulated event ordering, not browser CORS or provider behavior. Offline tests do not prove live authorization, playback, or deployment.
 
-### 7. First publication and verification
+### 7. Commit and synchronize safely
+
+- Inspect the working tree and review the diff.
+- Run required tests before committing.
+- Verify affected UI behavior in the browser.
+- Stage only intended files and review the staged diff.
+- Commit only after validation passes.
+- Before pushing, fetch and compare:
+
+```powershell
+git fetch origin
+if ($LASTEXITCODE -ne 0) { throw "Fetch failed." }
+
+git rev-list --left-right --count HEAD...origin/main
+if ($LASTEXITCODE -ne 0) { throw "Branch comparison failed." }
+```
+
+The first number is local commits ahead; the second is commits behind.
+
+- Ahead only: no pull is required.
+- Behind or diverged: inspect and integrate remote changes before pushing.
+- Protect uncommitted work; do not pull or stash blindly.
+- After integration or code changes, rerun validation.
+- Do not force-push or discard changes as a shortcut.
+- A successful push does not establish successful CI or deployment.
+
+Use the correct upstream when working on a branch other than `main`.
+
+### 8. First publication and verification
 
 Run initial publication with reuse unchecked; a new installation has no published snapshot.
 
@@ -564,6 +654,9 @@ Verify:
 - Device layouts and manual override.
 - RSS panel geometry, search, Back/Close, phone swipes, and scrolling.
 - MyTube playback, filtering, speed, Kino, fullscreen.
+- MyTube Auto-play next defaults to enabled, remains switchable, and stops at the list end.
+- Feed defaults/reset restore 720px width, 85vh height, and 5% background transparency, constrained to the screen.
+- The custom Caption button is absent; native YouTube caption controls remain provider-controlled.
 - Podcast playback, volume, queue, repeat, automatic advancement, and section continuity.
 - Collapse/dock/restore without interrupting audio.
 - Anonymous and fallback playback from the actual hosting Origin.
