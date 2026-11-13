@@ -8,12 +8,12 @@
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; script-src-elem 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/ https://s.ytimg.com/yts/jsbin/; style-src 'self'; img-src 'self' https://i.ytimg.com; frame-src https://www.youtube-nocookie.com https://open.spotify.com; connect-src 'self' https://accounts.spotify.com/api/token https://api.spotify.com/v1/me/playlists; media-src https://adswizz.podigee-cdn.net https://anchor.fm https://audio.podigee-cdn.net https://cdn.audiorella.com https://d3ctxlq1ktw2nl.cloudfront.net https://dcs-cached.megaphone.fm https://dts.podtrac.com https://npr.simplecastaudio.com https://play.podtrac.com https://podcast-mp3.dradio.de https://podfileszdf-a.akamaihd.net https://prfx.byspotify.com https://radiodownloaddw-a.akamaihd.net https://traffic.megaphone.fm https://wdrmedien-a.akamaihd.net https://cdn-storage.br.de https://media.neuland.br.de; object-src 'none'; base-uri 'none'; form-action 'none'"
+      content="default-src 'self'; script-src 'self'; script-src-elem 'self' https://www.youtube.com/iframe_api https://www.youtube.com/s/player/ https://s.ytimg.com/yts/jsbin/; style-src 'self'; img-src 'self' https://i.ytimg.com https://i.scdn.co/image/; frame-src https://www.youtube-nocookie.com https://open.spotify.com; connect-src 'self' https://accounts.spotify.com/api/token https://api.spotify.com/v1/me/playlists https://api.spotify.com/v1/me/following https://api.spotify.com/v1/artists/ https://api.spotify.com/v1/albums/ https://api.spotify.com/v1/playlists/; media-src https://adswizz.podigee-cdn.net https://anchor.fm https://audio.podigee-cdn.net https://cdn.audiorella.com https://d3ctxlq1ktw2nl.cloudfront.net https://dcs-cached.megaphone.fm https://dts.podtrac.com https://npr.simplecastaudio.com https://play.podtrac.com https://podcast-mp3.dradio.de https://podfileszdf-a.akamaihd.net https://prfx.byspotify.com https://radiodownloaddw-a.akamaihd.net https://traffic.megaphone.fm https://wdrmedien-a.akamaihd.net https://cdn-storage.br.de https://media.neuland.br.de; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>MyApps</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="style.css?v=tube-playback-defaults-v3" />
-    <script src="app.js?v=tube-playback-defaults-v3" defer></script>
+    <link rel="stylesheet" href="style.css?v=spotify-focus-workspace-v1" />
+    <script src="app.js?v=spotify-focus-workspace-v1" defer></script>
     <meta name="robots" content="noindex,nofollow" />
   </head>
   <body>
@@ -149,13 +149,13 @@
       <section id="spotify-page" aria-label="MySpotify — Owner only" hidden>
           <section id="spotify-connect-panel" class="manager">
             <div class="configuration-heading">
-              <h2>MySpotify — Your music, in one place.</h2>
+              <h2>MySpotify</h2>
               <button id="spotify-disconnect" type="button" hidden>
                 Disconnect
               </button>
             </div>
 
-          <p id="spotify-introduction">Your playlists, read-only. Listen in Spotify.</p>
+          <p id="spotify-introduction" hidden>Following &amp; saved.</p>
           <button id="spotify-connect" type="button" disabled>
             Connect Spotify
           </button>
@@ -164,6 +164,17 @@
               Finish or export unsaved edits first.
             </p>
         </section>
+
+        <label class="spotify-thumbnail-control">
+          <input id="spotify-thumbnails" type="checkbox"
+            autocomplete="off" aria-describedby="spotify-artwork-disclosure" />
+          Thumbnails
+        </label>
+        <span id="spotify-artwork-disclosure" class="sr-only">
+          Enabling thumbnails contacts Spotify image hosts.
+          Browser caching may occur. Turning them off does not erase cached images.
+          This preference resets on reload.
+        </span>
 
         <p id="spotify-status" role="status" aria-live="polite">
           Spotify is disconnected.
@@ -203,11 +214,40 @@
             Access and refresh tokens remain in page memory.
           </p>
           <p>
-              Approved permissions cover followed artists, playlists,
-              saved-song status, Like/Unlike, playback, and the account
-              permissions required by Spotify's player integration.
-              This version lists playlists and offers Spotify’s official embedded player on request. Track browsing, artist releases and Like/Unlike are not enabled. Embedded playback availability is controlled by Spotify.
-            </p>
+            MyApps lists followed artists, their loaded releases, and
+            account playlists. Album and permitted playlist song lists
+            are available. Spotify may restrict playlist contents;
+            Open player and Open in Spotify remain alternatives.
+            Liked Songs, Saved Albums and Like/Unlike actions are not implemented.
+          </p>
+          <p>
+            Current authorization requests permissions for followed artists,
+            private/collaborative playlists, library reading and modification,
+            streaming, playback control, private profile information and email.
+            This is broader than read-only browsing; requested permissions
+            do not mean every related feature is implemented.
+          </p>
+          <p>
+            Release summaries load progressively for loaded followed artists.
+            Scrolling can request additional artist or playlist metadata.
+            Results are partial and remain in page memory; there is no
+            background polling or persistent account-data cache.
+            Singles may include EPs. Displayed dates retain their precision.
+          </p>
+          <p>
+            Thumbnails are off by default. Enabling them contacts Spotify
+            image hosts using anonymous cross-origin image loading.
+            Browser caching may occur. Turning thumbnails off removes
+            image sources but does not undo requests or erase cached images.
+          </p>
+          <p>
+            The official Spotify player loads only after an explicit action.
+            Docking and section navigation retain its iframe.
+            Starting another media source closes Spotify to avoid overlap.
+            Playback availability and continuity depend on Spotify and the browser.
+            Focus rules filter MyApps lists, not links, recommendations,
+            advertising or other content within Spotify services.
+          </p>
           <p>
             Reloading loses the in-memory connection. Disconnect clears
             MyApps' connection but does not sign you out of Spotify globally

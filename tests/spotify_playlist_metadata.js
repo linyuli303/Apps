@@ -48,6 +48,28 @@ test("Provider links, descriptions and artwork are discarded", () => {
     "https://open.spotify.com/playlist/" + source.id);
   assert(Object.keys(output).sort().join(",") ===
     "collaborative,id,name,ownerId,ownerName,spotifyURL");
+
+  // Valid artwork is retained as a reduced URL, never a raw image array.
+  const artworkURL = "https://i.scdn.co/image/" + "c".repeat(40);
+  const withArtwork = item();
+  withArtwork.images = [{
+    url:artworkURL, width:300, height:300
+  }];
+  const checked = validateSpotifyPlaylistPage(
+    page([withArtwork])
+  ).items[0];
+
+  assert(checked.artworkURL === artworkURL);
+  assert(!("images" in checked));
+  assert(Object.isFrozen(checked));
+  withArtwork.images[0].url = "https://untrusted.example/changed";
+  assert(checked.artworkURL === artworkURL);
+
+  const invalidArtwork = item();
+  invalidArtwork.images = [{url:artworkURL + "?token=private"}];
+  assert(!("artworkURL" in validateSpotifyPlaylistPage(
+    page([invalidArtwork])
+  ).items[0]));
 });
 
 test("Duplicate IDs and malformed records fail closed", () => {

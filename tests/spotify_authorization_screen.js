@@ -99,7 +99,7 @@ function fixture(options = {}) {
     "openSpotifyLoginStore",
     "createSpotifyCallbackController",
     "createSpotifyConnectController",
-    "createSpotifyPlaylistView",
+    "createSpotifyFocusView",
     initializer,
   );
   run(

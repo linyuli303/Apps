@@ -69,7 +69,7 @@ async function test(name, run) {
     assert(f.calls.join(",") === "clean,consume,exchange");
     assert(f.controller.getStatus() === "connected");
     assert(Object.keys(f.controller).sort().join(",") ===
-      "completeCallback,disconnect,getStatus,readPlaylists");
+      "cancelAlbumTracks,cancelArtistReleases,cancelPlaylistItems,completeCallback,disconnect,getStatus,readAlbumTracks,readArtistReleases,readArtists,readPlaylistItems,readPlaylists");
   });
 
   await test("Normal app URL does not consume or exchange", async () => {

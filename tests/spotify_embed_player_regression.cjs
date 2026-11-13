@@ -1,42 +1,229 @@
-// Run from repository root: node tests/spotify_embed_player_regression.cjs
+"use strict";
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const source = fs.readFileSync(path.join(__dirname,"../site/app.js"),"utf8");
-const start = source.indexOf("function createSpotifyEmbedPlayer(host) {");
-const end = source.indexOf("function createSpotifyPlaylistView(",start);
-assert(start >= 0 && end > start);
+const source = fs.readFileSync(
+  path.join(__dirname, "../site/app.js"), "utf8"
+);
+const matches = [...source.matchAll(
+  /^function createSpotifyEmbedPlayer\([\s\S]*?^\}/gm
+)];
+assert.equal(matches.length, 1);
+
 class Node {
- constructor(tag) {this.tag=tag;this.children=[];this.attrs={};this.events={};this.dataset={};this.hidden=false;this.isConnected=true;}
- append(...items) {for(const n of items){n.parent=this;this.children.push(n);}}
- replaceChildren(...items) {this.children=[];this.append(...items);}
- setAttribute(k,v){this.attrs[k]=v;} getAttribute(k){return this.attrs[k];}
- addEventListener(k,f){this.events[k]=f;} removeEventListener(k){delete this.events[k];}
- focus(){this.focused=true;} scrollIntoView(){} remove(){this.removed=true;}
+  constructor(tag) {
+    this.tag=tag; this.children=[]; this.attrs={};
+    this.events={}; this.dataset={}; this.hidden=false;
+    this.isConnected=true;
+  }
+  append(...nodes) {
+    for(const node of nodes) {
+      node.parent=this;
+      this.children.push(node);
+    }
+  }
+  replaceChildren(...nodes) {this.children=[]; this.append(...nodes);}
+  setAttribute(key,value) {this.attrs[key]=value;}
+  getAttribute(key) {return this.attrs[key];}
+  addEventListener(name,fn) {this.events[name]=fn;}
+  removeEventListener(name) {delete this.events[name];}
+  focus() {this.focused=true;}
+  getClientRects() {return this.visible===false?[]:[{}];}
+  remove() {
+    this.removed=true;
+    if(this.parent) {
+      this.parent.children=this.parent.children.filter(n=>n!==this);
+    }
+  }
 }
-let callback, disconnected=false;
-const page=new Node("section");
-const document={createElement:tag=>new Node(tag)};
-const element=(tag,cl,text)=>{const n=new Node(tag);n.className=cl;n.textContent=text;return n;};
-class Observer {constructor(cb){callback=cb;}observe(){} disconnect(){disconnected=true;}}
-const create = new Function("element","document","$","MutationObserver",source.slice(start,end)+";return createSpotifyEmbedPlayer;")(element,document,()=>page,Observer);
-const host=new Node("section"); const api=create(host); const panel=host.children[0];
-const heading=panel.children[0],content=panel.children[1],frames=content.children[1];
-const toggle=heading.children[1],close=heading.children[2],restore=panel.children[2],trigger=new Node("button");
-assert.equal(panel.hidden,true);assert.equal(frames.children.length,0);
-api.open({id:"../escape",name:"Bad"},trigger);assert.equal(frames.children.length,0);
-const item={id:"A".repeat(22),name:"OST"};api.open(item,trigger);
-assert.equal(panel.hidden,false);const first=frames.children[0];
-assert.equal(first.src,"https://open.spotify.com/embed/playlist/"+item.id);
-assert(!first.src.includes("autoplay"));assert(!first.src.includes("token"));
-toggle.events.click();assert.equal(content.hidden,true);assert.equal(toggle.getAttribute("aria-expanded"),"false");assert.equal(frames.children[0],first);
-assert.equal(heading.hidden,true);assert.equal(restore.hidden,false);assert.equal(restore.focused,true);
-assert.equal(panel.dataset.collapsed,"true");
-restore.events.click();assert.equal(content.hidden,false);assert.equal(frames.children[0],first);
-assert.equal(heading.hidden,false);assert.equal(restore.hidden,true);assert.equal(toggle.focused,true);
-api.open(item,trigger);assert.equal(frames.children[0],first);
-api.open({id:"B".repeat(22),name:"Next"},trigger);assert.notEqual(frames.children[0],first);assert.equal(frames.children.length,1);
-close.events.click();assert.equal(frames.children.length,0);assert.equal(panel.hidden,true);assert.equal(trigger.focused,true);
-api.open(item,trigger);page.hidden=true;callback();assert.equal(frames.children.length,0);
-api.open(item,trigger);api.dispose();assert.equal(frames.children.length,0);assert.equal(disconnected,true);assert.equal(panel.removed,true);
-console.log("PASS: no eager iframe, invalid IDs rejected, fixed embed origin, no token/autoplay URL, side dock/restore preserves iframe and moves focus, same playlist reuse, replacement, close, tab exit and disposal.");
+const body=new Node("body");
+const document={body,createElement:tag=>new Node(tag)};
+const element=(tag,cl,text)=>{
+  const node=new Node(tag);
+  node.className=cl; node.textContent=text;
+  return node;
+};
+const create=new Function("element","document",
+  matches[0][0]+"\nreturn createSpotifyEmbedPlayer;"
+)(element,document);
+
+const host=new Node("section");
+const api=create(host);
+assert.equal(host.children.length,0);
+assert.equal(body.children.length,1);
+
+const panel=body.children[0];
+const [heading,content,restore]=panel.children;
+const [title,expand,bottom,side,close]=heading.children;
+const frames=content.children[1];
+const trigger=new Node("button");
+assert(panel.hidden);
+assert.equal(frames.children.length,0);
+
+api.open({id:"../escape",name:"Bad"},trigger);
+assert.equal(frames.children.length,0);
+
+const item={id:"A".repeat(22),name:"Sample"};
+api.open(item,trigger);
+const original=frames.children[0];
+assert.equal(original.src,
+  "https://open.spotify.com/embed/playlist/"+item.id);
+assert.equal(panel.dataset.presentation,"bottom");
+assert(content.hidden);
+assert(!heading.hidden);
+assert(expand.focused);
+
+expand.events.click();
+assert.equal(panel.dataset.presentation,"expanded");
+assert(!content.hidden);
+assert.equal(frames.children[0],original);
+
+bottom.events.click();
+assert(content.hidden);
+assert.equal(frames.children[0],original);
+side.events.click();
+assert(heading.hidden);
+assert(!restore.hidden);
+assert(restore.focused);
+restore.events.click();
+assert.equal(panel.dataset.presentation,"bottom");
+assert(!heading.hidden);
+assert.equal(frames.children[0],original);
+
+// No section observer removes the player during navigation.
+host.hidden=true;
+assert.equal(panel.parent,body);
+assert(!panel.hidden);
+assert.equal(frames.children[0],original);
+
+api.open(item,trigger);
+assert.equal(frames.children[0],original);
+let previous=original;
+for(const type of ["album","track","playlist"]) {
+  api.open({id:item.id,name:"Typed",type},trigger);
+  const frame=frames.children[0];
+  assert.notEqual(frame,previous);
+  assert.equal(frame.src,
+    "https://open.spotify.com/embed/"+type+"/"+item.id);
+  assert.equal(frame.title,"Spotify "+type+": Typed");
+  assert.equal(frame.getAttribute("referrerpolicy"),"no-referrer");
+  assert(!frame.src.includes("token"));
+  assert(!frame.src.includes("autoplay"));
+  api.open({id:item.id,name:"Typed",type},trigger);
+  assert.equal(frames.children[0],frame);
+  previous=frame;
+}
+for(const type of ["artist","episode","../track","TRACK","",null,{},42]) {
+  api.open({id:item.id,name:"Rejected",type},trigger);
+  assert.equal(frames.children[0],previous);
+  assert.equal(title.textContent,"Typed");
+}
+
+close.events.click();
+assert(panel.hidden);
+assert.equal(frames.children.length,0);
+assert(trigger.focused);
+
+api.open(item,trigger);
+expand.events.click();
+panel.events.keydown({key:"Escape",stopPropagation(){}});
+assert.equal(panel.dataset.presentation,"bottom");
+assert.equal(frames.children.length,1);
+
+api.dispose();
+api.dispose();
+assert.equal(frames.children.length,0);
+assert(panel.removed);
+assert.equal(body.children.length,0);
+api.open(item,trigger);
+assert.equal(frames.children.length,0);
+assert.equal(expand.events.click,undefined);
+console.log("PASS: no eager iframe; fixed typed URLs; compact bottom, expand, side dock and restore preserve iframe; root attachment preserves navigation; invalid types rejected; close, Escape and idempotent disposal.");
+
+// spotify-media-handoff-regression-v1
+{
+  let podcastPauses = 0;
+  let videoCloses = 0;
+  const video = {hidden:false};
+  const fakeWindow = {
+    MyAppsPodcastPlayer:{
+      pauseForVideo() { podcastPauses++; }
+    }
+  };
+
+  const createWithHandoff = new Function(
+    "element", "document", "window", "$", "closePlayer",
+    matches[0][0] + "\nreturn createSpotifyEmbedPlayer;"
+  )(
+    element,
+    document,
+    fakeWindow,
+    id => {
+      assert.equal(id, "player");
+      return video;
+    },
+    () => {
+      videoCloses++;
+      video.hidden = true;
+    }
+  );
+
+  const player = createWithHandoff(new Node("section"));
+  const registry = fakeWindow.MyAppsSpotifyPlayer;
+  const panel = body.children[body.children.length - 1];
+  const frames = panel.children[1].children[1];
+  const trigger = new Node("button");
+
+  // Construction must not interrupt other media or load an iframe.
+  assert.equal(podcastPauses, 0);
+  assert.equal(videoCloses, 0);
+  assert.equal(frames.children.length, 0);
+  assert.equal(typeof registry.closeForMedia, "function");
+
+  // Invalid selections must not interrupt current media.
+  player.open({id:"../escape", name:"Invalid"}, trigger);
+  player.open({
+    id:"Z".repeat(22), name:"Unsupported", type:"artist"
+  }, trigger);
+  assert.equal(podcastPauses, 0);
+  assert.equal(videoCloses, 0);
+  assert.equal(frames.children.length, 0);
+
+  // A valid explicit selection hands playback over to Spotify.
+  player.open({
+    id:"Z".repeat(22), name:"Sample track", type:"track"
+  }, trigger);
+  assert.equal(podcastPauses, 1);
+  assert.equal(videoCloses, 1);
+  assert.equal(frames.children.length, 1);
+
+  // Another media source can stop Spotify without disposing the UI.
+  registry.closeForMedia();
+  assert(panel.hidden);
+  assert.equal(frames.children.length, 0);
+  assert.equal(fakeWindow.MyAppsSpotifyPlayer, registry);
+
+  // Closing repeatedly is harmless, and the player can be opened again.
+  registry.closeForMedia();
+  player.open({
+    id:"Y".repeat(22), name:"Sample album", type:"album"
+  }, trigger);
+  assert.equal(podcastPauses, 2);
+  assert.equal(videoCloses, 1); // Already-hidden video is not closed again.
+  assert.equal(frames.children.length, 1);
+
+  player.dispose();
+  assert.equal(frames.children.length, 0);
+  assert.equal(fakeWindow.MyAppsSpotifyPlayer, undefined);
+
+  // An old player's disposal must not erase a newer player's registry.
+  const older = createWithHandoff(new Node("section"));
+  const newer = createWithHandoff(new Node("section"));
+  const newerRegistry = fakeWindow.MyAppsSpotifyPlayer;
+  older.dispose();
+  assert.equal(fakeWindow.MyAppsSpotifyPlayer, newerRegistry);
+  newer.dispose();
+  assert.equal(fakeWindow.MyAppsSpotifyPlayer, undefined);
+
+  console.log("PASS: media handoff is explicit, invalid selections do not interrupt playback, other media closes Spotify, registry cleanup is ownership-safe.");
+}

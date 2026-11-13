@@ -267,6 +267,9 @@ function openPlayer(id) {
     return;
   }
   if (!video || !safeID(id) || !draftAllows(video.channelId)) return;
+  if (window.MyAppsSpotifyPlayer) {
+    window.MyAppsSpotifyPlayer.closeForMedia();
+  }
   if ($("player").hidden) {
     returnFocus = document.activeElement;
     $("player").classList.add("kino");
@@ -2882,6 +2885,11 @@ function createPodcastPlayer(episodes, names, filtered, rerender) {
   function attemptPlay() {
     const attempt = privacyAttempt;
     if (!attempt || !privacyPolicy.resume(attempt)) return;
+    if (typeof window !== "undefined" &&
+        window.MyAppsSpotifyPlayer &&
+        typeof window.MyAppsSpotifyPlayer.closeForMedia === "function") {
+      window.MyAppsSpotifyPlayer.closeForMedia();
+    }
     const token = generation;
     const sequence = ++playSequence;
 
@@ -4119,6 +4127,10 @@ function createSpotifyCallbackController({
   clientId, store, replaceURL,
   exchange = exchangeSpotifyAuthorization,
   playlistReader = readSpotifyPlaylistPage,
+  artistReader = readSpotifyFollowedArtistPage,
+  releaseReader = (...args) => readSpotifyArtistReleasePage(...args),
+  albumTrackReader = (...args) => readSpotifyAlbumTrackPage(...args),
+  playlistItemReader = (...args) => readSpotifyPlaylistItemPage(...args),
   clock = Date.now,
 }) {
   if (typeof clientId !== "string" || !/^[a-f0-9]{32}$/.test(clientId) ||
@@ -4127,6 +4139,10 @@ function createSpotifyCallbackController({
       typeof replaceURL !== "function" ||
       typeof exchange !== "function" ||
       typeof playlistReader !== "function" ||
+      typeof artistReader !== "function" ||
+      typeof releaseReader !== "function" ||
+      typeof albumTrackReader !== "function" ||
+      typeof playlistItemReader !== "function" ||
       typeof clock !== "function") {
     throw new Error("Invalid Spotify callback controller.");
   }
@@ -4134,6 +4150,13 @@ function createSpotifyCallbackController({
   let generation = 0;
   let pending = null;
   let playlistPending = null;
+  let artistPending = null;
+  let releasePending = null;
+  const followedArtistIds = new Set();
+  const eligibleAlbumIds = new Set();
+  const eligiblePlaylistIds = new Set();
+  let playlistItemPending = null;
+  let albumTrackPending = null;
   let session = null;
   let status = "disconnected";
 
@@ -4141,7 +4164,16 @@ function createSpotifyCallbackController({
     generation++;
     if (pending) pending.abort();
     if (playlistPending) playlistPending.abort();
+    if (artistPending) artistPending.abort();
+    if (releasePending) releasePending.abort();
+    releasePending = null;
+    followedArtistIds.clear();
+    eligibleAlbumIds.clear();
+    eligiblePlaylistIds.clear();
+    cancelPlaylistItems();
+    cancelAlbumTracks();
     playlistPending = null;
+    artistPending = null;
     pending = null;
     session = null;
     status = "disconnected";
@@ -4240,6 +4272,10 @@ function createSpotifyCallbackController({
       return Object.freeze({status:"reauthorize"});
     }
 
+    if (offset === 0) {
+      eligiblePlaylistIds.clear();
+      cancelPlaylistItems();
+    }
     if (playlistPending) playlistPending.abort();
     const requestController = new AbortController();
     playlistPending = requestController;
@@ -4277,6 +4313,14 @@ function createSpotifyCallbackController({
       }
 
       const checked = validateSpotifyPlaylistPage(page);
+      const additions = checked.items
+        .map(item => item.id)
+        .filter(id => !eligiblePlaylistIds.has(id));
+      if (eligiblePlaylistIds.size + additions.length > 5000) {
+        throw new Error("Playlist membership limit reached");
+      }
+      for (const id of additions) eligiblePlaylistIds.add(id);
+
       return Object.freeze({
         status:"ready",
         ...checked,
@@ -4295,8 +4339,430 @@ function createSpotifyCallbackController({
     }
   }
 
+  async function readArtists(after = null) {
+    if (after !== null &&
+        (typeof after !== "string" || !/^[A-Za-z0-9]{22}$/.test(after))) {
+      return Object.freeze({status:"failed"});
+    }
+    if (getStatus() !== "connected") {
+      return Object.freeze({status:"reauthorize"});
+    }
+
+    // Refresh invalidates previously loaded followed membership immediately.
+    if (after === null) {
+      followedArtistIds.clear();
+      eligibleAlbumIds.clear();
+      cancelAlbumTracks();
+      if (releasePending) releasePending.abort();
+      releasePending = null;
+    }
+    if (artistPending) artistPending.abort();
+    const requestController = new AbortController();
+    artistPending = requestController;
+    const token = generation;
+    const currentSession = session;
+
+    const current = () =>
+      token === generation &&
+      session === currentSession &&
+      artistPending === requestController &&
+      !requestController.signal.aborted;
+
+    try {
+      const page = await artistReader(currentSession.accessToken, after, {
+        signal:requestController.signal,
+      });
+      if (!current()) return Object.freeze({status:"cancelled"});
+      if (getStatus() !== "connected") {
+        return Object.freeze({status:"reauthorize"});
+      }
+
+      if (!page || typeof page !== "object" || Array.isArray(page)) {
+        throw new Error("Invalid artist result");
+      }
+      if (page.status === "reauthorize") {
+        invalidate();
+        status = "expired";
+        return Object.freeze({status:"reauthorize"});
+      }
+      if (["restricted", "rate_limited"].includes(page.status)) {
+        return Object.freeze({status:page.status});
+      }
+      if (page.status !== "ready") {
+        throw new Error("Unexpected artist result");
+      }
+
+      // Revalidate injected results; discard links, artwork and extra fields.
+      const checked = validateSpotifyFollowedArtistPage({
+        artists: {
+          limit:20,
+          total:page.total,
+          items:Array.isArray(page.items)
+            ? page.items.map(item => item && ({
+                id:item.id,
+                type:item.type,
+                name:item.name,
+                images:[{url:item.artworkURL}],
+              }))
+            : page.items,
+          cursors:{after:page.nextAfter},
+        },
+      }, after);
+
+      const additions = checked.items.filter(item =>
+        !followedArtistIds.has(item.id));
+      if (followedArtistIds.size + additions.length > 5000) {
+        throw new Error("Followed-artist membership limit reached");
+      }
+      for (const item of additions) followedArtistIds.add(item.id);
+      return Object.freeze({status:"ready", ...checked});
+    } catch {
+      if (!current()) return Object.freeze({status:"cancelled"});
+      if (getStatus() !== "connected") {
+        return Object.freeze({status:"reauthorize"});
+      }
+      return Object.freeze({status:"failed"});
+    } finally {
+      requestController.abort();
+      if (artistPending === requestController) artistPending = null;
+    }
+  }
+
+  function cancelArtistReleases() {
+    if (releasePending) releasePending.abort();
+    releasePending = null;
+  }
+
+  async function readArtistReleases(artistId, offset = 0) {
+    if (typeof artistId !== "string" ||
+        !/^[A-Za-z0-9]{22}$/.test(artistId) ||
+        !Number.isSafeInteger(offset) ||
+        offset < 0 || offset > 10000 || offset % 20 !== 0) {
+      return Object.freeze({status:"failed"});
+    }
+    if (getStatus() !== "connected") {
+      return Object.freeze({status:"reauthorize"});
+    }
+    if (!followedArtistIds.has(artistId)) {
+      return Object.freeze({status:"restricted"});
+    }
+
+    if (releasePending) releasePending.abort();
+    const requestController = new AbortController();
+    releasePending = requestController;
+    const token = generation;
+    const currentSession = session;
+
+    const current = () =>
+      token === generation &&
+      session === currentSession &&
+      releasePending === requestController &&
+      !requestController.signal.aborted &&
+      followedArtistIds.has(artistId);
+
+    try {
+      const page = await releaseReader(
+        currentSession.accessToken, artistId, offset,
+        {signal:requestController.signal}
+      );
+      if (!current()) return Object.freeze({status:"cancelled"});
+      if (getStatus() !== "connected") {
+        return Object.freeze({status:"reauthorize"});
+      }
+
+      if (!page || typeof page !== "object" || Array.isArray(page)) {
+        throw new Error("Invalid release result");
+      }
+      if (page.status === "reauthorize") {
+        invalidate();
+        status = "expired";
+        return Object.freeze({status:"reauthorize"});
+      }
+      if (["restricted", "rate_limited"].includes(page.status)) {
+        return Object.freeze({status:page.status});
+      }
+
+      if (page.status !== "ready" || page.artistId !== artistId ||
+          page.offset !== offset ||
+          !Number.isSafeInteger(page.total) ||
+          page.total < offset || page.total > 100000 ||
+          !Array.isArray(page.items) || page.items.length > 20 ||
+          page.total < offset + page.items.length ||
+          (page.nextOffset !== null &&
+           (page.nextOffset !== offset + 20 ||
+            page.nextOffset > 10000 ||
+            page.nextOffset >= page.total))) {
+        throw new Error("Release page mismatch");
+      }
+
+      // Reconstruct and revalidate reduced metadata from injected readers.
+      // Raw-page pagination has already been validated by the transport.
+      const checked = validateSpotifyArtistReleasePage({
+        offset,
+        limit:20,
+        total:page.total,
+        items:page.items.map(item => ({
+          id:item.id,
+          type:item.type,
+          name:item.name,
+          album_type:item.releaseType,
+          album_group:item.releaseType,
+          images:[{url:item.artworkURL}],
+          release_date:item.releaseDate,
+          release_date_precision:item.releaseDatePrecision,
+          artists:Array.isArray(item.artistIds)
+            ? item.artistIds.map(id => ({id})) : null,
+        })),
+      }, artistId, offset);
+
+      if (checked.items.length !== page.items.length) {
+        throw new Error("Uncredited release returned");
+      }
+
+      const newAlbumIds = checked.items
+        .map(item => item.id)
+        .filter(id => !eligibleAlbumIds.has(id));
+      if (eligibleAlbumIds.size + newAlbumIds.length > 5000) {
+        throw new Error("Album eligibility limit reached");
+      }
+      for (const id of newAlbumIds) eligibleAlbumIds.add(id);
+
+      return Object.freeze({
+        status:"ready",
+        ...checked,
+        nextOffset:page.nextOffset,
+      });
+    } catch {
+      if (!current()) return Object.freeze({status:"cancelled"});
+      if (getStatus() !== "connected") {
+        return Object.freeze({status:"reauthorize"});
+      }
+      return Object.freeze({status:"failed"});
+    } finally {
+      requestController.abort();
+      if (releasePending === requestController) releasePending = null;
+    }
+  }
+
+  function cancelAlbumTracks() {
+    if (albumTrackPending) albumTrackPending.abort();
+    albumTrackPending = null;
+  }
+
+  async function readAlbumTracks(albumId, offset = 0) {
+    if (typeof albumId !== "string" ||
+        !/^[A-Za-z0-9]{22}$/.test(albumId) ||
+        !Number.isSafeInteger(offset) ||
+        offset < 0 || offset > 10000 || offset % 20 !== 0) {
+      return Object.freeze({status:"failed"});
+    }
+    if (getStatus() !== "connected") {
+      return Object.freeze({status:"reauthorize"});
+    }
+    if (!eligibleAlbumIds.has(albumId)) {
+      return Object.freeze({status:"restricted"});
+    }
+
+    cancelAlbumTracks();
+    const requestController = new AbortController();
+    albumTrackPending = requestController;
+    const token = generation;
+    const currentSession = session;
+
+    const current = () =>
+      token === generation &&
+      session === currentSession &&
+      albumTrackPending === requestController &&
+      !requestController.signal.aborted &&
+      eligibleAlbumIds.has(albumId);
+
+    try {
+      const page = await albumTrackReader(
+        currentSession.accessToken, albumId, offset,
+        {signal:requestController.signal}
+      );
+
+      if (!current()) return Object.freeze({status:"cancelled"});
+      if (getStatus() !== "connected") {
+        return Object.freeze({status:"reauthorize"});
+      }
+      if (!page || typeof page !== "object" || Array.isArray(page)) {
+        throw new Error("Invalid album-song result");
+      }
+      if (page.status === "reauthorize") {
+        invalidate();
+        status = "expired";
+        return Object.freeze({status:"reauthorize"});
+      }
+      if (["restricted", "rate_limited"].includes(page.status)) {
+        return Object.freeze({status:page.status});
+      }
+      if (page.status !== "ready" ||
+          page.albumId !== albumId || page.offset !== offset ||
+          !Array.isArray(page.items) || page.items.length > 20) {
+        throw new Error("Album-song page mismatch");
+      }
+
+      // Rebuild provider-shaped records and run the trusted validators again.
+      const checked = validateSpotifyAlbumTrackPage({
+        offset,
+        limit:20,
+        total:page.total,
+        items:page.items.map((row, index) => {
+          if (!row || row.position !== offset + index + 1) {
+            throw new Error("Album-song position mismatch");
+          }
+          if (row.track === null) return null;
+
+          const track = row.track;
+          if (!track ||
+              !["available", "unavailable", "unknown"]
+                .includes(track.availability)) {
+            throw new Error("Invalid reduced song");
+          }
+          return {
+            id:track.id,
+            type:track.type,
+            name:track.name,
+            artists:track.artists,
+            duration_ms:track.durationMs,
+            ...(track.availability === "unknown" ? {} : {
+              is_playable:track.availability === "available",
+            }),
+          };
+        }),
+      }, albumId, offset);
+
+      if (page.nextOffset !== checked.nextOffset) {
+        throw new Error("Album-song continuation mismatch");
+      }
+
+      return Object.freeze({status:"ready", ...checked});
+    } catch {
+      if (!current()) return Object.freeze({status:"cancelled"});
+      if (getStatus() !== "connected") {
+        return Object.freeze({status:"reauthorize"});
+      }
+      return Object.freeze({status:"failed"});
+    } finally {
+      requestController.abort();
+      if (albumTrackPending === requestController) albumTrackPending = null;
+    }
+  }
+
+  function cancelPlaylistItems() {
+    if (playlistItemPending) playlistItemPending.abort();
+    playlistItemPending = null;
+  }
+
+  async function readPlaylistItems(playlistId, offset = 0) {
+    if (typeof playlistId !== "string" ||
+        !/^[A-Za-z0-9]{22}$/.test(playlistId) ||
+        !Number.isSafeInteger(offset) ||
+        offset < 0 || offset > 10000 || offset % 20 !== 0) {
+      return Object.freeze({status:"failed"});
+    }
+    if (getStatus() !== "connected") {
+      return Object.freeze({status:"reauthorize"});
+    }
+    if (!eligiblePlaylistIds.has(playlistId)) {
+      return Object.freeze({status:"restricted"});
+    }
+
+    cancelPlaylistItems();
+    const requestController = new AbortController();
+    playlistItemPending = requestController;
+    const token = generation;
+    const currentSession = session;
+
+    const current = () =>
+      token === generation &&
+      session === currentSession &&
+      playlistItemPending === requestController &&
+      !requestController.signal.aborted &&
+      eligiblePlaylistIds.has(playlistId);
+
+    try {
+      const page = await playlistItemReader(
+        currentSession.accessToken, playlistId, offset,
+        {signal:requestController.signal}
+      );
+      if (!current()) return Object.freeze({status:"cancelled"});
+      if (getStatus() !== "connected") {
+        return Object.freeze({status:"reauthorize"});
+      }
+      if (!page || typeof page !== "object" || Array.isArray(page)) {
+        throw new Error("Invalid playlist-song result");
+      }
+      if (page.status === "reauthorize") {
+        invalidate();
+        status = "expired";
+        return Object.freeze({status:"reauthorize"});
+      }
+      if (["restricted", "rate_limited"].includes(page.status)) {
+        return Object.freeze({status:page.status});
+      }
+      if (page.status !== "ready" ||
+          page.playlistId !== playlistId || page.offset !== offset ||
+          !Array.isArray(page.items) || page.items.length > 20) {
+        throw new Error("Playlist-song page mismatch");
+      }
+
+      // Revalidate reduced results, including injected reader responses.
+      const checked = validateSpotifyPlaylistItemPage({
+        offset,
+        limit:20,
+        total:page.total,
+        items:page.items.map((row, index) => {
+          if (!row || row.position !== offset + index + 1) {
+            throw new Error("Playlist-song position mismatch");
+          }
+          if (row.track === null) return {item:null};
+
+          const track = row.track;
+          if (!track ||
+              !["available", "unavailable", "unknown"]
+                .includes(track.availability)) {
+            throw new Error("Invalid reduced playlist song");
+          }
+          return {
+            item:{
+              id:track.id,
+              type:track.type,
+              name:track.name,
+              artists:track.artists,
+              duration_ms:track.durationMs,
+              ...(track.availability === "unknown" ? {} : {
+                is_playable:track.availability === "available",
+              }),
+            },
+          };
+        }),
+      }, playlistId, offset);
+
+      if (checked.nextOffset !== page.nextOffset) {
+        throw new Error("Playlist-song continuation mismatch");
+      }
+      return Object.freeze({status:"ready", ...checked});
+    } catch {
+      if (!current()) return Object.freeze({status:"cancelled"});
+      if (getStatus() !== "connected") {
+        return Object.freeze({status:"reauthorize"});
+      }
+      return Object.freeze({status:"failed"});
+    } finally {
+      requestController.abort();
+      if (playlistItemPending === requestController) {
+        playlistItemPending = null;
+      }
+    }
+  }
+
   return Object.freeze({
-    completeCallback, disconnect, getStatus, readPlaylists,
+    completeCallback, disconnect, getStatus, readPlaylists, readArtists,
+    readArtistReleases, cancelArtistReleases,
+    readAlbumTracks, cancelAlbumTracks,
+    readPlaylistItems, cancelPlaylistItems,
   });
 }
 
@@ -4448,6 +4914,331 @@ function captureSpotifyStartupCallback({readURL, replaceURL}) {
 
 // Unwired read-only adapter. Never log tokens, bodies or private playlist data.
 // Callers must establish a current session and discard stale results.
+// Pure followed-artist reduction. No artwork, storage, requests or recommendations.
+// Pure artist-release reduction. No requests, artwork or recommendations.
+// Metadata selection only: never requests images or accesses browser storage.
+// Unknown hosts/formats fall back to a placeholder.
+// Explicit opt-in only. No source assignment while artwork is disabled.
+function createSpotifyArtworkCover(artworkURL, enabled = false) {
+  const cover = element("div", "music-library-cover", "♫");
+  cover.setAttribute("aria-hidden", "true");
+
+  if (enabled !== true) return cover;
+
+  const checkedURL = selectSpotifyArtworkURL([{url:artworkURL}]);
+  if (!checkedURL) return cover;
+
+  const image = document.createElement("img");
+  image.alt = "";
+  image.loading = "lazy";
+  image.decoding = "async";
+  image.referrerPolicy = "no-referrer";
+  image.crossOrigin = "anonymous";
+  image.addEventListener("error", () => {
+    // No retries or credentialed fallback.
+    image.removeAttribute("src");
+    // Rendering integration may have moved this image into an existing card.
+    const currentCover = image.parentNode;
+    if (currentCover) {
+      currentCover.replaceChildren(document.createTextNode("♫"));
+    } else if (cover.contains(image)) {
+      cover.replaceChildren(document.createTextNode("♫"));
+    }
+  }, {once:true});
+
+  cover.replaceChildren(image);
+  image.src = checkedURL;
+  return cover;
+}
+
+
+
+// Display reduction only. Session membership/access checks remain separate.
+// Null, local tracks and episodes are unavailable for this music-track view.
+// Album track order is retained. Release dates come from validated album data.
+// This validator does not establish saved/followed collection membership.
+// Current playlist item response shape: entries wrap their content in "item".
+// Access permission and account collection membership are checked separately.
+function validateSpotifyPlaylistItemPage(page, playlistId, offset = 0) {
+  if (typeof playlistId !== "string" ||
+      !/^[A-Za-z0-9]{22}$/.test(playlistId) ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 || offset > 10000 || offset % 20 !== 0 ||
+      !page || typeof page !== "object" || Array.isArray(page) ||
+      page.offset !== offset || page.limit !== 20 ||
+      !Number.isSafeInteger(page.total) ||
+      page.total < 0 || page.total > 100000 ||
+      !Array.isArray(page.items) || page.items.length > 20 ||
+      (page.items.length > 0 &&
+       page.total < offset + page.items.length)) {
+    throw new Error("Invalid playlist-item page.");
+  }
+
+  const items = page.items.map((entry, index) => {
+    const position = offset + index + 1;
+
+    if (entry === null) {
+      return Object.freeze({position, track:null});
+    }
+
+    if (!entry || typeof entry !== "object" || Array.isArray(entry) ||
+        !Object.prototype.hasOwnProperty.call(entry, "item") ||
+        (entry.is_local !== undefined &&
+         typeof entry.is_local !== "boolean")) {
+      throw new Error("Invalid playlist entry.");
+    }
+
+    // Local files have no supported Spotify catalogue playback action here.
+    const track = entry.is_local === true
+      ? null : validateSpotifyTrackMetadata(entry.item);
+
+    // Do not retain added_by, descriptions, arbitrary links or raw album data.
+    // Playlist added_at is not the song's release date.
+    return Object.freeze({position, track});
+  });
+
+  const candidate = offset + 20;
+
+  return Object.freeze({
+    playlistId,
+    offset,
+    total:page.total,
+    items:Object.freeze(items),
+    nextOffset:page.items.length === 20 &&
+      candidate < page.total && candidate <= 10000 ? candidate : null,
+  });
+}
+
+function validateSpotifyAlbumTrackPage(page, albumId, offset = 0) {
+  if (typeof albumId !== "string" ||
+      !/^[A-Za-z0-9]{22}$/.test(albumId) ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 || offset > 10000 || offset % 20 !== 0 ||
+      !page || typeof page !== "object" || Array.isArray(page) ||
+      page.offset !== offset || page.limit !== 20 ||
+      !Number.isSafeInteger(page.total) ||
+      page.total < 0 || page.total > 100000 ||
+      !Array.isArray(page.items) || page.items.length > 20 ||
+      (page.items.length > 0 &&
+       page.total < offset + page.items.length)) {
+    throw new Error("Invalid album-track page.");
+  }
+
+  const items = page.items.map((item, index) => Object.freeze({
+    position:offset + index + 1,
+    track:validateSpotifyTrackMetadata(item),
+  }));
+
+  // Use raw entry count so unavailable entries do not break pagination.
+  const candidate = offset + 20;
+  return Object.freeze({
+    albumId,
+    offset,
+    total:page.total,
+    items:Object.freeze(items),
+    nextOffset:page.items.length === 20 &&
+      candidate < page.total && candidate <= 10000 ? candidate : null,
+  });
+}
+
+function validateSpotifyTrackMetadata(track) {
+  if (track === null) return null;
+  if (!track || typeof track !== "object" || Array.isArray(track)) {
+    throw new Error("Invalid Spotify track.");
+  }
+  if (track.is_local === true || track.type === "episode") return null;
+
+  const validID = value =>
+    typeof value === "string" && /^[A-Za-z0-9]{22}$/.test(value);
+  const validLabel = value =>
+    typeof value === "string" && value.trim().length > 0 &&
+    value.length <= 300 && !/[\u0000-\u001f\u007f]/.test(value);
+
+  if (track.type !== "track" || !validID(track.id) ||
+      !validLabel(track.name) ||
+      (track.is_local !== undefined && track.is_local !== false) ||
+      !Array.isArray(track.artists) ||
+      track.artists.length < 1 || track.artists.length > 100 ||
+      (track.duration_ms !== undefined && track.duration_ms !== null &&
+       (!Number.isSafeInteger(track.duration_ms) ||
+        track.duration_ms < 0 || track.duration_ms > 86400000)) ||
+      (track.is_playable !== undefined &&
+       typeof track.is_playable !== "boolean")) {
+    throw new Error("Invalid Spotify track metadata.");
+  }
+
+  const artists = track.artists.map(artist => {
+    if (!artist || !validID(artist.id) || !validLabel(artist.name)) {
+      throw new Error("Invalid track artist.");
+    }
+    return Object.freeze({id:artist.id, name:artist.name.trim()});
+  });
+
+  return Object.freeze({
+    id:track.id,
+    type:"track",
+    name:track.name.trim(),
+    artists:Object.freeze(artists),
+    durationMs:track.duration_ms ?? null,
+    // Unknown availability is not a claim that playback will succeed.
+    availability:track.is_playable === true ? "available"
+      : track.is_playable === false ? "unavailable" : "unknown",
+    spotifyURL:"https://open.spotify.com/track/" + track.id,
+  });
+}
+
+function validateSpotifyArtistReleasePage(page, artistId, offset = 0) {
+  const validID = value =>
+    typeof value === "string" && /^[A-Za-z0-9]{22}$/.test(value);
+  const validLabel = value =>
+    typeof value === "string" && value.trim().length > 0 &&
+    value.length <= 300 && !/[\u0000-\u001f\u007f]/.test(value);
+
+  if (!validID(artistId) || !Number.isSafeInteger(offset) ||
+      offset < 0 || offset > 10000 || offset % 20 !== 0 ||
+      !page || typeof page !== "object" || Array.isArray(page) ||
+      page.offset !== offset || page.limit !== 20 ||
+      !Number.isSafeInteger(page.total) ||
+      page.total < 0 || page.total > 100000 ||
+      !Array.isArray(page.items) || page.items.length > 20 ||
+      page.total < offset + page.items.length) {
+    throw new Error("Invalid artist-release page.");
+  }
+
+  function checkedDate(value, precision) {
+    const patterns = {
+      year: /^[1-9][0-9]{3}$/,
+      month: /^[1-9][0-9]{3}-(0[1-9]|1[0-2])$/,
+      day: /^[1-9][0-9]{3}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/,
+    };
+    if (typeof value !== "string" ||
+        !Object.prototype.hasOwnProperty.call(patterns, precision) ||
+        !patterns[precision].test(value)) {
+      throw new Error("Invalid release date.");
+    }
+
+    // A lower bound supports sorting without claiming unknown day precision.
+    const lowerBound = precision === "year" ? value + "-01-01"
+      : precision === "month" ? value + "-01" : value;
+    const parsed = new Date(lowerBound + "T00:00:00Z");
+    if (!Number.isFinite(parsed.getTime()) ||
+        parsed.toISOString().slice(0, 10) !== lowerBound) {
+      throw new Error("Invalid calendar date.");
+    }
+    return lowerBound;
+  }
+
+  const seen = new Set();
+  const items = [];
+  for (const item of page.items) {
+    if (!item || typeof item !== "object" || Array.isArray(item) ||
+        item.type !== "album" || !validID(item.id) ||
+        seen.has(item.id) || !validLabel(item.name) ||
+        !["album", "single", "compilation"].includes(item.album_type) ||
+        !["album", "single", "compilation", "appears_on"]
+          .includes(item.album_group) ||
+        !Array.isArray(item.artists) ||
+        item.artists.length < 1 || item.artists.length > 100) {
+      throw new Error("Invalid artist release.");
+    }
+    seen.add(item.id);
+
+    const artistIds = item.artists.map(artist => {
+      if (!artist || !validID(artist.id)) {
+        throw new Error("Invalid release artist.");
+      }
+      return artist.id;
+    });
+    const dateLowerBound = checkedDate(
+      item.release_date, item.release_date_precision
+    );
+
+    // Require explicit credit; related artists and recommendations are excluded.
+    if (!artistIds.includes(artistId) ||
+        !["album", "single"].includes(item.album_group) ||
+        !["album", "single"].includes(item.album_type)) continue;
+
+    const artworkURL = selectSpotifyArtworkURL(item.images);
+    items.push(Object.freeze({
+      ...(artworkURL ? {artworkURL} : {}),
+      id: item.id,
+      type: "album",
+      name: item.name.trim(),
+      releaseType: item.album_type,
+      releaseDate: item.release_date,
+      releaseDatePrecision: item.release_date_precision,
+      dateLowerBound,
+      artistIds: Object.freeze([...new Set(artistIds)]),
+      spotifyURL: "https://open.spotify.com/album/" + item.id,
+    }));
+  }
+
+  // Pagination uses the raw page, not the count remaining after filtering.
+  const candidate = offset + 20;
+  const nextOffset = page.items.length === 20 &&
+    candidate < page.total && candidate <= 10000 ? candidate : null;
+
+  return Object.freeze({
+    artistId,
+    offset,
+    total: page.total,
+    items: Object.freeze(items),
+    nextOffset,
+  });
+}
+
+function validateSpotifyFollowedArtistPage(page, after = null) {
+  const validID = value =>
+    typeof value === "string" && /^[A-Za-z0-9]{22}$/.test(value);
+  if (after !== null && !validID(after)) {
+    throw new Error("Invalid followed-artist cursor.");
+  }
+
+  const artists = page && page.artists;
+  if (!artists || typeof artists !== "object" || Array.isArray(artists) ||
+      artists.limit !== 20 ||
+      !Array.isArray(artists.items) || artists.items.length > 20 ||
+      !Number.isSafeInteger(artists.total) ||
+      artists.total < artists.items.length || artists.total > 100000 ||
+      !artists.cursors || typeof artists.cursors !== "object" ||
+      Array.isArray(artists.cursors) ||
+      (artists.cursors.after !== null && !validID(artists.cursors.after))) {
+    throw new Error("Invalid followed-artist page.");
+  }
+
+  const seen = new Set();
+  const items = artists.items.map(item => {
+    if (!item || item.type !== "artist" || !validID(item.id) ||
+        seen.has(item.id) || item.id === after ||
+        typeof item.name !== "string" ||
+        !item.name.trim() || item.name.length > 300 ||
+        /[\u0000-\u001f\u007f]/.test(item.name)) {
+      throw new Error("Invalid followed artist.");
+    }
+    seen.add(item.id);
+    const artworkURL = selectSpotifyArtworkURL(item.images);
+    return Object.freeze({
+      ...(artworkURL ? {artworkURL} : {}),
+      id: item.id,
+      type: "artist",
+      name: item.name.trim(),
+      spotifyURL: "https://open.spotify.com/artist/" + item.id,
+    });
+  });
+
+  const cursor = artists.cursors.after;
+  if (items.length && cursor !== null &&
+      (cursor === after || cursor !== items[items.length - 1].id)) {
+    throw new Error("Invalid followed-artist continuation.");
+  }
+
+  return Object.freeze({
+    items: Object.freeze(items),
+    total: artists.total,
+    nextAfter: items.length && cursor !== null ? cursor : null,
+  });
+}
+
 async function readSpotifyPlaylistPage(
   accessToken, offset = 0, {request = globalThis.fetch, signal} = {}
 ) {
@@ -4581,6 +5372,521 @@ async function readSpotifyPlaylistPage(
   }
 }
 
+// Single artist-release page; caller must enforce followed membership.
+async function readSpotifyArtistReleasePage(
+  accessToken, artistId, offset = 0, {request = globalThis.fetch, signal} = {}
+) {
+  if (typeof accessToken !== "string" ||
+      accessToken.length < 1 || accessToken.length > 8192 ||
+      !/^[A-Za-z0-9._~+\/-]+=*$/.test(accessToken) ||
+      (typeof artistId !== "string" || !/^[A-Za-z0-9]{22}$/.test(artistId)) ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 || offset > 10000 || offset % 20 !== 0 ||
+      typeof request !== "function") {
+    throw new Error("Invalid Spotify artist-release request.");
+  }
+
+  // Construct pagination locally. Never send credentials to a supplied URL.
+  const url = new URL(
+    "https://api.spotify.com/v1/artists/" + artistId + "/albums"
+  );
+  url.search = new URLSearchParams({
+    include_groups:"album,single", limit:"20", offset:String(offset),
+  }).toString();
+
+  const controller = new AbortController();
+  let listening = false;
+  let reader = null;
+  let complete = false;
+  let timer;
+  const cancel = () => controller.abort();
+
+  try {
+    if (signal) {
+      if (typeof signal.aborted !== "boolean" ||
+          typeof signal.addEventListener !== "function" ||
+          typeof signal.removeEventListener !== "function") {
+        throw new Error("Invalid cancellation signal");
+      }
+      signal.addEventListener("abort", cancel, {once:true});
+      listening = true;
+      if (signal.aborted) cancel();
+    }
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    timer = setTimeout(cancel, 15000);
+
+    const response = await request(url.href, {
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"no-store",
+      redirect:"error",
+      referrerPolicy:"no-referrer",
+      headers:{
+        Authorization:"Bearer " + accessToken,
+        Accept:"application/json",
+      },
+      signal:controller.signal,
+    });
+
+    if (controller.signal.aborted || !response ||
+        response.redirected || response.url !== url.href) {
+      throw new Error("Invalid response destination");
+    }
+
+    // Return fixed states only, without reading provider error bodies.
+    const stopped = {
+      401:"reauthorize",
+      403:"restricted",
+      429:"rate_limited",
+    }[response.status];
+    if (stopped) {
+      return Object.freeze({status:stopped});
+    }
+
+    if (response.status !== 200 ||
+        !/^application\/json(?:\s*;|$)/i.test(
+          response.headers.get("Content-Type") || ""
+        ) ||
+        !response.body || typeof response.body.getReader !== "function") {
+      throw new Error("Invalid artist-release response");
+    }
+
+    reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    while (true) {
+      const part = await reader.read();
+      if (controller.signal.aborted) throw new Error("Cancelled");
+      if (part.done) break;
+      if (!(part.value instanceof Uint8Array)) {
+        throw new Error("Invalid response chunk");
+      }
+      size += part.value.byteLength;
+      if (size > 1000000) throw new Error("Artist-release response too large");
+      chunks.push(part.value);
+    }
+
+    const bytes = new Uint8Array(size);
+    let position = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, position);
+      position += chunk.byteLength;
+    }
+    const data = JSON.parse(
+      new TextDecoder("utf-8", {fatal:true}).decode(bytes)
+    );
+    const checked = validateSpotifyArtistReleasePage(
+      data, artistId, offset
+    );
+
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    complete = true;
+
+    // Reduced metadata only; never follow provider pagination URLs.
+    return Object.freeze({
+      status:"ready",
+      ...checked,
+    });
+  } catch {
+    throw new Error("Spotify artist releases could not be loaded or were cancelled.");
+  } finally {
+    clearTimeout(timer);
+    if (listening) signal.removeEventListener("abort", cancel);
+    if (!complete) {
+      controller.abort();
+      if (reader) {
+        try { Promise.resolve(reader.cancel()).catch(() => {}); } catch {}
+      }
+    }
+  }
+}
+
+// One album-song page; session must enforce collection membership.
+async function readSpotifyAlbumTrackPage(
+  accessToken, albumId, offset = 0, {request = globalThis.fetch, signal} = {}
+) {
+  if (typeof accessToken !== "string" ||
+      accessToken.length < 1 || accessToken.length > 8192 ||
+      !/^[A-Za-z0-9._~+\/-]+=*$/.test(accessToken) ||
+      (typeof albumId !== "string" || !/^[A-Za-z0-9]{22}$/.test(albumId)) ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 || offset > 10000 || offset % 20 !== 0 ||
+      typeof request !== "function") {
+    throw new Error("Invalid Spotify album-track request.");
+  }
+
+  // Construct pagination locally. Never send credentials to a supplied URL.
+  const url = new URL(
+    "https://api.spotify.com/v1/albums/" + albumId + "/tracks"
+  );
+  url.search = new URLSearchParams({
+    limit:"20", offset:String(offset),
+  }).toString();
+
+  const controller = new AbortController();
+  let listening = false;
+  let reader = null;
+  let complete = false;
+  let timer;
+  const cancel = () => controller.abort();
+
+  try {
+    if (signal) {
+      if (typeof signal.aborted !== "boolean" ||
+          typeof signal.addEventListener !== "function" ||
+          typeof signal.removeEventListener !== "function") {
+        throw new Error("Invalid cancellation signal");
+      }
+      signal.addEventListener("abort", cancel, {once:true});
+      listening = true;
+      if (signal.aborted) cancel();
+    }
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    timer = setTimeout(cancel, 15000);
+
+    const response = await request(url.href, {
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"no-store",
+      redirect:"error",
+      referrerPolicy:"no-referrer",
+      headers:{
+        Authorization:"Bearer " + accessToken,
+        Accept:"application/json",
+      },
+      signal:controller.signal,
+    });
+
+    if (controller.signal.aborted || !response ||
+        response.redirected || response.url !== url.href) {
+      throw new Error("Invalid response destination");
+    }
+
+    // Return fixed states only, without reading provider error bodies.
+    const stopped = {
+      401:"reauthorize",
+      403:"restricted",
+      429:"rate_limited",
+    }[response.status];
+    if (stopped) {
+      return Object.freeze({status:stopped});
+    }
+
+    if (response.status !== 200 ||
+        !/^application\/json(?:\s*;|$)/i.test(
+          response.headers.get("Content-Type") || ""
+        ) ||
+        !response.body || typeof response.body.getReader !== "function") {
+      throw new Error("Invalid album-track response");
+    }
+
+    reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    while (true) {
+      const part = await reader.read();
+      if (controller.signal.aborted) throw new Error("Cancelled");
+      if (part.done) break;
+      if (!(part.value instanceof Uint8Array)) {
+        throw new Error("Invalid response chunk");
+      }
+      size += part.value.byteLength;
+      if (size > 1000000) throw new Error("Album-track response too large");
+      chunks.push(part.value);
+    }
+
+    const bytes = new Uint8Array(size);
+    let position = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, position);
+      position += chunk.byteLength;
+    }
+    const data = JSON.parse(
+      new TextDecoder("utf-8", {fatal:true}).decode(bytes)
+    );
+    const checked = validateSpotifyAlbumTrackPage(
+      data, albumId, offset
+    );
+
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    complete = true;
+
+    // Reduced metadata only; never follow provider pagination URLs.
+    return Object.freeze({
+      status:"ready",
+      ...checked,
+    });
+  } catch {
+    throw new Error("Spotify album tracks could not be loaded or were cancelled.");
+  } finally {
+    clearTimeout(timer);
+    if (listening) signal.removeEventListener("abort", cancel);
+    if (!complete) {
+      controller.abort();
+      if (reader) {
+        try { Promise.resolve(reader.cancel()).catch(() => {}); } catch {}
+      }
+    }
+  }
+}
+
+// One playlist-song page; session membership and provider access are required.
+async function readSpotifyPlaylistItemPage(
+  accessToken, playlistId, offset = 0, {request = globalThis.fetch, signal} = {}
+) {
+  if (typeof accessToken !== "string" ||
+      accessToken.length < 1 || accessToken.length > 8192 ||
+      !/^[A-Za-z0-9._~+\/-]+=*$/.test(accessToken) ||
+      (typeof playlistId !== "string" || !/^[A-Za-z0-9]{22}$/.test(playlistId)) ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 || offset > 10000 || offset % 20 !== 0 ||
+      typeof request !== "function") {
+    throw new Error("Invalid Spotify playlist-item request.");
+  }
+
+  // Construct pagination locally. Never send credentials to a supplied URL.
+  const url = new URL(
+    "https://api.spotify.com/v1/playlists/" + playlistId + "/items"
+  );
+  url.search = new URLSearchParams({
+    limit:"20", offset:String(offset),
+  }).toString();
+
+  const controller = new AbortController();
+  let listening = false;
+  let reader = null;
+  let complete = false;
+  let timer;
+  const cancel = () => controller.abort();
+
+  try {
+    if (signal) {
+      if (typeof signal.aborted !== "boolean" ||
+          typeof signal.addEventListener !== "function" ||
+          typeof signal.removeEventListener !== "function") {
+        throw new Error("Invalid cancellation signal");
+      }
+      signal.addEventListener("abort", cancel, {once:true});
+      listening = true;
+      if (signal.aborted) cancel();
+    }
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    timer = setTimeout(cancel, 15000);
+
+    const response = await request(url.href, {
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"no-store",
+      redirect:"error",
+      referrerPolicy:"no-referrer",
+      headers:{
+        Authorization:"Bearer " + accessToken,
+        Accept:"application/json",
+      },
+      signal:controller.signal,
+    });
+
+    if (controller.signal.aborted || !response ||
+        response.redirected || response.url !== url.href) {
+      throw new Error("Invalid response destination");
+    }
+
+    // Return fixed states only, without reading provider error bodies.
+    const stopped = {
+      401:"reauthorize",
+      403:"restricted",
+      429:"rate_limited",
+    }[response.status];
+    if (stopped) {
+      return Object.freeze({status:stopped});
+    }
+
+    if (response.status !== 200 ||
+        !/^application\/json(?:\s*;|$)/i.test(
+          response.headers.get("Content-Type") || ""
+        ) ||
+        !response.body || typeof response.body.getReader !== "function") {
+      throw new Error("Invalid playlist-item response");
+    }
+
+    reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    while (true) {
+      const part = await reader.read();
+      if (controller.signal.aborted) throw new Error("Cancelled");
+      if (part.done) break;
+      if (!(part.value instanceof Uint8Array)) {
+        throw new Error("Invalid response chunk");
+      }
+      size += part.value.byteLength;
+      if (size > 1000000) throw new Error("Playlist-item response too large");
+      chunks.push(part.value);
+    }
+
+    const bytes = new Uint8Array(size);
+    let position = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, position);
+      position += chunk.byteLength;
+    }
+    const data = JSON.parse(
+      new TextDecoder("utf-8", {fatal:true}).decode(bytes)
+    );
+    const checked = validateSpotifyPlaylistItemPage(
+      data, playlistId, offset
+    );
+
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    complete = true;
+
+    // Reduced metadata only; never follow provider pagination URLs.
+    return Object.freeze({
+      status:"ready",
+      ...checked,
+    });
+  } catch {
+    throw new Error("Spotify playlist items could not be loaded or were cancelled.");
+  } finally {
+    clearTimeout(timer);
+    if (listening) signal.removeEventListener("abort", cancel);
+    if (!complete) {
+      controller.abort();
+      if (reader) {
+        try { Promise.resolve(reader.cancel()).catch(() => {}); } catch {}
+      }
+    }
+  }
+}
+
+// Bounded followed-artist reader; no automatic pagination or artwork.
+async function readSpotifyFollowedArtistPage(
+  accessToken, after = null, {request = globalThis.fetch, signal} = {}
+) {
+  if (typeof accessToken !== "string" ||
+      accessToken.length < 1 || accessToken.length > 8192 ||
+      !/^[A-Za-z0-9._~+\/-]+=*$/.test(accessToken) ||
+      (after !== null &&
+        (typeof after !== "string" || !/^[A-Za-z0-9]{22}$/.test(after))) ||
+      typeof request !== "function") {
+    throw new Error("Invalid Spotify followed-artist request.");
+  }
+
+  // Construct pagination locally. Never send credentials to a supplied URL.
+  const url = new URL("https://api.spotify.com/v1/me/following");
+  const parameters = new URLSearchParams({type:"artist", limit:"20"});
+  if (after !== null) parameters.set("after", after);
+  url.search = parameters.toString();
+
+  const controller = new AbortController();
+  let listening = false;
+  let reader = null;
+  let complete = false;
+  let timer;
+  const cancel = () => controller.abort();
+
+  try {
+    if (signal) {
+      if (typeof signal.aborted !== "boolean" ||
+          typeof signal.addEventListener !== "function" ||
+          typeof signal.removeEventListener !== "function") {
+        throw new Error("Invalid cancellation signal");
+      }
+      signal.addEventListener("abort", cancel, {once:true});
+      listening = true;
+      if (signal.aborted) cancel();
+    }
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    timer = setTimeout(cancel, 15000);
+
+    const response = await request(url.href, {
+      method:"GET",
+      mode:"cors",
+      credentials:"omit",
+      cache:"no-store",
+      redirect:"error",
+      referrerPolicy:"no-referrer",
+      headers:{
+        Authorization:"Bearer " + accessToken,
+        Accept:"application/json",
+      },
+      signal:controller.signal,
+    });
+
+    if (controller.signal.aborted || !response ||
+        response.redirected || response.url !== url.href) {
+      throw new Error("Invalid response destination");
+    }
+
+    // Return fixed states only, without reading provider error bodies.
+    const stopped = {
+      401:"reauthorize",
+      403:"restricted",
+      429:"rate_limited",
+    }[response.status];
+    if (stopped) {
+      return Object.freeze({status:stopped});
+    }
+
+    if (response.status !== 200 ||
+        !/^application\/json(?:\s*;|$)/i.test(
+          response.headers.get("Content-Type") || ""
+        ) ||
+        !response.body || typeof response.body.getReader !== "function") {
+      throw new Error("Invalid followed-artist response");
+    }
+
+    reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    while (true) {
+      const part = await reader.read();
+      if (controller.signal.aborted) throw new Error("Cancelled");
+      if (part.done) break;
+      if (!(part.value instanceof Uint8Array)) {
+        throw new Error("Invalid response chunk");
+      }
+      size += part.value.byteLength;
+      if (size > 1000000) throw new Error("Followed-artist response too large");
+      chunks.push(part.value);
+    }
+
+    const bytes = new Uint8Array(size);
+    let position = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, position);
+      position += chunk.byteLength;
+    }
+    const data = JSON.parse(
+      new TextDecoder("utf-8", {fatal:true}).decode(bytes)
+    );
+    const checked = validateSpotifyFollowedArtistPage(data, after);
+
+    if (controller.signal.aborted) throw new Error("Cancelled");
+    complete = true;
+
+    // Return reduced display data only. Never follow provider pagination URLs.
+    return Object.freeze({
+      status:"ready",
+      ...checked,
+    });
+  } catch {
+    throw new Error("Spotify followed artists could not be loaded or were cancelled.");
+  } finally {
+    clearTimeout(timer);
+    if (listening) signal.removeEventListener("abort", cancel);
+    if (!complete) {
+      controller.abort();
+      if (reader) {
+        try { Promise.resolve(reader.cancel()).catch(() => {}); } catch {}
+      }
+    }
+  }
+}
+
 // Pure metadata reduction. Render returned labels with textContent only.
 // No artwork requests, HTML descriptions, provider links, or account storage.
 function validateSpotifyPlaylistPage(page) {
@@ -4622,7 +5928,9 @@ function validateSpotifyPlaylistPage(page) {
     const ownerName = typeof item.owner.display_name === "string"
       ? item.owner.display_name.trim() : "";
 
+    const artworkURL = selectSpotifyArtworkURL(item.images);
     return Object.freeze({
+      ...(artworkURL ? {artworkURL} : {}),
       id: item.id,
       name: item.name.trim() || "Untitled playlist",
       ownerId: item.owner.id,
@@ -4646,104 +5954,1664 @@ function validateSpotifyPlaylistPage(page) {
   });
 }
 
+function selectSpotifyArtworkURL(images) {
+  if (!Array.isArray(images) || images.length > 20) return null;
+
+  const candidates = [];
+  for (const image of images) {
+    if (!image || typeof image !== "object" || Array.isArray(image) ||
+        typeof image.url !== "string" || image.url.length > 2048 ||
+        !/^https:\/\/i\.scdn\.co\/image\/[a-fA-F0-9]{16,128}$/.test(image.url)) {
+      continue;
+    }
+
+    // Validate parsed components independently of the raw-string check.
+    let url;
+    try {
+      url = new URL(image.url);
+    } catch {
+      continue;
+    }
+    if (url.origin !== "https://i.scdn.co" ||
+        url.username || url.password || url.port ||
+        url.search || url.hash) continue;
+
+    const width = image.width;
+    const height = image.height;
+    const validDimension = value =>
+      value === null || value === undefined ||
+      (Number.isSafeInteger(value) && value > 0 && value <= 10000);
+
+    if (!validDimension(width) || !validDimension(height)) continue;
+
+    candidates.push({
+      url:url.href,
+      width:Number.isSafeInteger(width) ? width : null,
+    });
+  }
+
+  // Prefer a modest image for the 140px default tile; avoid largest-first.
+  const sized = candidates
+    .filter(image => image.width !== null)
+    .sort((a,b) => a.width - b.width);
+  const selected = sized.find(image => image.width >= 140) ||
+    sized[sized.length - 1] || candidates[0];
+
+  return selected ? selected.url : null;
+}
+
 // Playlist UI receives reduced data only, never credentials.
 // All rendering is text/node based; provider HTML and image URLs are discarded.
 // Official iframe only: no SDK, tokens, provider scripts, or autoplay.
 function createSpotifyEmbedPlayer(host) {
-  const panel = element("section", "spotify-embed-panel");
-  panel.setAttribute("aria-label", "Spotify playlist player");
+  const panel = element("section",
+    "spotify-embed-panel spotify-persistent-player");
+  panel.setAttribute("aria-label", "Spotify player");
   panel.hidden = true;
+
   const heading = element("div", "spotify-embed-heading");
   const title = element("strong", "spotify-embed-title", "Spotify player");
-  const toggle = element("button", "", "Dock ›");
-  const closeButton = element("button", "", "Close player");
-  toggle.type = closeButton.type = "button";
-  toggle.setAttribute("aria-expanded", "true");
-  toggle.setAttribute("aria-controls", "spotify-embed-content");
+  const expandButton = element("button", "", "Expand");
+  const bottomButton = element("button", "", "Bottom dock");
+  const sideButton = element("button", "", "Side dock");
+  const closeButton = element("button", "", "Close");
+  for (const button of [
+    expandButton, bottomButton, sideButton, closeButton
+  ]) button.type = "button";
+  heading.append(title, expandButton, bottomButton, sideButton, closeButton);
+
   const content = element("div", "spotify-embed-content");
   content.id = "spotify-embed-content";
   const notice = element("p", "spotify-embed-notice",
-    "Spotify content loads only when you open a player. Spotify may use cookies and browser data. Playback depends on Spotify and your browser; use Open in Spotify if unavailable.");
+    "Spotify controls playback and may use cookies and browser caching.");
   const frameHost = element("div", "spotify-embed-frame");
   content.append(notice, frameHost);
-  heading.append(title, toggle, closeButton);
-  const restore = element("button", "spotify-embed-restore", "‹ ♫");
+
+  const restore = element("button", "spotify-embed-restore", "♫");
   restore.type = "button";
-  restore.hidden = true;
-  restore.setAttribute("aria-label", "Restore Spotify playlist player");
-  restore.setAttribute("aria-controls", "spotify-embed-content");
-  panel.append(heading, content, restore);
-  host.append(panel);
-  let currentId = null;
-  let opener = null;
-  function expand(expanded) {
-    content.hidden = !expanded;
-    toggle.textContent = expanded ? "Dock ›" : "Expand";
-    heading.hidden = !expanded;
-    restore.hidden = expanded;
-    restore.setAttribute("aria-expanded", String(expanded));
-    toggle.setAttribute("aria-expanded", String(expanded));
-    panel.dataset.collapsed = String(!expanded);
+  restore.setAttribute("aria-label", "Restore Spotify bottom bar");
+  for (const button of [expandButton, bottomButton, restore]) {
+    button.setAttribute("aria-controls", content.id);
   }
+  panel.append(heading, content, restore);
+
+  // Attach once outside hidden application sections. Never move a live iframe.
+  document.body.append(panel);
+
+  let currentKey = null, opener = null, disposed = false;
+
+  // spotify-media-handoff-v1: navigation never invokes this closure.
+  const mediaHandoff = Object.freeze({
+    closeForMedia: () => close(false),
+  });
+  if (typeof window !== "undefined") {
+    window.MyAppsSpotifyPlayer = mediaHandoff;
+  }
+
+  function present(state, focus = true) {
+    panel.dataset.presentation = state;
+    heading.hidden = state === "side";
+    content.hidden = state !== "expanded";
+    restore.hidden = state !== "side";
+    expandButton.hidden = state !== "bottom";
+    bottomButton.hidden = state !== "expanded";
+    expandButton.setAttribute("aria-expanded",
+      String(state === "expanded"));
+    bottomButton.setAttribute("aria-expanded",
+      String(state === "expanded"));
+    restore.setAttribute("aria-expanded", String(state !== "side"));
+
+    if (focus && !panel.hidden) {
+      const target = state === "side" ? restore
+        : state === "expanded" ? bottomButton : expandButton;
+      target.focus();
+    }
+  }
+
   function close(restoreFocus = false) {
     frameHost.replaceChildren();
-    currentId = null;
+    currentKey = null;
+    title.textContent = "Spotify player";
     panel.hidden = true;
-    expand(true);
-    if (restoreFocus && opener && opener.isConnected) opener.focus();
+    present("bottom", false);
+
+    if (restoreFocus && opener && opener.isConnected &&
+        opener.getClientRects().length) {
+      opener.focus();
+    }
     opener = null;
   }
+
   function open(item, trigger) {
-    if (!item || typeof item.id !== "string" ||
-        !/^[A-Za-z0-9]{22}$/.test(item.id) || typeof item.name !== "string") return;
+    if (disposed || !item || typeof item.id !== "string" ||
+        !/^[A-Za-z0-9]{22}$/.test(item.id) ||
+        typeof item.name !== "string") return;
+
+    const type = item.type === undefined ? "playlist" : item.type;
+    if (!["playlist", "album", "track"].includes(type)) return;
+
+    const key = type + ":" + item.id;
+
+    // A valid explicit player action takes over from other media.
+    if (typeof window !== "undefined" && window.MyAppsPodcastPlayer) {
+      window.MyAppsPodcastPlayer.pauseForVideo();
+    }
+    if (typeof $ === "function" && typeof closePlayer === "function") {
+      const videoPlayer = $("player");
+      if (videoPlayer && !videoPlayer.hidden) closePlayer();
+    }
+
     opener = trigger;
     title.textContent = item.name;
-    if (currentId !== item.id) {
+
+    if (key !== currentKey) {
       const frame = document.createElement("iframe");
-      frame.title = "Spotify playlist: " + item.name;
-      frame.src = "https://open.spotify.com/embed/playlist/" + item.id;
-      frame.setAttribute("allow", "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture");
+      frame.title = "Spotify " + type + ": " + item.name;
+      frame.src = "https://open.spotify.com/embed/" + type + "/" + item.id;
+      frame.setAttribute("allow",
+        "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture");
       frame.setAttribute("allowfullscreen", "");
       frame.setAttribute("referrerpolicy", "no-referrer");
       frameHost.replaceChildren(frame);
-      currentId = item.id;
+      currentKey = key;
     }
+
     panel.hidden = false;
-    expand(true);
-    toggle.focus();
-    panel.scrollIntoView({block:"nearest",behavior:"smooth"});
+    present("bottom");
   }
-  const toggleClick = () => {
-    expand(false);
-    restore.focus();
-  };
-  const restoreClick = () => { expand(true); toggle.focus(); };
+
+  const expand = () => present("expanded");
+  const bottom = () => present("bottom");
+  const side = () => present("side");
   const closeClick = () => close(true);
   const escape = event => {
-    if (event.key === "Escape" && !panel.hidden) { close(true); event.stopPropagation(); }
+    if (event.key !== "Escape" || panel.hidden) return;
+    event.stopPropagation();
+    if (panel.dataset.presentation === "expanded") present("bottom");
+    else close(true);
   };
-  toggle.addEventListener("click", toggleClick);
-  restore.addEventListener("click", restoreClick);
+
+  expandButton.addEventListener("click", expand);
+  bottomButton.addEventListener("click", bottom);
+  sideButton.addEventListener("click", side);
+  restore.addEventListener("click", bottom);
   closeButton.addEventListener("click", closeClick);
   panel.addEventListener("keydown", escape);
-  // Stop this player when leaving Spotify; don't leave hidden audio behind.
-  const page = $("spotify-page");
-  const observer = page && typeof MutationObserver === "function"
-    ? new MutationObserver(() => { if (page.hidden) close(); }) : null;
-  if (observer) observer.observe(page, {attributes:true,attributeFilter:["hidden"]});
+  present("bottom", false);
+
   function dispose() {
+    if (disposed) return;
+    disposed = true;
     close();
-    if (observer) observer.disconnect();
-    toggle.removeEventListener("click", toggleClick);
-    restore.removeEventListener("click", restoreClick);
+    if (typeof window !== "undefined" &&
+        window.MyAppsSpotifyPlayer === mediaHandoff) {
+      delete window.MyAppsSpotifyPlayer;
+    }
+    expandButton.removeEventListener("click", expand);
+    bottomButton.removeEventListener("click", bottom);
+    sideButton.removeEventListener("click", side);
+    restore.removeEventListener("click", bottom);
     closeButton.removeEventListener("click", closeClick);
     panel.removeEventListener("keydown", escape);
     panel.remove();
   }
+
   return Object.freeze({open, close, dispose});
 }
 
+// Session-owned followed artists. No eager requests, artwork or storage.
+// Following artists by default; existing playlists load only when selected.
+// Explicit artist expansion. Uses the session's followed-only release reader.
+// Album songs use session-validated metadata and the existing shared player.
+function createSpotifyAlbumSongView(host, controller, onReauthorize, onPlay) {
+  const panel = element("section", "music-album-songs");
+  panel.hidden = true;
+  panel.setAttribute("aria-label", "Album songs");
+
+  const heading = element("div", "configuration-heading");
+  const title = element("h3", "", "Songs");
+  const closeButton = element("button", "", "Close songs");
+  closeButton.type = "button";
+  heading.append(title, closeButton);
+
+  const table = element("table", "music-song-table");
+  const head = element("thead", "");
+  const headings = element("tr", "");
+  for (const label of ["Play", "Song / Artist", "Length", "Release date"]) {
+    const cell = element("th", "", label);
+    cell.setAttribute("scope", "col");
+    headings.append(cell);
+  }
+  head.append(headings);
+  const rows = element("tbody", "");
+  table.append(head, rows);
+
+  const status = element("p", "");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const more = element("button", "", "Load more songs");
+  more.type = "button";
+  more.hidden = true;
+  panel.append(heading, table, status, more);
+  host.append(panel);
+
+  let selected = null, opener = null, nextOffset = null;
+  let generation = 0, busy = false, disposed = false;
+  const records = new Map();
+
+  function duration(ms) {
+    if (!Number.isSafeInteger(ms) || ms < 0) return "Unavailable";
+    const total = Math.floor(ms / 1000);
+    return Math.floor(total / 60) + ":" +
+      String(total % 60).padStart(2, "0");
+  }
+
+  function render() {
+    const fragment = document.createDocumentFragment();
+    for (const row of records.values()) {
+      const line = element("tr", "");
+      const action = element("td", "");
+      const track = row.track;
+
+      if (track) {
+        const play = element("button", "music-song-play", "▶");
+        play.type = "button";
+        play.setAttribute("aria-label",
+          "Open Spotify player for " + track.name);
+        play.disabled = track.availability === "unavailable" ||
+          typeof onPlay !== "function";
+        const albumId = selected.id;
+        play.addEventListener("click", () => {
+          if (!disposed && selected?.id === albumId &&
+              records.get(row.position) === row &&
+              !play.disabled && typeof onPlay === "function") {
+            onPlay(track, play);
+          }
+        });
+        action.append(play);
+      } else {
+        action.textContent = "—";
+      }
+
+      const name = element("td", "", track ? track.name : "Unavailable");
+      if (track) {
+        name.append(element("small", "",
+          track.artists.map(artist => artist.name).join(", ")));
+      }
+      line.append(
+        action,
+        name,
+        element("td", "", track ? duration(track.durationMs) : "Unavailable"),
+        element("td", "", selected.releaseDate || "Unavailable")
+      );
+      fragment.append(line);
+    }
+    rows.replaceChildren(fragment);
+    status.textContent = records.size
+      ? records.size + " source entries loaded." +
+        (nextOffset !== null ? " Partial." : "")
+      : "No songs returned.";
+    more.hidden = nextOffset === null || records.size >= 1000;
+    if (records.size >= 1000 && nextOffset !== null) {
+      status.textContent += " Loading limit reached; partial.";
+    }
+  }
+
+  async function load() {
+    if (disposed || !selected || busy || nextOffset === null) return;
+    const albumId = selected.id;
+    const offset = nextOffset;
+    const token = ++generation;
+    busy = true;
+    more.disabled = true;
+    more.hidden = true;
+    status.textContent = "Loading songs…";
+    try {
+      const result = await controller.readAlbumTracks(albumId, offset);
+      if (disposed || token !== generation ||
+          selected?.id !== albumId) return;
+      if (result.status === "reauthorize") {
+        close(false);
+        onReauthorize();
+        return;
+      }
+      if (result.status !== "ready") {
+        const messages = {
+          restricted:"Songs unavailable for this album.",
+          rate_limited:"Rate limit reached. Wait before retrying.",
+          cancelled:"Song loading cancelled.",
+          failed:"Songs could not be loaded.",
+        };
+        status.textContent = messages[result.status] || messages.failed;
+        more.textContent = "Retry";
+        more.hidden = false;
+        return;
+      }
+      for (const row of result.items) records.set(row.position, row);
+      nextOffset = result.nextOffset;
+      more.textContent = "Load more songs";
+      render();
+    } catch {
+      if (!disposed && token === generation) {
+        status.textContent = "Songs could not be loaded.";
+        more.textContent = "Retry";
+        more.hidden = false;
+      }
+    } finally {
+      if (!disposed && token === generation) {
+        busy = false;
+        more.disabled = false;
+      }
+    }
+  }
+
+  function close(restoreFocus = true) {
+    generation++;
+    if (selected) controller.cancelAlbumTracks();
+    selected = null;
+    nextOffset = null;
+    busy = false;
+    records.clear();
+    rows.replaceChildren();
+    status.textContent = "";
+    title.textContent = "Songs";
+    panel.hidden = true;
+    more.hidden = true;
+    if (restoreFocus && opener?.isConnected &&
+        opener.getClientRects().length) opener.focus();
+    opener = null;
+  }
+
+  function open(album, trigger) {
+    if (disposed || !album || album.type !== "album" ||
+        typeof album.id !== "string" ||
+        !/^[A-Za-z0-9]{22}$/.test(album.id) ||
+        typeof album.name !== "string") return;
+    close(false);
+    // Album input must come from the validated release view/coordinator.
+    selected = {
+      id:album.id,
+      releaseDate:typeof album.releaseDate === "string"
+        ? album.releaseDate : null,
+    };
+    opener = trigger;
+    nextOffset = 0;
+    title.textContent = album.name;
+    panel.hidden = false;
+    closeButton.focus();
+    panel.scrollIntoView({block:"nearest", behavior:"auto"});
+    return load();
+  }
+
+  const closeClick = () => close();
+  const escape = event => {
+    if (event.key === "Escape" && !panel.hidden) {
+      event.stopPropagation();
+      close();
+    }
+  };
+  closeButton.addEventListener("click", closeClick);
+  more.addEventListener("click", load);
+  panel.addEventListener("keydown", escape);
+
+  function clear() {
+    if (disposed) return;
+    close(false);
+    disposed = true;
+    closeButton.removeEventListener("click", closeClick);
+    more.removeEventListener("click", load);
+    panel.removeEventListener("keydown", escape);
+    panel.remove();
+  }
+
+  return Object.freeze({open, close, clear});
+}
+
+// Playlist songs reuse the approved table; provider denial remains explicit.
+function createSpotifyPlaylistSongView(host, controller, onReauthorize, onPlay) {
+  const panel = element("section", "music-album-songs music-playlist-songs");
+  panel.hidden = true;
+  panel.setAttribute("aria-label", "Playlist songs");
+
+  const heading = element("div", "configuration-heading");
+  const title = element("h3", "", "Songs");
+  const closeButton = element("button", "", "Close songs");
+  closeButton.type = "button";
+  heading.append(title, closeButton);
+
+  const table = element("table", "music-song-table");
+  const head = element("thead", "");
+  const headings = element("tr", "");
+  for (const label of ["Play", "Song / Artist", "Length", "Release date"]) {
+    const cell = element("th", "", label);
+    cell.setAttribute("scope", "col");
+    headings.append(cell);
+  }
+  head.append(headings);
+  const rows = element("tbody", "");
+  table.append(head, rows);
+
+  const status = element("p", "");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const more = element("button", "", "Load more songs");
+  more.type = "button";
+  more.hidden = true;
+  panel.append(heading, table, status, more);
+  host.append(panel);
+
+  let selected = null, opener = null, nextOffset = null;
+  let generation = 0, busy = false, disposed = false;
+  const records = new Map();
+
+  function duration(ms) {
+    if (!Number.isSafeInteger(ms) || ms < 0) return "Unavailable";
+    const total = Math.floor(ms / 1000);
+    return Math.floor(total / 60) + ":" +
+      String(total % 60).padStart(2, "0");
+  }
+
+  function render() {
+    const fragment = document.createDocumentFragment();
+    for (const row of records.values()) {
+      const line = element("tr", "");
+      const action = element("td", "");
+      const track = row.track;
+
+      if (track) {
+        const play = element("button", "music-song-play", "▶");
+        play.type = "button";
+        play.setAttribute("aria-label",
+          "Open Spotify player for " + track.name);
+        play.disabled = track.availability === "unavailable" ||
+          typeof onPlay !== "function";
+        const playlistId = selected.id;
+        play.addEventListener("click", () => {
+          if (!disposed && selected?.id === playlistId &&
+              records.get(row.position) === row &&
+              !play.disabled && typeof onPlay === "function") {
+            onPlay(track, play);
+          }
+        });
+        action.append(play);
+      } else {
+        action.textContent = "—";
+      }
+
+      const name = element("td", "", track ? track.name : "Unavailable");
+      if (track) {
+        name.append(element("small", "",
+          track.artists.map(artist => artist.name).join(", ")));
+      }
+      line.append(
+        action,
+        name,
+        element("td", "", track ? duration(track.durationMs) : "Unavailable"),
+        element("td", "", selected.releaseDate || "Unavailable")
+      );
+      fragment.append(line);
+    }
+    rows.replaceChildren(fragment);
+    status.textContent = records.size
+      ? records.size + " source entries loaded." +
+        (nextOffset !== null ? " Partial." : "")
+      : "No songs returned.";
+    more.hidden = nextOffset === null || records.size >= 1000;
+    if (records.size >= 1000 && nextOffset !== null) {
+      status.textContent += " Loading limit reached; partial.";
+    }
+  }
+
+  async function load() {
+    if (disposed || !selected || busy || nextOffset === null) return;
+    const playlistId = selected.id;
+    const offset = nextOffset;
+    const token = ++generation;
+    busy = true;
+    more.disabled = true;
+    more.hidden = true;
+    status.textContent = "Loading songs…";
+    try {
+      const result = await controller.readPlaylistItems(playlistId, offset);
+      if (disposed || token !== generation ||
+          selected?.id !== playlistId) return;
+      if (result.status === "reauthorize") {
+        close(false);
+        onReauthorize();
+        return;
+      }
+      if (result.status !== "ready") {
+        const messages = {
+          restricted:"Spotify restricts these playlist songs. Use Open player or Open in Spotify.",
+          rate_limited:"Rate limit reached. Wait before retrying.",
+          cancelled:"Song loading cancelled.",
+          failed:"Songs could not be loaded.",
+        };
+        status.textContent = messages[result.status] || messages.failed;
+        more.textContent = "Retry";
+        more.hidden = false;
+        return;
+      }
+      for (const row of result.items) records.set(row.position, row);
+      nextOffset = result.nextOffset;
+      more.textContent = "Load more songs";
+      render();
+    } catch {
+      if (!disposed && token === generation) {
+        status.textContent = "Songs could not be loaded.";
+        more.textContent = "Retry";
+        more.hidden = false;
+      }
+    } finally {
+      if (!disposed && token === generation) {
+        busy = false;
+        more.disabled = false;
+      }
+    }
+  }
+
+  function close(restoreFocus = true) {
+    generation++;
+    if (selected) controller.cancelPlaylistItems();
+    selected = null;
+    nextOffset = null;
+    busy = false;
+    records.clear();
+    rows.replaceChildren();
+    status.textContent = "";
+    title.textContent = "Songs";
+    panel.hidden = true;
+    more.hidden = true;
+    if (restoreFocus && opener?.isConnected &&
+        opener.getClientRects().length) opener.focus();
+    opener = null;
+  }
+
+  function open(playlist, trigger) {
+    if (disposed || !playlist || (playlist.type !== undefined && playlist.type !== "playlist") ||
+        typeof playlist.id !== "string" ||
+        !/^[A-Za-z0-9]{22}$/.test(playlist.id) ||
+        typeof playlist.name !== "string") return;
+    close(false);
+    // Playlist input must come from the validated account collection.
+    selected = {
+      id:playlist.id,
+      // Playlist-added dates are not song release dates.
+      releaseDate:null,
+    };
+    opener = trigger;
+    nextOffset = 0;
+    title.textContent = playlist.name;
+    panel.hidden = false;
+    closeButton.focus();
+    panel.scrollIntoView({block:"nearest", behavior:"auto"});
+    return load();
+  }
+
+  const closeClick = () => close();
+  const escape = event => {
+    if (event.key === "Escape" && !panel.hidden) {
+      event.stopPropagation();
+      close();
+    }
+  };
+  closeButton.addEventListener("click", closeClick);
+  more.addEventListener("click", load);
+  panel.addEventListener("keydown", escape);
+
+  function clear() {
+    if (disposed) return;
+    close(false);
+    disposed = true;
+    closeButton.removeEventListener("click", closeClick);
+    more.removeEventListener("click", load);
+    panel.removeEventListener("keydown", escape);
+    panel.remove();
+  }
+
+  return Object.freeze({open, close, clear});
+}
+
+function createSpotifyArtistReleaseView(
+  host, controller, onReauthorize, onPlay
+) {
+  const onBrowseSongs = arguments[4];
+  const panel = element("section", "music-artist-releases");
+  panel.hidden = true;
+  panel.setAttribute("aria-label", "Selected artist releases");
+  const heading = element("div", "configuration-heading");
+  const title = element("h3", "", "Artist releases");
+  const closeButton = element("button", "", "Close releases");
+  closeButton.type = "button";
+  heading.append(title, closeButton);
+
+  const toolbar = element("div", "music-library-toolbar");
+  const period = document.createElement("select");
+  period.setAttribute("aria-label", "Release display");
+  for (const [value, label] of [
+    ["latest", "Latest loaded releases"],
+    ["all", "All loaded releases"],
+  ]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    period.append(option);
+  }
+  period.value = "latest";
+
+  const type = document.createElement("select");
+  type.setAttribute("aria-label", "Release type");
+  for (const [value, label] of [
+    ["all", "Albums & Singles / EPs"],
+    ["album", "Albums"],
+    ["single", "Singles / EPs"],
+  ]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    type.append(option);
+  }
+  type.value = "all";
+  toolbar.append(period, type);
+
+  const notice = element("p", "",
+    "Newest first among loaded results. Partial dates retain their precision. " +
+    "Available works depend on Spotify and your market; this is not a " +
+    "guaranteed complete discography. EPs follow Spotify's single grouping.");
+  const rows = element("div", "music-library-rows");
+  rows.dataset.view = "grid";
+  const status = element("p", "");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const more = element("button", "", "Load more releases");
+  more.type = "button";
+  more.hidden = true;
+  panel.append(heading, toolbar, notice, rows, status, more);
+  host.append(panel);
+
+  const records = new Map();
+  let selected = null, nextOffset = null, generation = 0;
+  let disposed = false, busy = false, opener = null;
+  const limit = 500;
+
+  function render() {
+    const filtered = Array.from(records.values())
+      .filter(item => type.value === "all" ||
+        item.releaseType === type.value)
+      .sort((a,b) =>
+        b.dateLowerBound.localeCompare(a.dateLowerBound) ||
+        a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    const visible = period.value === "latest"
+      ? filtered.slice(0, 6) : filtered;
+    const fragment = document.createDocumentFragment();
+
+    for (const item of visible) {
+      const card = element("div", "music-library-card");
+      const cover = element("div", "music-library-cover", "♫");
+      cover.setAttribute("aria-hidden", "true");
+      if (item.artworkURL) {
+        cover.dataset.spotifyArtworkUrl = item.artworkURL;
+      }
+      const label = element("span", "music-library-label", item.name);
+      label.append(element("small", "",
+        item.releaseDate + " · " +
+        (item.releaseType === "album" ? "Album" : "Single / EP")));
+
+      const openPlayer = element("button",
+        "music-library-open-player", "Open player");
+      openPlayer.type = "button";
+      openPlayer.disabled = typeof onPlay !== "function";
+      openPlayer.setAttribute("aria-label",
+        "Open Spotify player for " + item.name);
+      openPlayer.addEventListener("click", () => {
+        if (!disposed && selected && typeof onPlay === "function") {
+          onPlay(item, openPlayer);
+        }
+      });
+
+      const link = element("a", "official", "Open in Spotify");
+      link.href = item.spotifyURL;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.referrerPolicy = "no-referrer";
+      card.append(cover, label, openPlayer, link);
+      if (typeof onBrowseSongs === "function") {
+        const browse = element("button",
+          "music-library-browse-songs", "View songs");
+        browse.type = "button";
+        browse.setAttribute("aria-label",
+          "View songs in " + item.name);
+        browse.addEventListener("click", () => {
+          if (!disposed && records.get(item.id) === item) {
+            onBrowseSongs(item, browse);
+          }
+        });
+        card.append(browse);
+      }
+      fragment.append(card);
+    }
+
+    rows.replaceChildren(fragment);
+    status.textContent = visible.length + " shown / " + records.size +
+      " unique release IDs loaded. " +
+      (nextOffset !== null
+        ? "More source entries are available; results are partial."
+        : "No further pages offered within the loading limits.");
+    if (!records.size) {
+      status.textContent = nextOffset !== null
+        ? "No eligible releases in loaded pages. More source entries are available."
+        : "No eligible releases returned.";
+    }
+    if (records.size >= limit && nextOffset !== null) {
+      status.textContent += " Loading limit reached; results are partial.";
+    }
+    more.hidden = nextOffset === null || records.size >= limit;
+  }
+
+  async function load(append = false) {
+    if (disposed || !selected || busy ||
+        (append && nextOffset === null)) return;
+    const artistId = selected.id;
+    const offset = append ? nextOffset : 0;
+    const token = ++generation;
+    busy = true;
+    more.disabled = true;
+    more.hidden = true;
+    status.textContent = "Loading artist releases…";
+
+    try {
+      const result = await controller.readArtistReleases(artistId, offset);
+      if (disposed || token !== generation ||
+          !selected || selected.id !== artistId) return;
+      if (result.status === "reauthorize") {
+        close(false);
+        onReauthorize();
+        return;
+      }
+      if (result.status !== "ready") {
+        const messages = {
+          restricted:"Release access unavailable. Refresh Following Artists.",
+          rate_limited:"Spotify rate limit reached. Wait before retrying.",
+          cancelled:"Release request cancelled.",
+          failed:"Releases could not be loaded. Try again.",
+        };
+        status.textContent = messages[result.status] || messages.failed;
+        more.hidden = false;
+        more.textContent = "Retry release page";
+        return;
+      }
+
+      const additions = result.items.filter(item => !records.has(item.id));
+      if (records.size + additions.length > limit) {
+        status.textContent =
+          "Release loading limit reached (500); results are partial.";
+        nextOffset = null;
+        return;
+      }
+      for (const item of additions) records.set(item.id, item);
+      nextOffset = result.nextOffset;
+      more.textContent = "Load more releases";
+      render();
+    } catch {
+      if (!disposed && token === generation) {
+        status.textContent = "Releases could not be loaded. Try again.";
+        more.hidden = false;
+        more.textContent = "Retry release page";
+      }
+    } finally {
+      if (!disposed && token === generation) {
+        busy = false;
+        more.disabled = false;
+      }
+    }
+  }
+
+  function close(restoreFocus = true) {
+    generation++;
+    if (selected &&
+        typeof controller.cancelArtistReleases === "function") {
+      controller.cancelArtistReleases();
+    }
+    selected = null;
+    busy = false;
+    nextOffset = null;
+    records.clear();
+    rows.replaceChildren();
+    status.textContent = "";
+    title.textContent = "Artist releases";
+    panel.hidden = true;
+    more.hidden = true;
+    if (restoreFocus && opener && opener.isConnected) opener.focus();
+    opener = null;
+  }
+
+  function open(artist, trigger) {
+    if (disposed || !artist || typeof artist.id !== "string" ||
+        !/^[A-Za-z0-9]{22}$/.test(artist.id) ||
+        typeof artist.name !== "string") return;
+    close(false);
+    selected = {id:artist.id, name:artist.name};
+    opener = trigger;
+    period.value = "latest";
+    type.value = "all";
+    title.textContent = artist.name + " · releases";
+    panel.hidden = false;
+    closeButton.focus();
+    panel.scrollIntoView({block:"nearest", behavior:"auto"});
+    return load();
+  }
+
+  const moreClick = () => load(records.size > 0 || nextOffset !== null);
+  const closeClick = () => close();
+  const filterChange = () => {
+    if (!busy && selected) render();
+  };
+  const escape = event => {
+    if (event.key === "Escape" && !panel.hidden) {
+      event.stopPropagation();
+      close();
+    }
+  };
+  more.addEventListener("click", moreClick);
+  closeButton.addEventListener("click", closeClick);
+  period.addEventListener("change", filterChange);
+  type.addEventListener("change", filterChange);
+  panel.addEventListener("keydown", escape);
+
+  function clear() {
+    if (disposed) return;
+    close(false);
+    disposed = true;
+    more.removeEventListener("click", moreClick);
+    closeButton.removeEventListener("click", closeClick);
+    period.removeEventListener("change", filterChange);
+    type.removeEventListener("change", filterChange);
+    panel.removeEventListener("keydown", escape);
+    panel.remove();
+  }
+
+  return Object.freeze({open, close, clear});
+}
+
+// Presentation grouping only: inputs must come from validated session results.
+// This is not an authorization check or a provider-response validator.
+// Explicit overview action: at most three sequential first-page requests.
+// Caller supplies session-loaded followed IDs and discards stale UI results.
+async function loadSpotifyLatestReleaseBatch(
+  controller, artistIds, start = 0, isCurrent = () => true
+) {
+  if (!controller ||
+      typeof controller.readArtistReleases !== "function" ||
+      !Array.isArray(artistIds) || artistIds.length > 5000 ||
+      !artistIds.every(id =>
+        typeof id === "string" && /^[A-Za-z0-9]{22}$/.test(id)) ||
+      new Set(artistIds).size !== artistIds.length ||
+      !Number.isSafeInteger(start) ||
+      start < 0 || start > artistIds.length ||
+      typeof isCurrent !== "function") {
+    throw new Error("Invalid latest-release batch.");
+  }
+
+  const releases = new Map();
+  let completed = 0;
+  let partialArtistPages = 0;
+  const end = Math.min(start + 3, artistIds.length);
+
+  function result(status, nextIndex) {
+    return Object.freeze({
+      status,
+      items:Object.freeze(Array.from(releases.values())),
+      completed,
+      partialArtistPages,
+      nextIndex,
+    });
+  }
+
+  for (let index = start; index < end; index++) {
+    if (!isCurrent()) {
+      return Object.freeze({status:"cancelled"});
+    }
+
+    let page;
+    try {
+      page = await controller.readArtistReleases(artistIds[index], 0);
+    } catch {
+      if (!isCurrent()) return Object.freeze({status:"cancelled"});
+      return result("failed", index);
+    }
+
+    if (!isCurrent()) {
+      return Object.freeze({status:"cancelled"});
+    }
+
+    if (!page || page.status !== "ready") {
+      const state = page && page.status;
+      if (state === "reauthorize" || state === "cancelled") {
+        // Do not retain account results after session loss/cancellation.
+        return Object.freeze({status:state});
+      }
+      return result(
+        ["restricted", "rate_limited"].includes(state) ? state : "failed",
+        index
+      );
+    }
+
+    if (page.artistId !== artistIds[index] || page.offset !== 0 ||
+        !Array.isArray(page.items) || page.items.length > 20) {
+      return result("failed", index);
+    }
+
+    for (const item of page.items) {
+      if (!releases.has(item.id)) releases.set(item.id, item);
+    }
+    completed++;
+    if (page.nextOffset !== null) partialArtistPages++;
+  }
+
+  return result("ready", end < artistIds.length ? end : null);
+}
+
+function groupSpotifyLatestReleases(releases, followedIds, limit = 24) {
+  if (!Array.isArray(releases) || releases.length > 5000 ||
+      !Array.isArray(followedIds) || followedIds.length > 5000 ||
+      !followedIds.every(id =>
+        typeof id === "string" && /^[A-Za-z0-9]{22}$/.test(id)) ||
+      !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new Error("Invalid latest-release grouping input.");
+  }
+
+  const followed = new Set(followedIds);
+  const unique = new Map();
+
+  for (const item of releases) {
+    if (!item || item.type !== "album" ||
+        typeof item.id !== "string" ||
+        !/^[A-Za-z0-9]{22}$/.test(item.id) ||
+        !["album", "single"].includes(item.releaseType) ||
+        typeof item.name !== "string" ||
+        typeof item.dateLowerBound !== "string" ||
+        !Array.isArray(item.artistIds)) {
+      throw new Error("Invalid reduced release.");
+    }
+
+    if (!item.artistIds.some(id => followed.has(id))) continue;
+
+    // Same-ID duplicates represent the same release; keep the first record.
+    if (!unique.has(item.id)) unique.set(item.id, item);
+  }
+
+  const ordered = Array.from(unique.values()).sort((a, b) =>
+    b.dateLowerBound.localeCompare(a.dateLowerBound) ||
+    a.name.localeCompare(b.name) ||
+    a.id.localeCompare(b.id));
+
+  function collection(type) {
+    const matching = ordered.filter(item => item.releaseType === type);
+    return Object.freeze({
+      items: Object.freeze(matching.slice(0, limit)),
+      loadedCount: matching.length,
+      truncated: matching.length > limit,
+    });
+  }
+
+  return Object.freeze({
+    singles: collection("single"),
+    albums: collection("album"),
+  });
+}
+
+// Overview of loaded followed-artist releases; explicit bounded loading.
+function createSpotifyLatestView(host, controller, onReauthorize, onPlay) {
+  const onBrowseSongs = arguments[5];
+  const automatic = arguments[4] === true;
+  const panel = element("section", "music-latest");
+  panel.setAttribute("aria-label", "Latest followed-artist releases");
+
+  const controls = element("div", "music-library-toolbar");
+  const loadButton = element("button", "", "Load releases");
+  loadButton.type = "button";
+  loadButton.disabled = true;
+  const status = element("p", "");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  controls.append(loadButton);
+
+  function collection(title) {
+    const section = element("section", "music-latest-collection");
+    const heading = element("h3", "", title);
+    const rows = element("div", "music-library-rows");
+    rows.dataset.view = "grid";
+    section.append(heading, rows);
+    panel.append(section);
+    return rows;
+  }
+
+  panel.append(controls, status);
+  const albums = collection("Albums");
+  const singles = collection("Singles");
+  host.append(panel);
+
+  let artistIds = [], nextIndex = 0, generation = 0;
+  let busy = false, disposed = false, scanned = 0, partialPages = 0;
+  const records = new Map();
+
+  function renderCollection(rows, items) {
+    const fragment = document.createDocumentFragment();
+    for (const item of items) {
+      const card = element("div", "music-library-card");
+      const cover = element("div", "music-library-cover", "♫");
+      cover.setAttribute("aria-hidden", "true");
+      if (item.artworkURL) {
+        cover.dataset.spotifyArtworkUrl = item.artworkURL;
+      }
+      const label = element("span", "music-library-label", item.name);
+      label.append(element("small", "", item.releaseDate));
+
+      const play = element("button",
+        "music-library-open-player", "Open player");
+      play.type = "button";
+      play.disabled = typeof onPlay !== "function";
+      play.setAttribute("aria-label", "Open Spotify player for " + item.name);
+      play.addEventListener("click", () => {
+        if (!disposed && records.get(item.id) === item &&
+            typeof onPlay === "function") {
+          onPlay(item, play);
+        }
+      });
+
+      const link = element("a", "official", "Open in Spotify");
+      link.href = item.spotifyURL;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.referrerPolicy = "no-referrer";
+      card.append(cover, label, play, link);
+      if (typeof onBrowseSongs === "function") {
+        const browse = element("button",
+          "music-library-browse-songs", "View songs");
+        browse.type = "button";
+        browse.setAttribute("aria-label",
+          "View songs in " + item.name);
+        browse.addEventListener("click", () => {
+          if (!disposed && records.get(item.id) === item) {
+            onBrowseSongs(item, browse);
+          }
+        });
+        card.append(browse);
+      }
+      fragment.append(card);
+    }
+    if (!items.length) {
+      fragment.append(element("p", "music-library-empty",
+        "No loaded releases."));
+    }
+    rows.replaceChildren(fragment);
+  }
+
+  function render() {
+    const grouped = groupSpotifyLatestReleases(
+      Array.from(records.values()), artistIds
+    );
+    renderCollection(singles, grouped.singles.items);
+    renderCollection(albums, grouped.albums.items);
+    status.textContent = scanned + "/" + artistIds.length +
+      " loaded artists checked. " +
+      (nextIndex !== null || partialPages > 0
+        ? "Partial release coverage."
+        : "First-page results only.");
+    if (grouped.singles.truncated || grouped.albums.truncated) {
+      status.textContent += " Showing up to 24 releases per section.";
+    }
+  }
+
+  function cancel() {
+    generation++;
+    if (busy && typeof controller.cancelArtistReleases === "function") {
+      controller.cancelArtistReleases();
+    }
+    busy = false;
+    loadButton.disabled = artistIds.length === 0 || nextIndex === null;
+  }
+
+  function setArtists(ids) {
+    if (disposed) return;
+    if (!Array.isArray(ids) || ids.length > 5000 ||
+        !ids.every(id =>
+          typeof id === "string" && /^[A-Za-z0-9]{22}$/.test(id)) ||
+        new Set(ids).size !== ids.length) {
+      throw new Error("Invalid overview artist IDs.");
+    }
+    // Additional artist pages extend the queue without discarding releases.
+    const extendsCollection = artistIds.length > 0 &&
+      ids.length > artistIds.length &&
+      artistIds.every((id, index) => ids[index] === id);
+
+    if (extendsCollection) {
+      const previousLength = artistIds.length;
+      artistIds = [...ids];
+
+      // An active batch continues normally. Errors retain their explicit Retry.
+      if (!busy && nextIndex === null && records.size < 5000) {
+        nextIndex = previousLength;
+        loadButton.disabled = false;
+        loadButton.hidden = automatic;
+        if (automatic) {
+          const scheduledGeneration = generation;
+          queueMicrotask(() => {
+            if (!disposed && generation === scheduledGeneration) void load();
+          });
+        }
+      }
+      return;
+    }
+
+    cancel();
+    artistIds = [...ids];
+    nextIndex = 0;
+    scanned = 0;
+    partialPages = 0;
+    records.clear();
+    singles.replaceChildren();
+    albums.replaceChildren();
+    loadButton.hidden = false;
+    loadButton.disabled = artistIds.length === 0;
+    loadButton.textContent = "Load releases";
+    status.textContent = artistIds.length
+      ? (automatic ? "Updating…" : "Ready to check loaded artists.")
+      : "Load followed artists first.";
+
+    if (automatic) {
+      loadButton.hidden = true;
+      const scheduledGeneration = generation;
+      queueMicrotask(() => {
+        if (!disposed && scheduledGeneration === generation &&
+            artistIds.length) {
+          void load();
+        }
+      });
+    }
+  }
+
+  async function load() {
+    if (disposed || busy || !artistIds.length || nextIndex === null) return;
+    const token = ++generation;
+    let continueAutomatically = false;
+    busy = true;
+    loadButton.disabled = true;
+    status.textContent = "Loading releases…";
+
+    try {
+      const result = await loadSpotifyLatestReleaseBatch(
+        controller, artistIds, nextIndex,
+        () => !disposed && generation === token
+      );
+      if (disposed || generation !== token) return;
+
+      if (result.status === "reauthorize") {
+        setArtists([]);
+        onReauthorize();
+        return;
+      }
+      if (result.status === "cancelled") {
+        status.textContent = "Release loading cancelled.";
+        return;
+      }
+
+      const additions = result.items.filter(item => !records.has(item.id));
+      if (records.size + additions.length > 5000) {
+        status.textContent = "Partial · release loading limit reached.";
+        loadButton.hidden = true;
+        nextIndex = null;
+        return;
+      }
+      for (const item of additions) records.set(item.id, item);
+      scanned += result.completed;
+      partialPages += result.partialArtistPages;
+      nextIndex = result.nextIndex;
+      // Artist pages may have arrived while this batch was awaiting results.
+      if (result.status === "ready" && nextIndex === null &&
+          scanned < artistIds.length) {
+        nextIndex = scanned;
+      }
+      render();
+
+      if (result.status !== "ready") {
+        const messages = {
+          restricted:"Release access unavailable. Refresh Artists.",
+          rate_limited:"Rate limit reached. Wait before retrying.",
+          failed:"Release loading failed.",
+        };
+        status.textContent += " " +
+          (messages[result.status] || messages.failed);
+        loadButton.textContent = "Retry";
+      } else {
+        loadButton.textContent = "Load next artists";
+        continueAutomatically = automatic && nextIndex !== null;
+      }
+      loadButton.hidden = result.status === "ready"
+        ? (automatic || nextIndex === null)
+        : nextIndex === null;
+    } catch {
+      if (!disposed && generation === token) {
+        status.textContent = "Release loading failed.";
+        loadButton.textContent = "Retry";
+        loadButton.hidden = false;
+      }
+    } finally {
+      if (!disposed && generation === token) {
+        busy = false;
+        loadButton.disabled = nextIndex === null || !artistIds.length;
+        if (continueAutomatically) {
+          queueMicrotask(() => {
+            if (!disposed && generation === token) void load();
+          });
+        }
+      }
+    }
+  }
+
+  loadButton.addEventListener("click", load);
+
+  function clear() {
+    if (disposed) return;
+    cancel();
+    disposed = true;
+    artistIds = [];
+    records.clear();
+    singles.replaceChildren();
+    albums.replaceChildren();
+    status.textContent = "";
+    loadButton.removeEventListener("click", load);
+    panel.remove();
+  }
+
+  return Object.freeze({setArtists, load, cancel, clear});
+}
+
+function createSpotifyFocusView(controller, onReauthorize) {
+  const host = element("section", "music-focus");
+  host.setAttribute("aria-label", "Focused music library");
+  host.hidden = true;
+  const navigation = element("nav", "category-tabs");
+  navigation.setAttribute("aria-label", "Music sections");
+
+  const searchButton = element("button", "category-tab", "Search");
+  searchButton.type = "button";
+  searchButton.setAttribute("aria-label",
+    "Search loaded items in the selected collection");
+  searchButton.title = "Search the selected collection";
+  const artistsButton = element("button", "category-tab", "Artists");
+  const libraryButton = element("button", "category-tab", "Playlists");
+  artistsButton.type = libraryButton.type = "button";
+  const artistHost = element("section", "");
+  artistHost.id = "music-followed-artists";
+  const libraryHost = element("section", "");
+  libraryHost.id = "music-saved-library";
+  libraryHost.hidden = true;
+
+  artistsButton.setAttribute("aria-controls", artistHost.id);
+  libraryButton.setAttribute("aria-controls", libraryHost.id);
+  artistsButton.setAttribute("aria-pressed", "true");
+  libraryButton.setAttribute("aria-pressed", "false");
+  navigation.append(searchButton, artistsButton, libraryButton);
+
+  const libraryNotice = element("p", "sr-only",
+    "My Playlists. Liked Songs and Saved Albums are not available yet.");
+  libraryHost.append(libraryNotice);
+  const playerHost = element("section", "music-shared-player");
+  playerHost.setAttribute("aria-label", "Shared Spotify player");
+  host.append(navigation, artistHost, libraryHost, playerHost);
+  $("spotify-status").after(host);
+
+  const playlistPanel = $("spotify-playlists");
+  libraryHost.append(playlistPanel);
+
+  let disposed = false;
+  let playlistLoaded = false;
+  // One player, created once outside either hidden content section.
+  const sharedPlayer = createSpotifyEmbedPlayer(playerHost);
+  const songHost = element("section", "music-song-browser");
+  const songView = createSpotifyAlbumSongView(
+    songHost, controller, onReauthorize,
+    (track, trigger) => {
+      if (!disposed) sharedPlayer.open(track, trigger);
+    }
+  );
+  const browseSongs = (album, trigger) => {
+    if (disposed) return;
+    latestView.cancel();
+    songView.open(album, trigger);
+  };
+  const latestHost = element("section", "music-overview");
+  const latestView = createSpotifyLatestView(
+    latestHost, controller, onReauthorize,
+    (item, trigger) => {
+      if (!disposed) sharedPlayer.open(item, trigger);
+    },
+    true,
+    browseSongs
+  );
+  const releaseView = createSpotifyArtistReleaseView(
+    artistHost, controller, onReauthorize,
+    (item, trigger) => {
+      if (!disposed) sharedPlayer.open(item, trigger);
+    },
+    browseSongs
+  );
+  const artistView = createSpotifyArtistView(
+    artistHost, controller, onReauthorize,
+    (artist, trigger) => {
+      if (!disposed) {
+        latestView.cancel();
+        songView.close(false);
+        releaseView.open(artist, trigger);
+      }
+    },
+    () => {
+      latestView.setArtists([]);
+      songView.close(false);
+      releaseView.close(false);
+    },
+    ids => {
+      if (!disposed) latestView.setArtists(ids);
+    }
+  );
+  // Keep the expansion below the artist grid without moving an active iframe.
+  const releasePanel = artistHost.firstElementChild;
+  artistHost.append(releasePanel);
+  // Approved browsing order: Artists, Albums, Singles, artist expansion.
+  releasePanel.before(latestHost);
+  artistHost.append(songHost);
+  const playlistSongHost = element("section", "music-playlist-song-browser");
+  const playlistSongView = createSpotifyPlaylistSongView(
+    playlistSongHost, controller, onReauthorize,
+    (track, trigger) => {
+      if (!disposed) sharedPlayer.open(track, trigger);
+    }
+  );
+  const playlistView = createSpotifyPlaylistView(
+    controller, onReauthorize, playerHost, sharedPlayer,
+    (playlist, trigger) => {
+      if (!disposed) playlistSongView.open(playlist, trigger);
+    },
+    () => playlistSongView.close(false)
+  );
+  libraryHost.append(playlistSongHost);
+
+  function select(section) {
+    if (disposed) return;
+    const artists = section === "artists";
+    if (!artists) {
+      latestView.cancel();
+      songView.close(false);
+    }
+    if (artists) playlistSongView.close(false);
+    artistHost.hidden = !artists;
+    libraryHost.hidden = artists;
+    artistsButton.setAttribute("aria-pressed", String(artists));
+    libraryButton.setAttribute("aria-pressed", String(!artists));
+
+    if (!artists && !playlistLoaded) {
+      playlistLoaded = true;
+      playlistView.load();
+    }
+  }
+
+  const searchCollection = () => {
+    if (disposed) return;
+    const activeHost = artistHost.hidden ? libraryHost : artistHost;
+    const input = activeHost.querySelector(
+      '.music-library-toolbar input[type="search"]'
+    );
+    if (input) {
+      input.focus();
+      input.scrollIntoView({block:"nearest", behavior:"auto"});
+    }
+  };
+  searchButton.addEventListener("click", searchCollection);
+  const showArtists = () => select("artists");
+  const showLibrary = () => select("library");
+  artistsButton.addEventListener("click", showArtists);
+  libraryButton.addEventListener("click", showLibrary);
+
+  function load() {
+    if (disposed) return;
+    host.hidden = false;
+    select("artists");
+    return artistView.load();
+  }
+
+  function clear() {
+    if (disposed) return;
+    disposed = true;
+    searchButton.removeEventListener("click", searchCollection);
+    artistsButton.removeEventListener("click", showArtists);
+    libraryButton.removeEventListener("click", showLibrary);
+    latestView.clear();
+    songView.clear();
+    artistView.clear();
+    releaseView.clear();
+    playlistSongView.clear();
+    playlistView.clear();
+    sharedPlayer.dispose();
+
+    // Keep the original playlist DOM available for a later connection.
+    host.before(playlistPanel);
+    host.remove();
+  }
+
+  return Object.freeze({load, clear});
+}
+
+function createSpotifyArtistView(host, controller, onReauthorize) {
+  // Optional coordinator hooks; legacy callers retain existing behavior.
+  const onSelectArtist = arguments[3];
+  const onRefreshArtists = arguments[4];
+  const onArtistsLoaded = arguments[5];
+  const panel = element("section", "music-artists");
+  panel.setAttribute("aria-label", "Following Artists");
+  panel.hidden = true;
+  const heading = element("div", "configuration-heading");
+  const title = element("h3", "", "Following Artists");
+  const refresh = element("button", "", "Refresh");
+  refresh.type = "button";
+  heading.append(title, refresh);
+
+  const toolbar = element("div", "music-library-toolbar");
+  const search = document.createElement("input");
+  search.type = "search";
+  search.autocomplete = "off";
+  search.placeholder = "Search loaded artists…";
+  search.setAttribute("aria-label", "Search loaded followed artists");
+  toolbar.append(search);
+
+  const rows = element("div", "music-library-rows");
+  rows.dataset.view = "grid";
+  const status = element("p", "");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const more = element("button", "", "Load more artists");
+  more.type = "button";
+  more.hidden = true;
+  panel.append(heading, toolbar, rows, status, more);
+  host.append(panel);
+
+  const records = new Map();
+  const usedCursors = new Set();
+  let nextAfter = null, generation = 0, disposed = false, busy = false;
+
+  function render() {
+    const query = search.value.trim().toLocaleLowerCase();
+    const items = Array.from(records.values())
+      .filter(item => item.name.toLocaleLowerCase().includes(query))
+      .sort((a,b) => a.name.localeCompare(b.name, undefined, {
+        sensitivity:"base", numeric:true,
+      }));
+    const fragment = document.createDocumentFragment();
+    for (const item of items) {
+      const card = element("div", "music-library-card");
+      const cover = element("div", "music-library-cover", "♫");
+      cover.setAttribute("aria-hidden", "true");
+      if (item.artworkURL) {
+        cover.dataset.spotifyArtworkUrl = item.artworkURL;
+      }
+      const label = element("span", "music-library-label", item.name);
+      label.append(element("small", "", "Followed artist"));
+      const link = element("a", "official", "Open in Spotify");
+      link.href = item.spotifyURL;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.referrerPolicy = "no-referrer";
+      link.setAttribute("aria-label",
+        "Open " + item.name + " in Spotify (new tab)");
+      card.append(cover, label);
+      if (typeof onSelectArtist === "function") {
+        const releases = element("button",
+          "music-library-open-player", "View releases");
+        releases.type = "button";
+        releases.setAttribute("aria-label",
+          "View releases by " + item.name);
+        releases.addEventListener("click", () => {
+          if (!disposed && !busy && records.get(item.id) === item) {
+            onSelectArtist(item, releases);
+          }
+        });
+        card.append(releases);
+      }
+      card.append(link);
+      fragment.append(card);
+    }
+    rows.replaceChildren(fragment);
+    status.textContent = records.size
+      ? items.length + " shown / " + records.size +
+        " followed artists loaded. Search covers loaded artists only."
+      : "No followed artists returned by Spotify.";
+  }
+
+  async function load(append = false) {
+    if (disposed || (append && (busy || nextAfter === null))) return;
+    const after = append ? nextAfter : null;
+    const token = ++generation;
+    busy = true;
+    panel.hidden = false;
+    refresh.disabled = true;
+    more.disabled = true;
+    more.hidden = true;
+    if (!append) {
+      if (typeof onRefreshArtists === "function") onRefreshArtists();
+      if (typeof onArtistsLoaded === "function") {
+        onArtistsLoaded(Object.freeze([]));
+      }
+      records.clear();
+      usedCursors.clear();
+      nextAfter = null;
+      rows.replaceChildren();
+    }
+    status.textContent = "Loading followed artists…";
+    try {
+      const result = await controller.readArtists(after);
+      if (disposed || token !== generation) return;
+      if (result.status === "reauthorize") {
+        onReauthorize();
+        return;
+      }
+      if (result.status !== "ready") {
+        const messages = {
+          restricted:"Spotify did not permit this artist request.",
+          rate_limited:"Spotify rate limit reached. Wait before refreshing.",
+          cancelled:"Artist request cancelled.",
+          failed:"Artists could not be loaded. Try Refresh.",
+        };
+        status.textContent = messages[result.status] || messages.failed;
+        return;
+      }
+
+      // Stop cursor cycles and bound retained data to 5,000 artists.
+      if (result.nextAfter !== null &&
+          (result.nextAfter === after ||
+           usedCursors.has(result.nextAfter))) {
+        throw new Error("Repeated artist cursor");
+      }
+      const newItems = result.items.filter(item => !records.has(item.id));
+      if (records.size + newItems.length > 5000) {
+        status.textContent =
+          "Artist loading limit reached (5,000). Results are partial.";
+        nextAfter = null;
+        return;
+      }
+      if (after !== null) usedCursors.add(after);
+      for (const item of newItems) records.set(item.id, item);
+      nextAfter = result.nextAfter;
+      render();
+      if (typeof onArtistsLoaded === "function") {
+        onArtistsLoaded(Object.freeze(Array.from(records.keys())));
+      }
+      if (records.size >= 5000 && nextAfter !== null) {
+        nextAfter = null;
+        status.textContent += " Loading limit reached; results are partial.";
+      }
+      more.hidden = nextAfter === null;
+    } catch {
+      if (!disposed && token === generation) {
+        status.textContent = "Artists could not be loaded. Try Refresh.";
+      }
+    } finally {
+      if (!disposed && token === generation) {
+        busy = false;
+        refresh.disabled = false;
+        more.disabled = false;
+      }
+    }
+  }
+
+  const refreshClick = () => load(false);
+  const moreClick = () => load(true);
+
+  // User scrolling initiates one bounded next-page request.
+  // No observer loop, automatic retries or full-library preloading.
+  const sourceScroll = () => {
+    if (disposed || busy || host.hidden || panel.hidden ||
+        search.value.trim() || nextAfter === null ||
+        more.hidden || more.disabled) return;
+
+    const height = host.clientHeight;
+    const total = host.scrollHeight;
+    const top = host.scrollTop;
+    if (!Number.isFinite(height) || height <= 0 ||
+        !Number.isFinite(total) || total <= height ||
+        !Number.isFinite(top)) return;
+
+    if (top + height >= total - 160) {
+      void load(true);
+    }
+  };
+  host.addEventListener("scroll", sourceScroll, {passive:true});
+  search.addEventListener("input", render);
+  refresh.addEventListener("click", refreshClick);
+  more.addEventListener("click", moreClick);
+
+  function clear() {
+    if (disposed) return;
+    disposed = true;
+    generation++;
+    records.clear();
+    usedCursors.clear();
+    nextAfter = null;
+    search.value = "";
+    rows.replaceChildren();
+    status.textContent = "";
+    host.removeEventListener("scroll", sourceScroll);
+    search.removeEventListener("input", render);
+    refresh.removeEventListener("click", refreshClick);
+    more.removeEventListener("click", moreClick);
+    panel.remove();
+  }
+
+  return Object.freeze({load, clear});
+}
+
 function createSpotifyPlaylistView(controller, onReauthorize) {
+  const onBrowsePlaylistSongs = arguments[4];
+  const onRefreshPlaylists = arguments[5];
   const panel = $("spotify-playlists");
   const rows = $("spotify-playlist-rows");
   const status = $("spotify-playlist-status");
@@ -4752,7 +7620,18 @@ function createSpotifyPlaylistView(controller, onReauthorize) {
   let generation = 0, nextOffset = null, disposed = false;
   const shown = new Set();
   const records = new Map();
-  const embedPlayer = createSpotifyEmbedPlayer(panel);
+  // Optional shared host keeps the player visible across music sections.
+  // Legacy callers retain the original playlist-panel placement.
+  // A supplied player is owned by the coordinator, not this playlist view.
+  const suppliedPlayer = arguments[3];
+  const ownsPlayer = suppliedPlayer === undefined;
+  if (!ownsPlayer && (!suppliedPlayer ||
+      typeof suppliedPlayer.open !== "function")) {
+    throw new Error("Invalid shared Spotify player.");
+  }
+  const embedPlayer = ownsPlayer
+    ? createSpotifyEmbedPlayer(arguments[2] || panel)
+    : suppliedPlayer;
   const toolbar = element("div", "music-library-toolbar");
   const search = document.createElement("input");
   search.type = "search";
@@ -4786,6 +7665,9 @@ function createSpotifyPlaylistView(controller, onReauthorize) {
       const row = element("div", "podcast-managed-show music-library-card");
       const cover = element("div", "music-library-cover", "♫");
       cover.setAttribute("aria-hidden", "true");
+      if (item.artworkURL) {
+        cover.dataset.spotifyArtworkUrl = item.artworkURL;
+      }
       const text = element("span", "music-library-label", item.name);
       text.title = item.name;
       text.append(element("small", "", "By " + item.ownerName + (item.collaborative ? " | Collaborative" : "")));
@@ -4800,6 +7682,19 @@ function createSpotifyPlaylistView(controller, onReauthorize) {
       openPlayer.setAttribute("aria-label", "Open Spotify player for " + item.name);
       openPlayer.addEventListener("click", () => embedPlayer.open(item, openPlayer));
       row.append(cover, text, openPlayer, link);
+      if (typeof onBrowsePlaylistSongs === "function") {
+        const browse = element("button",
+          "music-library-browse-songs", "View songs");
+        browse.type = "button";
+        browse.setAttribute("aria-label",
+          "View songs in " + item.name);
+        browse.addEventListener("click", () => {
+          if (!disposed && records.get(item.id) === item) {
+            onBrowsePlaylistSongs(item, browse);
+          }
+        });
+        row.append(browse);
+      }
       fragment.append(row);
     }
     if (!filtered.length && records.size) fragment.append(element("p", "music-library-empty", "No matching loaded playlists."));
@@ -4821,13 +7716,21 @@ function createSpotifyPlaylistView(controller, onReauthorize) {
   grid.addEventListener("click", selectGrid);
   list.addEventListener("click", selectList);
   async function load(append = false) {
-    if (disposed) return;
+    if (disposed || (append && more.disabled)) return;
     const offset = append ? nextOffset : 0;
     if (offset === null) return;
     const token = ++generation;
     panel.hidden = false;
     refresh.disabled = true; more.disabled = true; more.hidden = true;
-    if (!append) { rows.replaceChildren(); shown.clear(); records.clear(); nextOffset = null; }
+    if (!append) {
+      if (typeof onRefreshPlaylists === "function") {
+        onRefreshPlaylists();
+      }
+      rows.replaceChildren();
+      shown.clear();
+      records.clear();
+      nextOffset = null;
+    }
     status.textContent = "Loading playlists...";
     try {
       const result = await controller.readPlaylists(offset);
@@ -4853,15 +7756,39 @@ function createSpotifyPlaylistView(controller, onReauthorize) {
   }
   const refreshClick = () => load(false);
   const moreClick = () => load(true);
+
+  const scrollHost = panel.parentElement;
+  const playlistScroll = () => {
+    if (disposed || !scrollHost || scrollHost.hidden || panel.hidden ||
+        refresh.disabled || more.disabled || more.hidden ||
+        nextOffset === null || search.value.trim()) return;
+
+    const height = scrollHost.clientHeight;
+    const total = scrollHost.scrollHeight;
+    const top = scrollHost.scrollTop;
+
+    if (!Number.isFinite(height) || height <= 0 ||
+        !Number.isFinite(total) || total <= height ||
+        !Number.isFinite(top)) return;
+
+    if (top + height >= total - 160) void load(true);
+  };
+
+  if (scrollHost) {
+    scrollHost.addEventListener("scroll", playlistScroll, {passive:true});
+  }
   refresh.addEventListener("click", refreshClick);
   more.addEventListener("click", moreClick);
   function clear() {
+    if (scrollHost) {
+      scrollHost.removeEventListener("scroll", playlistScroll);
+    }
     disposed = true; generation++; shown.clear(); records.clear(); nextOffset = null;
     rows.replaceChildren(); status.textContent = ""; panel.hidden = true; more.hidden = true;
     refresh.removeEventListener("click", refreshClick); more.removeEventListener("click", moreClick);
     search.removeEventListener("input", render); sort.removeEventListener("change", render);
     grid.removeEventListener("click", selectGrid); list.removeEventListener("click", selectList);
-    embedPlayer.dispose();
+    if (ownsPlayer) embedPlayer.dispose();
     toolbar.remove();
   }
   return Object.freeze({load, clear});
@@ -4946,7 +7873,7 @@ function initializePodcastConfiguration(shows) {
   function display(state) {
     statusNode.textContent = messages[state] || messages.failed;
     if (state === "connected" && !playlistView) {
-      playlistView = createSpotifyPlaylistView(
+      playlistView = createSpotifyFocusView(
         callbackController,
         () => {
           uiGeneration++;
@@ -5239,4 +8166,135 @@ function readyTubeExtras() {
   window.addEventListener("storage",event=>{
     if(event.key===storageKey || event.key===null)apply(event.newValue||"compact");
   });
+})();
+
+
+// Memory-only presentation preference; never loads data or controls playback.
+(function initializeSpotifyGridSize() {
+  const page = $("spotify-page");
+  if (!page || $("spotify-grid-size")) return;
+
+  const controls = element("div", "spotify-grid-controls");
+  const label = element("label", "", "Grid size");
+  label.htmlFor = "spotify-grid-size";
+
+  const slider = element("input");
+  slider.id = "spotify-grid-size";
+  slider.type = "range";
+  slider.min = "50";
+  slider.max = "100";
+  slider.step = "5";
+  slider.value = "70";
+  slider.autocomplete = "off";
+
+  const value = element("output", "", "70%");
+  value.id = "spotify-grid-size-value";
+  value.setAttribute("for", slider.id);
+
+  function apply() {
+    const percent = Number(slider.value);
+    if (!Number.isFinite(percent) ||
+        percent < 50 || percent > 100 || percent % 5 !== 0) return;
+
+    // 200px reference × 70% = 140px default tile width.
+    page.style.setProperty("--spotify-cover-size", (percent * 2) + "px");
+    value.textContent = percent + "%";
+    slider.setAttribute("aria-valuetext", percent + " percent");
+  }
+
+  slider.addEventListener("input", apply);
+  controls.append(label, slider, value);
+  $("spotify-status").after(controls);
+  apply();
+})();
+
+
+// Presentation only: retain the original slider across view reconstruction.
+(function initializeSpotifyGridPlacement() {
+  const page = $("spotify-page");
+  const controls = page && page.querySelector(".spotify-grid-controls");
+  if (!page || !controls) return;
+
+  function place() {
+    const navigation = page.querySelector(".music-focus > nav");
+    const destination = navigation || page;
+    if (controls.parentElement !== destination) {
+      destination.append(controls);
+    }
+  }
+
+  // Observe structure, not slider values; no polling or storage.
+  const observer = new MutationObserver(place);
+  observer.observe(page, {childList:true, subtree:true});
+  place();
+})();
+
+
+// Page-memory artwork preference. No images load from this initializer.
+(function initializeSpotifyArtworkPreference() {
+  const page = $("spotify-page");
+  const toggle = $("spotify-thumbnails");
+  if (!page || !toggle) return;
+
+  // Reset restored form state: artwork always starts disabled on initialization.
+  toggle.checked = false;
+  page.dataset.spotifyArtwork = "off";
+
+  toggle.addEventListener("change", () => {
+    page.dataset.spotifyArtwork = toggle.checked ? "on" : "off";
+    page.dispatchEvent(new Event("spotifyartworkchange"));
+  });
+})();
+
+
+// Update covers in place: no list rerender, account fetch or player changes.
+(function initializeSpotifyArtworkRendering() {
+  const page = $("spotify-page");
+  if (!page) return;
+
+  const selector = ".music-library-cover[data-spotify-artwork-url]";
+  const states = new WeakMap();
+
+  function update(cover) {
+    const enabled = page.dataset.spotifyArtwork === "on";
+    const url = cover.dataset.spotifyArtworkUrl;
+    const previous = states.get(cover);
+
+    // Includes failed images: no automatic retry for an unchanged preference.
+    if (previous && previous.enabled === enabled && previous.url === url) {
+      return;
+    }
+
+    // Remove old sources before discarding their image nodes.
+    for (const image of cover.querySelectorAll("img")) {
+      image.removeAttribute("src");
+      image.removeAttribute("srcset");
+    }
+
+    states.set(cover, {enabled, url});
+
+    const replacement = createSpotifyArtworkCover(url, enabled);
+    cover.replaceChildren(...Array.from(replacement.childNodes));
+  }
+
+  function updateAll() {
+    page.querySelectorAll(selector).forEach(update);
+  }
+
+  page.addEventListener("spotifyartworkchange", updateAll);
+
+  // Process newly rendered covers without observing our own image mutations.
+  const observer = new MutationObserver(records => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        if (node.matches(selector) && page.contains(node)) update(node);
+        node.querySelectorAll(selector).forEach(cover => {
+          if (page.contains(cover)) update(cover);
+        });
+      }
+    }
+  });
+  observer.observe(page, {childList:true, subtree:true});
+  updateAll();
 })();
