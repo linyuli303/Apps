@@ -5138,6 +5138,15 @@ function readyTubeExtras() {
   }
   $("tube-description-close").addEventListener("click",()=>closeTubePopover("tube-description-panel",true));
   $("tube-preview-settings-close").addEventListener("click",()=>closeTubePopover("tube-preview-settings",true));
+  // Close Feed preview settings when clicking outside the panel and trigger.
+  document.addEventListener("click", event => {
+    const panel = $("tube-preview-settings");
+    const trigger = $("tube-preview-config");
+    if (panel.hidden ||
+        panel.contains(event.target) ||
+        trigger.contains(event.target)) return;
+    closeTubePopover("tube-preview-settings", panel.contains(document.activeElement));
+  }, true);
   $("tube-description-original").addEventListener("click",()=>{
     stopSpeedController(); $("frame").replaceChildren();
   });
