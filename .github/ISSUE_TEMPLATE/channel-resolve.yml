@@ -1,0 +1,31 @@
+name: Resolve YouTube channel handles
+description: Look up channel identities for review without adding them.
+title: "[MyTube] Resolve channels"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Only requests opened by the authorized repository owner are eligible.
+        This request and resolved channel identities are public.
+        Never include credentials, cookies or private links.
+        Resolution does not approve or add channels.
+        Review the resolved titles, immutable IDs and official links before confirming additions.
+        Use 1 to 50 entries, one per line, without blank lines.
+        Supported inputs: immutable UC IDs, ASCII @handles, and plain HTTPS channel URLs.
+        Handles currently support 3 to 30 ASCII letters, digits, periods, underscores or hyphens.
+        Display names, video URLs, playlist URLs, query strings and code fences are not accepted.
+  - type: textarea
+    id: channels
+    attributes:
+      label: Channels
+      description: One channel ID, supported @handle or plain channel URL per line.
+      placeholder: "@ExampleHandle"
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I understand these inputs and resolved identities are public. This request does not approve channel additions.
+          required: true
