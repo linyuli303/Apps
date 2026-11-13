@@ -8407,8 +8407,8 @@ function readyTubeExtras() {
   panel.id = "channel-bulk-manager";
   const summary = element("summary", "", "Add multiple channels");
   const instructions = element("p", "",
-    "One channel ID or HTTPS /channel/ID URL per line. " +
-    "Up to 50 lines. Requests are public; no channel lookup occurs.");
+    "Paste one UC channel ID per line (UC followed by 22 letters, digits, underscores or hyphens). " +
+    "Do not paste URLs, @handles or channel names. Up to 50 lines. Requests are public.");
 
   const label = element("label", "", "Channels");
   label.htmlFor = "channel-bulk-input";
