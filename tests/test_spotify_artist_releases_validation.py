@@ -20,5 +20,5 @@ class SpotifyArtistReleaseValidationTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(
-            "8 artist-release validation tests passed.", result.stdout
+            "9 artist-release validation tests passed.", result.stdout
         )

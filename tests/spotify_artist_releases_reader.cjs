@@ -27,7 +27,7 @@ const failure =
 
 function page(offset = 0) {
   return {
-    limit: 20, offset, total: offset + 1,
+    limit: 10, offset, total: offset + 1,
     next: "https://untrusted.example/next",
     items: [{
       id: releaseId, type: "album", name: "Sample release",
@@ -80,7 +80,7 @@ async function test(name, run) {
         assert.deepEqual([...parsed.searchParams.keys()].sort(),
           ["include_groups", "limit", "offset"]);
         assert.equal(parsed.searchParams.get("include_groups"), "album,single");
-        assert.equal(parsed.searchParams.get("limit"), "20");
+        assert.equal(parsed.searchParams.get("limit"), "10");
         assert.equal(parsed.searchParams.get("offset"), "0");
         assert.equal(options.method, "GET");
         assert.equal(options.mode, "cors");
@@ -105,15 +105,15 @@ async function test(name, run) {
 
   await test("Offset built locally; no automatic pagination", async () => {
     let calls = 0;
-    const result = await read(token, artistId, 20, {
+    const result = await read(token, artistId, 10, {
       async request(url) {
         calls++;
-        assert.equal(new URL(url).searchParams.get("offset"), "20");
-        return response(url, page(20));
+        assert.equal(new URL(url).searchParams.get("offset"), "10");
+        return response(url, page(10));
       }
     });
     assert.equal(calls, 1);
-    assert.equal(result.offset, 20);
+    assert.equal(result.offset, 10);
   });
 
   await test("401/403/429 return fixed states without reading error bodies", async () => {
@@ -140,7 +140,8 @@ async function test(name, run) {
       ["", artistId, 0], ["with space", artistId, 0],
       [token, "../escape", 0], [token, null, 0],
       [token, artistId, -1], [token, artistId, 1],
-      [token, artistId, 10020], [token, artistId, "0"]
+      [token, artistId, 5], [token, artistId, 15],
+      [token, artistId, 10010], [token, artistId, "0"]
     ]) {
       let calls = 0;
       await assert.rejects(() => read(credential, artist, offset, {
@@ -198,7 +199,7 @@ async function test(name, run) {
           if (kind === "large") record.bytes = new Uint8Array(1000001);
           if (kind === "utf8") record.bytes = new Uint8Array([255]);
           if (kind === "json") record.bytes = new TextEncoder().encode("{");
-          if (kind === "offset") return response(url, page(20));
+          if (kind === "offset") return response(url, page(10));
           if (kind === "metadata") {
             const data = page();
             data.items[0].id = "../escape";

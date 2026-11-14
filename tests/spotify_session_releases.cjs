@@ -146,7 +146,8 @@ async function test(name, run) {
       assert.deepEqual(await f.controller.readArtistReleases(id(1)),
         {status: "restricted"});
       for (const [artistId, offset] of [
-        ["bad", 0], [id(1), 1], [id(1), -1], [id(1), 10020]
+        ["bad", 0], [id(1), 1], [id(1), 5], [id(1), 15],
+        [id(1), -1], [id(1), 10010]
       ]) {
         assert.deepEqual(
           await f.controller.readArtistReleases(artistId, offset),
@@ -227,8 +228,8 @@ async function test(name, run) {
     await ready(f);
     const first = f.controller.readArtistReleases(id(1));
     const playlistWork = f.controller.readPlaylists();
-    const second = await f.controller.readArtistReleases(id(1), 20);
-    assert.equal(second.offset, 20);
+    const second = await f.controller.readArtistReleases(id(1), 10);
+    assert.equal(second.offset, 10);
     assert(f.calls[0].signal.aborted);
     assert(!f.playlistCalls[0].signal.aborted);
     old.resolve(releases());
@@ -257,7 +258,10 @@ async function test(name, run) {
 
   await test("Wrong bindings and malformed metadata fail closed", async () => {
     for (const change of [
-      {artistId: id(2)}, {offset: 20}, {nextOffset: 1},
+      {artistId: id(2)}, {offset: 10}, {nextOffset: 1}, {nextOffset: 20},
+      {items: Array.from({length: 11}, (_, i) => ({
+        ...releases().items[0], id: id(200 + i)
+      })), total: 11},
       {items: [{...releases().items[0], artistIds: [id(2)]}]},
       {items: [{...releases().items[0], releaseDate: "2023-02-29",
         releaseDatePrecision: "day"}]}
@@ -281,13 +285,13 @@ async function test(name, run) {
   await test("Filtered empty pages preserve validated raw-page pagination",
     async () => {
       const f = fixture({releases: async () => ({
-        ...releases(), items: [], total: 40, nextOffset: 20
+        ...releases(), items: [], total: 20, nextOffset: 10
       })});
       await ready(f);
       const result = await f.controller.readArtistReleases(id(1));
       assert.equal(result.status, "ready");
       assert.equal(result.items.length, 0);
-      assert.equal(result.nextOffset, 20);
+      assert.equal(result.nextOffset, 10);
     }
   );
 

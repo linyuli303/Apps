@@ -83,7 +83,7 @@ async function test(name, run) {
       async readArtistReleases(artistId) {
         return page(artistId, {
           items: [{id: id(100)}],
-          nextOffset: 20
+          nextOffset: 10
         });
       }
     }, artists);
@@ -167,7 +167,7 @@ async function test(name, run) {
 
     for (const changes of [
       {artistId: id(999)}, {offset: 20}, {items: null},
-      {items: Array.from({length: 21}, (_, i) => ({id: id(i)}))}
+      {items: Array.from({length: 11}, (_, i) => ({id: id(i)}))}
     ]) {
       let calls = 0;
       const result = await load({

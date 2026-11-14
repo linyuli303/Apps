@@ -32,7 +32,7 @@ function release(n = 1, changes = {}) {
 }
 function page(items = [release()], offset = 0,
               total = offset + items.length) {
-  return {items, offset, total, limit: 20};
+  return {items, offset, total, limit: 10};
 }
 
 let passed = 0;
@@ -85,6 +85,30 @@ test("Only explicitly credited album/single groups survive", () => {
   assert.deepEqual(output.items[2].artistIds, [id(901), artistId]);
 });
 
+test("Missing album_group is accepted; album_type decides; credit still required", () => {
+  const without = changes => {
+    const item = release(changes.n, changes);
+    delete item.album_group;
+    delete item.n;
+    return item;
+  };
+  const output = validate(page([
+    without({n: 1}),
+    without({n: 2, album_type: "single"}),
+    without({n: 3, album_type: "compilation"}),
+    without({n: 4, artists: [{id: id(901)}]}),
+    release(5, {album_group: "appears_on"})
+  ]), artistId);
+  assert.deepEqual(output.items.map(item => item.id), [id(1), id(2)]);
+  assert.deepEqual(output.items.map(item => item.releaseType),
+    ["album", "single"]);
+  for (const changes of [
+    {album_group: null}, {album_group: ""}, {album_group: "unknown"}
+  ]) {
+    assert.throws(() => validate(page([release(1, changes)]), artistId));
+  }
+});
+
 test("Year/month/day precision retained without inventing exact dates", () => {
   for (const [date, precision, lowerBound] of [
     ["2024", "year", "2024-01-01"],
@@ -113,14 +137,15 @@ test("Year/month/day precision retained without inventing exact dates", () => {
 });
 
 test("Pagination uses raw page size even when every release is filtered out", () => {
-  const excluded = Array.from({length: 20}, (_, i) =>
+  // Spotify's artist-albums page size is 10 (February 2026 Web API).
+  const excluded = Array.from({length: 10}, (_, i) =>
     release(i + 1, {artists: [{id: id(901)}]}));
-  const result = validate(page(excluded, 0, 40), artistId);
+  const result = validate(page(excluded, 0, 20), artistId);
   assert.equal(result.items.length, 0);
-  assert.equal(result.nextOffset, 20);
+  assert.equal(result.nextOffset, 10);
 
-  const full = Array.from({length: 20}, (_, i) => release(i + 1));
-  assert.equal(validate(page(full, 20, 40), artistId, 20).nextOffset, null);
+  const full = Array.from({length: 10}, (_, i) => release(i + 1));
+  assert.equal(validate(page(full, 10, 20), artistId, 10).nextOffset, null);
   assert.equal(validate(page([release()], 0, 40), artistId).nextOffset, null);
   assert.equal(validate(page([], 0, 0), artistId).nextOffset, null);
   assert.equal(
@@ -153,16 +178,16 @@ test("Invalid artist IDs, offsets and page containers rejected", () => {
   for (const invalid of [null, "", "../escape", 42]) {
     assert.throws(() => validate(page(), invalid));
   }
-  for (const offset of [-1, 1, 10020, "0", Infinity]) {
+  for (const offset of [-1, 1, 5, 15, 10010, "0", Infinity]) {
     assert.throws(() => validate(page(), artistId, offset));
   }
   for (const invalid of [null, [], {}, {items: []}]) {
     assert.throws(() => validate(invalid, artistId));
   }
   for (const changes of [
-    {offset: 20}, {limit: 50}, {total: -1}, {total: 0},
+    {offset: 10}, {limit: 50}, {limit: 20}, {total: -1}, {total: 0},
     {total: 100001}, {total: Infinity}, {items: null},
-    {items: Array.from({length: 21}, (_, i) => release(i + 1)), total: 21}
+    {items: Array.from({length: 11}, (_, i) => release(i + 1)), total: 11}
   ]) {
     assert.throws(() => validate({...page(), ...changes}, artistId));
   }

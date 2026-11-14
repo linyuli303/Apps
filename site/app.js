@@ -4534,7 +4534,7 @@ function createSpotifyCallbackController({
     if (typeof artistId !== "string" ||
         !/^[A-Za-z0-9]{22}$/.test(artistId) ||
         !Number.isSafeInteger(offset) ||
-        offset < 0 || offset > 10000 || offset % 20 !== 0) {
+        offset < 0 || offset > 10000 || offset % 10 !== 0) {
       return Object.freeze({status:"failed"});
     }
     if (getStatus() !== "connected") {
@@ -4583,10 +4583,10 @@ function createSpotifyCallbackController({
           page.offset !== offset ||
           !Number.isSafeInteger(page.total) ||
           page.total < offset || page.total > 100000 ||
-          !Array.isArray(page.items) || page.items.length > 20 ||
+          !Array.isArray(page.items) || page.items.length > 10 ||
           page.total < offset + page.items.length ||
           (page.nextOffset !== null &&
-           (page.nextOffset !== offset + 20 ||
+           (page.nextOffset !== offset + 10 ||
             page.nextOffset > 10000 ||
             page.nextOffset >= page.total))) {
         throw new Error("Release page mismatch");
@@ -4596,7 +4596,7 @@ function createSpotifyCallbackController({
       // Raw-page pagination has already been validated by the transport.
       const checked = validateSpotifyArtistReleasePage({
         offset,
-        limit:20,
+        limit:10,
         total:page.total,
         items:page.items.map(item => ({
           id:item.id,
@@ -5192,12 +5192,12 @@ function validateSpotifyArtistReleasePage(page, artistId, offset = 0) {
     value.length <= 300 && !/[\u0000-\u001f\u007f]/.test(value);
 
   if (!validID(artistId) || !Number.isSafeInteger(offset) ||
-      offset < 0 || offset > 10000 || offset % 20 !== 0 ||
+      offset < 0 || offset > 10000 || offset % 10 !== 0 ||
       !page || typeof page !== "object" || Array.isArray(page) ||
-      page.offset !== offset || page.limit !== 20 ||
+      page.offset !== offset || page.limit !== 10 ||
       !Number.isSafeInteger(page.total) ||
       page.total < 0 || page.total > 100000 ||
-      !Array.isArray(page.items) || page.items.length > 20 ||
+      !Array.isArray(page.items) || page.items.length > 10 ||
       page.total < offset + page.items.length) {
     throw new Error("Invalid artist-release page.");
   }
@@ -5232,8 +5232,10 @@ function validateSpotifyArtistReleasePage(page, artistId, offset = 0) {
         item.type !== "album" || !validID(item.id) ||
         seen.has(item.id) || !validLabel(item.name) ||
         !["album", "single", "compilation"].includes(item.album_type) ||
-        !["album", "single", "compilation", "appears_on"]
-          .includes(item.album_group) ||
+        // album_group was removed in February 2026; validate it if present.
+        (item.album_group !== undefined &&
+         !["album", "single", "compilation", "appears_on"]
+           .includes(item.album_group)) ||
         !Array.isArray(item.artists) ||
         item.artists.length < 1 || item.artists.length > 100) {
       throw new Error("Invalid artist release.");
@@ -5252,7 +5254,8 @@ function validateSpotifyArtistReleasePage(page, artistId, offset = 0) {
 
     // Require explicit credit; related artists and recommendations are excluded.
     if (!artistIds.includes(artistId) ||
-        !["album", "single"].includes(item.album_group) ||
+        (item.album_group !== undefined &&
+         !["album", "single"].includes(item.album_group)) ||
         !["album", "single"].includes(item.album_type)) continue;
 
     const artworkURL = selectSpotifyArtworkURL(item.images);
@@ -5271,8 +5274,8 @@ function validateSpotifyArtistReleasePage(page, artistId, offset = 0) {
   }
 
   // Pagination uses the raw page, not the count remaining after filtering.
-  const candidate = offset + 20;
-  const nextOffset = page.items.length === 20 &&
+  const candidate = offset + 10;
+  const nextOffset = page.items.length === 10 &&
     candidate < page.total && candidate <= 10000 ? candidate : null;
 
   return Object.freeze({
@@ -5478,7 +5481,7 @@ async function readSpotifyArtistReleasePage(
       !/^[A-Za-z0-9._~+\/-]+=*$/.test(accessToken) ||
       (typeof artistId !== "string" || !/^[A-Za-z0-9]{22}$/.test(artistId)) ||
       !Number.isSafeInteger(offset) ||
-      offset < 0 || offset > 10000 || offset % 20 !== 0 ||
+      offset < 0 || offset > 10000 || offset % 10 !== 0 ||
       typeof request !== "function") {
     throw new Error("Invalid Spotify artist-release request.");
   }
@@ -5487,8 +5490,9 @@ async function readSpotifyArtistReleasePage(
   const url = new URL(
     "https://api.spotify.com/v1/artists/" + artistId + "/albums"
   );
+  // Spotify caps this endpoint at 10 per page (February 2026 Web API).
   url.search = new URLSearchParams({
-    include_groups:"album,single", limit:"20", offset:String(offset),
+    include_groups:"album,single", limit:"10", offset:String(offset),
   }).toString();
 
   const controller = new AbortController();
@@ -7014,7 +7018,7 @@ async function loadSpotifyLatestReleaseBatch(
     }
 
     if (page.artistId !== artistIds[index] || page.offset !== 0 ||
-        !Array.isArray(page.items) || page.items.length > 20) {
+        !Array.isArray(page.items) || page.items.length > 10) {
       return result("failed", index);
     }
 
