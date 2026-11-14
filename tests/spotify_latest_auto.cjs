@@ -174,7 +174,8 @@ function fixture(reader) {
   await settle();
 
   const completedPanel = completed.host.children[0];
-  const albumRows = completedPanel.children[2].children[1];
+  // Approved order: Singles (index 2) before Albums (index 3).
+  const albumRows = completedPanel.children[3].children[1];
   assert.equal(albumRows.children.length, 2);
 
   completed.view.setArtists([id(1), id(2), id(3)]);
@@ -215,7 +216,7 @@ function fixture(reader) {
   assert.deepEqual(extending.calls.map(call => call.artistId),
     [id(1), id(2), id(3), id(4)]);
   const extendingAlbums =
-    extending.host.children[0].children[2].children[1];
+    extending.host.children[0].children[3].children[1];
   assert.equal(extendingAlbums.children.length, 4);
   assert(extending.button.hidden);
   extending.view.clear();

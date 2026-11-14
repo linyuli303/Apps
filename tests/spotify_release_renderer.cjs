@@ -92,7 +92,7 @@ function deferred() {
 function allNodes(node) {
   return node.children.flatMap(child => [child, ...allNodes(child)]);
 }
-function fixture(reader) {
+function fixture(reader, onVisibility) {
   const host = new FakeNode("section");
   const calls = [], plays = [];
   let expired = 0, cancellations = 0;
@@ -104,15 +104,25 @@ function fixture(reader) {
     }
   }, () => { expired++; }, (item, trigger) => {
     plays.push({item, trigger});
-  });
+  }, undefined, onVisibility);
   const panel = host.children[0];
-  const [heading, toolbar, notice, rows, status, more] = panel.children;
+  // Approved order inside the releases view: Singles & EPs, then Albums.
+  const [heading, toolbar, notice, singles, albums, status, more] =
+    panel.children;
+  assert.equal(singles.children[0].textContent, "Singles & EPs");
+  assert.equal(albums.children[0].textContent, "Albums");
+  // Combined view over both groups for counting and searching.
+  const rows = {
+    get children() {
+      return [...singles.children[1].children, ...albums.children[1].children];
+    }
+  };
   const trigger = new FakeNode("button");
   trigger.isConnected = true;
   return {
-    host, view, panel, rows, status, more, trigger,
-    closeButton: heading.children[1],
-    title: heading.children[0],
+    host, view, panel, rows, status, more, trigger, singles, albums,
+    closeButton: heading.children[0],
+    title: heading.children[1],
     period: toolbar.children[0], type: toolbar.children[1],
     calls, plays, expired: () => expired, cancellations: () => cancellations
   };
@@ -137,7 +147,7 @@ async function test(name, run) {
       assert(!f.panel.hidden);
       assert(f.closeButton.focused);
 
-      const nodes = allNodes(f.rows);
+      const nodes = [f.singles, f.albums].flatMap(allNodes);
       assert(!nodes.some(n => ["img", "iframe", "audio"].includes(n.tag)));
       assert(nodes.some(n => n.textContent === "<img src=x>"));
       const link = nodes.find(n => n.tag === "a");
@@ -146,10 +156,80 @@ async function test(name, run) {
       assert.equal(link.rel, "noopener noreferrer");
       assert.equal(link.referrerPolicy, "no-referrer");
       assert.equal(f.plays.length, 0);
+      // Without a song browser, the title opens the player explicitly.
       nodes.find(n => n.tag === "button").events.click();
       assert.equal(f.plays.length, 1);
       assert.equal(f.plays[0].item.type, "album");
+      const play = nodes.find(n => n.className.includes("music-library-play"));
+      play.events.click();
+      assert.equal(f.plays.length, 2);
+      assert.equal(play.attrs["aria-label"],
+        "Open Spotify player for <img src=x>");
+      assert.equal(link.attrs["aria-label"],
+        "Open <img src=x> in Spotify (new tab)");
       f.view.clear();
+    }
+  );
+
+  await test("Singles and albums render in separate ordered groups",
+    async () => {
+      const f = fixture(async () => page([
+        release(1, "album"), release(2, "single"), release(3, "single")
+      ]));
+      await f.view.open(artist(1), f.trigger);
+      assert(!f.singles.hidden);
+      assert(!f.albums.hidden);
+      assert.equal(f.singles.children[1].children.length, 2);
+      assert.equal(f.albums.children[1].children.length, 1);
+      f.type.value = "album";
+      f.type.events.change();
+      assert(f.singles.hidden);
+      assert(!f.albums.hidden);
+      f.view.clear();
+    }
+  );
+
+  await test("Album titles browse songs; single titles open the player",
+    async () => {
+      const host = new FakeNode("section");
+      const browsed = [], played = [];
+      const view = create(host, {
+        cancelArtistReleases() {},
+        async readArtistReleases() {
+          return page([release(1, "album"), release(2, "single")]);
+        }
+      }, () => {}, item => played.push(item), item => browsed.push(item));
+      const trigger = new FakeNode("button");
+      await view.open(artist(1), trigger);
+      const [, , , singles, albums] = host.children[0].children;
+      const title = group => allNodes(group).find(n =>
+        n.className === "music-library-title");
+      title(albums).events.click();
+      assert.equal(browsed.length, 1);
+      assert.equal(played.length, 0);
+      title(singles).events.click();
+      assert.equal(browsed.length, 1);
+      assert.equal(played.length, 1);
+      view.clear();
+    }
+  );
+
+  await test("Visibility hook reports open and user/automatic close",
+    async () => {
+      const events = [];
+      const f = fixture(undefined, (open, byUser) =>
+        events.push([open, byUser]));
+      await f.view.open(artist(1), f.trigger);
+      assert.deepEqual(events, [[true, undefined]]);
+      f.closeButton.events.click();
+      assert.deepEqual(events.at(-1), [false, true]);
+      assert(f.panel.hidden);
+      assert(f.trigger.focused);
+      f.view.close(false);
+      assert.equal(events.length, 2);
+      await f.view.open(artist(2), f.trigger);
+      f.view.clear();
+      assert.deepEqual(events.at(-1), [false, false]);
     }
   );
 
@@ -210,6 +290,8 @@ async function test(name, run) {
       await work;
       assert(f.panel.hidden);
       assert.equal(f.rows.children.length, 0);
+      assert(f.singles.hidden);
+      assert(f.albums.hidden);
       assert.equal(f.status.textContent, "");
       assert(f.trigger.focused);
       f.view.clear();
@@ -227,8 +309,9 @@ async function test(name, run) {
       old.resolve(page([release(1)]));
       await first;
       assert.equal(f.title.textContent, "Artist 2 · releases");
-      assert(allNodes(f.rows).some(n => n.textContent === "Release 2"));
-      assert(!allNodes(f.rows).some(n => n.textContent === "<img src=x>"));
+      const shown = [f.singles, f.albums].flatMap(allNodes);
+      assert(shown.some(n => n.textContent === "Release 2"));
+      assert(!shown.some(n => n.textContent === "<img src=x>"));
 
       f.view.clear();
       assert.equal(f.host.children.length, 0);

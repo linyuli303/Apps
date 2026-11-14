@@ -19,4 +19,4 @@ class SpotifyArtistRendererTests(unittest.TestCase):
             timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("7 artist-renderer tests passed.", result.stdout)
+        self.assertIn("8 artist-renderer tests passed.", result.stdout)

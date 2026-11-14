@@ -16,4 +16,4 @@ class SpotifyReleaseRendererTests(unittest.TestCase):
             capture_output=True, text=True, encoding="utf-8", timeout=10,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("6 release-renderer tests passed.", result.stdout)
+        self.assertIn("9 release-renderer tests passed.", result.stdout)

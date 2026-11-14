@@ -6109,13 +6109,9 @@ function createSpotifyEmbedPlayer(host) {
   const heading = element("div", "spotify-embed-heading");
   const title = element("strong", "spotify-embed-title", "Spotify player");
   const expandButton = element("button", "", "Expand");
-  const bottomButton = element("button", "", "Bottom dock");
-  const sideButton = element("button", "", "Side dock");
   const closeButton = element("button", "", "Close");
-  for (const button of [
-    expandButton, bottomButton, sideButton, closeButton
-  ]) button.type = "button";
-  heading.append(title, expandButton, bottomButton, sideButton, closeButton);
+  for (const button of [expandButton, closeButton]) button.type = "button";
+  heading.append(title, expandButton, closeButton);
 
   const content = element("div", "spotify-embed-content");
   content.id = "spotify-embed-content";
@@ -6123,14 +6119,8 @@ function createSpotifyEmbedPlayer(host) {
     "Spotify controls playback and may use cookies and browser caching.");
   const frameHost = element("div", "spotify-embed-frame");
   content.append(notice, frameHost);
-
-  const restore = element("button", "spotify-embed-restore", "♫");
-  restore.type = "button";
-  restore.setAttribute("aria-label", "Restore Spotify bottom bar");
-  for (const button of [expandButton, bottomButton, restore]) {
-    button.setAttribute("aria-controls", content.id);
-  }
-  panel.append(heading, content, restore);
+  expandButton.setAttribute("aria-controls", content.id);
+  panel.append(heading, content);
 
   // Attach once outside hidden application sections. Never move a live iframe.
   document.body.append(panel);
@@ -6145,23 +6135,15 @@ function createSpotifyEmbedPlayer(host) {
     window.MyAppsSpotifyPlayer = mediaHandoff;
   }
 
+  // Expanded by default. Compact only shortens the same mounted iframe.
   function present(state, focus = true) {
     panel.dataset.presentation = state;
-    heading.hidden = state === "side";
-    content.hidden = state !== "expanded";
-    restore.hidden = state !== "side";
-    expandButton.hidden = state !== "bottom";
-    bottomButton.hidden = state !== "expanded";
+    expandButton.hidden = state !== "compact";
     expandButton.setAttribute("aria-expanded",
       String(state === "expanded"));
-    bottomButton.setAttribute("aria-expanded",
-      String(state === "expanded"));
-    restore.setAttribute("aria-expanded", String(state !== "side"));
 
     if (focus && !panel.hidden) {
-      const target = state === "side" ? restore
-        : state === "expanded" ? bottomButton : expandButton;
-      target.focus();
+      (state === "compact" ? expandButton : closeButton).focus();
     }
   }
 
@@ -6170,7 +6152,7 @@ function createSpotifyEmbedPlayer(host) {
     currentKey = null;
     title.textContent = "Spotify player";
     panel.hidden = true;
-    present("bottom", false);
+    present("expanded", false);
 
     if (restoreFocus && opener && opener.isConnected &&
         opener.getClientRects().length) {
@@ -6214,27 +6196,35 @@ function createSpotifyEmbedPlayer(host) {
     }
 
     panel.hidden = false;
-    present("bottom");
+    present("expanded");
   }
 
   const expand = () => present("expanded");
-  const bottom = () => present("bottom");
-  const side = () => present("side");
+  const titleClick = () => {
+    if (panel.dataset.presentation === "compact") present("expanded");
+  };
   const closeClick = () => close(true);
   const escape = event => {
     if (event.key !== "Escape" || panel.hidden) return;
     event.stopPropagation();
-    if (panel.dataset.presentation === "expanded") present("bottom");
+    if (panel.dataset.presentation === "expanded") present("compact");
     else close(true);
+  };
+  // Click-away compacts without moving focus. Pointer events inside the
+  // cross-origin Spotify iframe never reach this document.
+  const clickAway = event => {
+    if (disposed || panel.hidden ||
+        panel.dataset.presentation !== "expanded" ||
+        panel.contains(event.target)) return;
+    present("compact", false);
   };
 
   expandButton.addEventListener("click", expand);
-  bottomButton.addEventListener("click", bottom);
-  sideButton.addEventListener("click", side);
-  restore.addEventListener("click", bottom);
+  title.addEventListener("click", titleClick);
   closeButton.addEventListener("click", closeClick);
   panel.addEventListener("keydown", escape);
-  present("bottom", false);
+  document.addEventListener("pointerdown", clickAway, true);
+  present("expanded", false);
 
   function dispose() {
     if (disposed) return;
@@ -6245,11 +6235,10 @@ function createSpotifyEmbedPlayer(host) {
       delete window.MyAppsSpotifyPlayer;
     }
     expandButton.removeEventListener("click", expand);
-    bottomButton.removeEventListener("click", bottom);
-    sideButton.removeEventListener("click", side);
-    restore.removeEventListener("click", bottom);
+    title.removeEventListener("click", titleClick);
     closeButton.removeEventListener("click", closeClick);
     panel.removeEventListener("keydown", escape);
+    document.removeEventListener("pointerdown", clickAway, true);
     panel.remove();
   }
 
@@ -6673,14 +6662,17 @@ function createSpotifyArtistReleaseView(
   host, controller, onReauthorize, onPlay
 ) {
   const onBrowseSongs = arguments[4];
+  // Optional coordinator hook: the releases replace the artist overview.
+  const onVisibilityChange = arguments[5];
   const panel = element("section", "music-artist-releases");
   panel.hidden = true;
   panel.setAttribute("aria-label", "Selected artist releases");
   const heading = element("div", "configuration-heading");
   const title = element("h3", "", "Artist releases");
-  const closeButton = element("button", "", "Close releases");
+  const closeButton = element("button", "music-back", "‹ Following Artists");
   closeButton.type = "button";
-  heading.append(title, closeButton);
+  closeButton.setAttribute("aria-label", "Back to Following Artists");
+  heading.append(closeButton, title);
 
   const toolbar = element("div", "music-library-toolbar");
   const period = document.createElement("select");
@@ -6699,9 +6691,9 @@ function createSpotifyArtistReleaseView(
   const type = document.createElement("select");
   type.setAttribute("aria-label", "Release type");
   for (const [value, label] of [
-    ["all", "Albums & Singles / EPs"],
-    ["album", "Albums"],
+    ["all", "Singles / EPs & Albums"],
     ["single", "Singles / EPs"],
+    ["album", "Albums"],
   ]) {
     const option = document.createElement("option");
     option.value = value;
@@ -6715,15 +6707,24 @@ function createSpotifyArtistReleaseView(
     "Newest first among loaded results. Partial dates retain their precision. " +
     "Available works depend on Spotify and your market; this is not a " +
     "guaranteed complete discography. EPs follow Spotify's single grouping.");
-  const rows = element("div", "music-library-rows");
-  rows.dataset.view = "grid";
+  function group(label) {
+    const section = element("section", "music-latest-collection");
+    section.hidden = true;
+    const rows = element("div", "music-library-rows");
+    rows.dataset.view = "grid";
+    section.append(element("h3", "", label), rows);
+    return {section, rows};
+  }
+  const singles = group("Singles & EPs");
+  const albums = group("Albums");
   const status = element("p", "");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   const more = element("button", "", "Load more releases");
   more.type = "button";
   more.hidden = true;
-  panel.append(heading, toolbar, notice, rows, status, more);
+  panel.append(heading, toolbar, notice, singles.section, albums.section,
+    status, more);
   host.append(panel);
 
   const records = new Map();
@@ -6740,7 +6741,11 @@ function createSpotifyArtistReleaseView(
         a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
     const visible = period.value === "latest"
       ? filtered.slice(0, 6) : filtered;
-    const fragment = document.createDocumentFragment();
+    const fragments = {
+      single:document.createDocumentFragment(),
+      album:document.createDocumentFragment(),
+    };
+    let singleCount = 0, albumCount = 0;
 
     for (const item of visible) {
       const card = element("div", "music-library-card");
@@ -6749,15 +6754,28 @@ function createSpotifyArtistReleaseView(
       if (item.artworkURL) {
         cover.dataset.spotifyArtworkUrl = item.artworkURL;
       }
-      const label = element("span", "music-library-label", item.name);
-      label.append(element("small", "",
-        item.releaseDate + " · " +
-        (item.releaseType === "album" ? "Album" : "Single / EP")));
+      const isAlbum = item.releaseType === "album";
+      const browsable = isAlbum && typeof onBrowseSongs === "function";
+      const label = element("span", "music-library-label");
+      const primary = element("button", "music-library-title", item.name);
+      primary.type = "button";
+      primary.title = item.name;
+      primary.setAttribute("aria-label",
+        (browsable ? "View songs in " : "Open Spotify player for ") +
+        item.name);
+      primary.addEventListener("click", () => {
+        if (disposed || !selected || records.get(item.id) !== item) return;
+        if (browsable) onBrowseSongs(item, primary);
+        else if (typeof onPlay === "function") onPlay(item, primary);
+      });
+      label.append(primary, element("small", "",
+        item.releaseDate + " · " + (isAlbum ? "Album" : "Single / EP")));
 
       const openPlayer = element("button",
-        "music-library-open-player", "Open player");
+        "music-library-icon music-library-play", "▶");
       openPlayer.type = "button";
       openPlayer.disabled = typeof onPlay !== "function";
+      openPlayer.title = "Open player";
       openPlayer.setAttribute("aria-label",
         "Open Spotify player for " + item.name);
       openPlayer.addEventListener("click", () => {
@@ -6766,29 +6784,23 @@ function createSpotifyArtistReleaseView(
         }
       });
 
-      const link = element("a", "official", "Open in Spotify");
+      const link = element("a", "official music-library-icon", "↗");
       link.href = item.spotifyURL;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.referrerPolicy = "no-referrer";
+      link.title = "Open in Spotify";
+      link.setAttribute("aria-label",
+        "Open " + item.name + " in Spotify (new tab)");
       card.append(cover, label, openPlayer, link);
-      if (typeof onBrowseSongs === "function") {
-        const browse = element("button",
-          "music-library-browse-songs", "View songs");
-        browse.type = "button";
-        browse.setAttribute("aria-label",
-          "View songs in " + item.name);
-        browse.addEventListener("click", () => {
-          if (!disposed && records.get(item.id) === item) {
-            onBrowseSongs(item, browse);
-          }
-        });
-        card.append(browse);
-      }
-      fragment.append(card);
+      if (isAlbum) albumCount++; else singleCount++;
+      fragments[isAlbum ? "album" : "single"].append(card);
     }
 
-    rows.replaceChildren(fragment);
+    singles.rows.replaceChildren(fragments.single);
+    albums.rows.replaceChildren(fragments.album);
+    singles.section.hidden = singleCount === 0;
+    albums.section.hidden = albumCount === 0;
     status.textContent = visible.length + " shown / " + records.size +
       " unique release IDs loaded. " +
       (nextOffset !== null
@@ -6873,11 +6885,18 @@ function createSpotifyArtistReleaseView(
     busy = false;
     nextOffset = null;
     records.clear();
-    rows.replaceChildren();
+    singles.rows.replaceChildren();
+    albums.rows.replaceChildren();
+    singles.section.hidden = albums.section.hidden = true;
     status.textContent = "";
     title.textContent = "Artist releases";
+    const wasOpen = !panel.hidden;
     panel.hidden = true;
     more.hidden = true;
+    // Restore the overview before returning focus to the artist tile.
+    if (wasOpen && typeof onVisibilityChange === "function") {
+      onVisibilityChange(false, restoreFocus);
+    }
     if (restoreFocus && opener && opener.isConnected) opener.focus();
     opener = null;
   }
@@ -6893,6 +6912,7 @@ function createSpotifyArtistReleaseView(
     type.value = "all";
     title.textContent = artist.name + " · releases";
     panel.hidden = false;
+    if (typeof onVisibilityChange === "function") onVisibilityChange(true);
     closeButton.focus();
     panel.scrollIntoView({block:"nearest", behavior:"auto"});
     return load();
@@ -7084,8 +7104,9 @@ function createSpotifyLatestView(host, controller, onReauthorize, onPlay) {
   }
 
   panel.append(controls, status);
-  const albums = collection("Albums");
+  // Approved order: Singles, then Albums, then Following Artists.
   const singles = collection("Singles");
+  const albums = collection("Albums");
   host.append(panel);
 
   let artistIds = [], nextIndex = 0, generation = 0;
@@ -7101,13 +7122,28 @@ function createSpotifyLatestView(host, controller, onReauthorize, onPlay) {
       if (item.artworkURL) {
         cover.dataset.spotifyArtworkUrl = item.artworkURL;
       }
-      const label = element("span", "music-library-label", item.name);
-      label.append(element("small", "", item.releaseDate));
+      // Compact tile: the title performs the main action.
+      const browsable = item.releaseType === "album" &&
+        typeof onBrowseSongs === "function";
+      const label = element("span", "music-library-label");
+      const primary = element("button", "music-library-title", item.name);
+      primary.type = "button";
+      primary.title = item.name;
+      primary.setAttribute("aria-label",
+        (browsable ? "View songs in " : "Open Spotify player for ") +
+        item.name);
+      primary.addEventListener("click", () => {
+        if (disposed || records.get(item.id) !== item) return;
+        if (browsable) onBrowseSongs(item, primary);
+        else if (typeof onPlay === "function") onPlay(item, primary);
+      });
+      label.append(primary, element("small", "", item.releaseDate));
 
       const play = element("button",
-        "music-library-open-player", "Open player");
+        "music-library-icon music-library-play", "▶");
       play.type = "button";
       play.disabled = typeof onPlay !== "function";
+      play.title = "Open player";
       play.setAttribute("aria-label", "Open Spotify player for " + item.name);
       play.addEventListener("click", () => {
         if (!disposed && records.get(item.id) === item &&
@@ -7116,25 +7152,15 @@ function createSpotifyLatestView(host, controller, onReauthorize, onPlay) {
         }
       });
 
-      const link = element("a", "official", "Open in Spotify");
+      const link = element("a", "official music-library-icon", "↗");
       link.href = item.spotifyURL;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.referrerPolicy = "no-referrer";
+      link.title = "Open in Spotify";
+      link.setAttribute("aria-label",
+        "Open " + item.name + " in Spotify (new tab)");
       card.append(cover, label, play, link);
-      if (typeof onBrowseSongs === "function") {
-        const browse = element("button",
-          "music-library-browse-songs", "View songs");
-        browse.type = "button";
-        browse.setAttribute("aria-label",
-          "View songs in " + item.name);
-        browse.addEventListener("click", () => {
-          if (!disposed && records.get(item.id) === item) {
-            onBrowseSongs(item, browse);
-          }
-        });
-        card.append(browse);
-      }
       fragment.append(card);
     }
     if (!items.length) {
@@ -7392,7 +7418,8 @@ function createSpotifyFocusView(controller, onReauthorize) {
     (item, trigger) => {
       if (!disposed) sharedPlayer.open(item, trigger);
     },
-    browseSongs
+    browseSongs,
+    (open, byUser) => showReleases(open, byUser)
   );
   const artistView = createSpotifyArtistView(
     artistHost, controller, onReauthorize,
@@ -7412,12 +7439,35 @@ function createSpotifyFocusView(controller, onReauthorize) {
       if (!disposed) latestView.setArtists(ids);
     }
   );
-  // Keep the expansion below the artist grid without moving an active iframe.
+  // Approved browsing order: Singles, Albums, Following Artists.
+  // Selected-artist releases replace that overview until Back is chosen.
   const releasePanel = artistHost.firstElementChild;
   artistHost.append(releasePanel);
-  // Approved browsing order: Artists, Albums, Singles, artist expansion.
-  releasePanel.before(latestHost);
+  const artistPanel = artistHost.firstElementChild !== releasePanel
+    ? artistHost.firstElementChild : null;
+  (artistPanel || releasePanel).before(latestHost);
   artistHost.append(songHost);
+
+  // Hiding the artist panel also pauses its scroll-driven page loading.
+  let releasesOpen = false;
+  function resumeOverview() {
+    if (!disposed && typeof latestView.load === "function") {
+      void latestView.load();
+    }
+  }
+  function showReleases(open, byUser) {
+    if (disposed) return;
+    releasesOpen = open;
+    latestHost.hidden = open;
+    if (artistPanel) artistPanel.hidden = open;
+    if (open) {
+      artistHost.scrollTop = 0;
+      return;
+    }
+    songView.close(false);
+    // Resume the automatic overview only after an explicit Back action.
+    if (byUser) resumeOverview();
+  }
   const playlistSongHost = element("section", "music-playlist-song-browser");
   const playlistSongView = createSpotifyPlaylistSongView(
     playlistSongHost, controller, onReauthorize,
@@ -7455,6 +7505,11 @@ function createSpotifyFocusView(controller, onReauthorize) {
 
   const searchCollection = () => {
     if (disposed) return;
+    // Searching artists returns from releases to the visible artist list.
+    if (!artistHost.hidden && releasesOpen) {
+      releaseView.close(false);
+      resumeOverview();
+    }
     const activeHost = artistHost.hidden ? libraryHost : artistHost;
     const input = activeHost.querySelector(
       '.music-library-toolbar input[type="search"]'
@@ -7465,7 +7520,15 @@ function createSpotifyFocusView(controller, onReauthorize) {
     }
   };
   searchButton.addEventListener("click", searchCollection);
-  const showArtists = () => select("artists");
+  // Artists always returns to the overview; it resumes only if releases
+  // were open, so it never silently retries an errored overview.
+  const showArtists = () => {
+    if (disposed) return;
+    const returning = releasesOpen;
+    if (returning) releaseView.close(false);
+    select("artists");
+    if (returning) resumeOverview();
+  };
   const showLibrary = () => select("library");
   artistsButton.addEventListener("click", showArtists);
   libraryButton.addEventListener("click", showLibrary);
@@ -7551,30 +7614,31 @@ function createSpotifyArtistView(host, controller, onReauthorize) {
       if (item.artworkURL) {
         cover.dataset.spotifyArtworkUrl = item.artworkURL;
       }
-      const label = element("span", "music-library-label", item.name);
-      label.append(element("small", "", "Followed artist"));
-      const link = element("a", "official", "Open in Spotify");
+      // Compact tile: the artist name opens Singles and Albums in place.
+      const selectable = typeof onSelectArtist === "function";
+      const label = element("span", "music-library-label");
+      const name = element(selectable ? "button" : "span",
+        "music-library-title", item.name);
+      name.title = item.name;
+      if (selectable) {
+        name.type = "button";
+        name.setAttribute("aria-label", "View releases by " + item.name);
+        name.addEventListener("click", () => {
+          if (!disposed && !busy && records.get(item.id) === item) {
+            onSelectArtist(item, name);
+          }
+        });
+      }
+      label.append(name, element("small", "", "Artist"));
+      const link = element("a", "official music-library-icon", "↗");
       link.href = item.spotifyURL;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.referrerPolicy = "no-referrer";
+      link.title = "Open in Spotify";
       link.setAttribute("aria-label",
         "Open " + item.name + " in Spotify (new tab)");
-      card.append(cover, label);
-      if (typeof onSelectArtist === "function") {
-        const releases = element("button",
-          "music-library-open-player", "View releases");
-        releases.type = "button";
-        releases.setAttribute("aria-label",
-          "View releases by " + item.name);
-        releases.addEventListener("click", () => {
-          if (!disposed && !busy && records.get(item.id) === item) {
-            onSelectArtist(item, releases);
-          }
-        });
-        card.append(releases);
-      }
-      card.append(link);
+      card.append(cover, label, link);
       fragment.append(card);
     }
     rows.replaceChildren(fragment);
@@ -7765,33 +7829,37 @@ function createSpotifyPlaylistView(controller, onReauthorize) {
       if (item.artworkURL) {
         cover.dataset.spotifyArtworkUrl = item.artworkURL;
       }
-      const text = element("span", "music-library-label", item.name);
-      text.title = item.name;
-      text.append(element("small", "", "By " + item.ownerName + (item.collaborative ? " | Collaborative" : "")));
-      const link = element("a", "official", "Open in Spotify");
+      // Compact tile/row: the title opens songs; icons play or open Spotify.
+      const browsable = typeof onBrowsePlaylistSongs === "function";
+      const text = element("span", "music-library-label");
+      const name = element(browsable ? "button" : "span",
+        "music-library-title", item.name);
+      name.title = item.name;
+      if (browsable) {
+        name.type = "button";
+        name.setAttribute("aria-label", "View songs in " + item.name);
+        name.addEventListener("click", () => {
+          if (!disposed && records.get(item.id) === item) {
+            onBrowsePlaylistSongs(item, name);
+          }
+        });
+      }
+      text.append(name, element("small", "", "By " + item.ownerName + (item.collaborative ? " | Collaborative" : "")));
+      const openPlayer = element("button",
+        "music-library-icon music-library-play", "▶");
+      openPlayer.type = "button";
+      openPlayer.title = "Open player";
+      openPlayer.setAttribute("aria-label", "Open Spotify player for " + item.name);
+      openPlayer.addEventListener("click", () => embedPlayer.open(item, openPlayer));
+      const link = element("a", "official music-library-icon", "↗");
       link.href = item.spotifyURL;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.referrerPolicy = "no-referrer";
-      link.setAttribute("aria-label", "Open " + item.name + " in Spotify (new tab)");
-      const openPlayer = element("button", "music-library-open-player", "Open player");
-      openPlayer.type = "button";
-      openPlayer.setAttribute("aria-label", "Open Spotify player for " + item.name);
-      openPlayer.addEventListener("click", () => embedPlayer.open(item, openPlayer));
+      link.title = "Open in Spotify";
+      link.setAttribute("aria-label",
+        "Open " + item.name + " in Spotify (new tab)");
       row.append(cover, text, openPlayer, link);
-      if (typeof onBrowsePlaylistSongs === "function") {
-        const browse = element("button",
-          "music-library-browse-songs", "View songs");
-        browse.type = "button";
-        browse.setAttribute("aria-label",
-          "View songs in " + item.name);
-        browse.addEventListener("click", () => {
-          if (!disposed && records.get(item.id) === item) {
-            onBrowsePlaylistSongs(item, browse);
-          }
-        });
-        row.append(browse);
-      }
       fragment.append(row);
     }
     if (!filtered.length && records.size) fragment.append(element("p", "music-library-empty", "No matching loaded playlists."));
@@ -7959,7 +8027,8 @@ function initializePodcastConfiguration(shows) {
     preparing: "Preparing secure Spotify authorization...",
     redirecting: "Opening Spotify authorization...",
     connecting: "Completing Spotify authorization...",
-    connected: "Connected · Open a playlist player to listen. Playback availability is controlled by Spotify.",
+    // Connected needs no message; the empty status line is hidden.
+    connected: "",
     denied: "Spotify authorization was declined. No connection was established.",
     failed: "Spotify connection failed. Connect again.",
     cleanup_failed: "Connection cancelled, but temporary login cleanup could not be confirmed. Close this tab before reconnecting.",
@@ -7968,7 +8037,8 @@ function initializePodcastConfiguration(shows) {
   });
 
   function display(state) {
-    statusNode.textContent = messages[state] || messages.failed;
+    statusNode.textContent = Object.hasOwn(messages, state)
+      ? messages[state] : messages.failed;
     if (state === "connected" && !playlistView) {
       playlistView = createSpotifyFocusView(
         callbackController,

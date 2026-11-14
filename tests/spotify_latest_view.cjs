@@ -104,8 +104,9 @@ function fixture(reader = async artistId => page(artistId)) {
     view, host, panel, calls, plays,
     button: panel.children[0].children[0],
     status: panel.children[1],
-    singles: panel.children[3].children[1],
-    albums: panel.children[2].children[1],
+    // Approved order: Singles before Albums.
+    singles: panel.children[2].children[1],
+    albums: panel.children[3].children[1],
     cancelled: () => cancelled,
     expired: () => expired
   };
@@ -136,6 +137,8 @@ async function test(name, run) {
     f.view.setArtists([id(1), id(2)]);
     await f.view.load();
     assert.equal(f.calls.length, 2);
+    assert.equal(f.panel.children[2].children[0].textContent, "Singles");
+    assert.equal(f.panel.children[3].children[0].textContent, "Albums");
     assert.equal(f.singles.children.length, 1);
     assert.equal(f.albums.children.length, 1);
     const nodes = descendants(f.panel);

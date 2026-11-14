@@ -3121,22 +3121,6 @@ body.podcast-player-open main{padding-bottom:220px}
  #spotify-page .music-library-rows[data-view="list"] .music-library-card a {grid-column:2;}
 }
 
-/* Side-docked state: a fixed edge tab, never a horizontal collapsed bar. */
-#spotify-page .spotify-embed-heading[hidden],
-#spotify-page .spotify-embed-restore[hidden] {display:none!important;}
-#spotify-page .spotify-embed-panel[data-collapsed="true"] {
- position:fixed;right:0;bottom:26px;z-index:40;
- width:48px;margin:0;padding:0;border-radius:12px 0 0 12px;
- overflow:hidden;box-shadow:0 3px 14px rgb(0 0 0 / .15);
-}
-#spotify-page .spotify-embed-restore {
- display:flex;align-items:center;justify-content:center;
- width:48px;min-width:48px;height:76px;min-height:76px;
- margin:0;padding:6px;border:0;border-radius:inherit;
- background:var(--accent);color:var(--page);font:inherit;font-size:23px;
-}
-#spotify-page .spotify-embed-restore:focus-visible {outline-offset:-4px;}
-
 /* MyTube controls and configurable preview v2. */
 :root[data-device-layout="tv"] #tube-page #grid .card:focus:not(:focus-visible){outline:none;box-shadow:none}
 #player .tube-volume-control{display:inline-flex;align-items:center;gap:5px}
@@ -3409,9 +3393,6 @@ body,button,input,select,textarea{font-family:system-ui,-apple-system,"Segoe UI"
   color:#8A8A93;
   font-size:36px;
 }
-#spotify-page .music-artists .music-library-cover {
-  border-radius:50%;
-}
 #spotify-page .music-library-open-player {
   align-self:flex-start;
   min-height:30px;
@@ -3497,23 +3478,18 @@ body,button,input,select,textarea{font-family:system-ui,-apple-system,"Segoe UI"
     height:100%;
     overflow:hidden;
   }
+  /* Same shell width, padding and header position as MyTube/MyPodcasts. */
   body:has(#spotify-page:not([hidden])) > main {
     display:flex;
     flex-direction:column;
-    width:100%;
-    max-width:none;
     height:100vh;
     height:100dvh;
     min-height:0;
-    margin:0;
-    padding:0;
+    padding-bottom:0;
     overflow:hidden;
   }
-  /* Reserve header space without changing its fonts, controls or ordering. */
   body:has(#spotify-page:not([hidden])) .myapps-header {
     flex:0 0 auto;
-    margin:0;
-    padding:26px 4vw 22px;
   }
   #spotify-page:not([hidden]) {
     display:flex;
@@ -3568,11 +3544,6 @@ body,button,input,select,textarea{font-family:system-ui,-apple-system,"Segoe UI"
     grid-column:1;
     grid-row:3;
     padding:0 12px;
-  }
-}
-@media(max-width:600px) {
-  body:has(#spotify-page:not([hidden])) .myapps-header {
-    padding:24px 20px 16px;
   }
 }
 @media(forced-colors:active) {
@@ -3733,38 +3704,44 @@ body,button,input,select,textarea{font-family:system-ui,-apple-system,"Segoe UI"
   border:0;
   border-radius:12px;
 }
-.spotify-persistent-player[data-presentation="side"] {
-  left:auto;
-  right:0;
-  bottom:26px;
-  transform:none;
-  width:48px;
-  padding:0;
-  border-radius:12px 0 0 12px;
+/* Click-away compact state: same iframe, Spotify's 152px compact layout. */
+.spotify-persistent-player[data-presentation="compact"] {
+  padding:6px 10px 8px;
 }
-.spotify-persistent-player .spotify-embed-restore {
-  width:46px;
-  height:66px;
-  min-height:66px;
-  padding:0;
-  border:0;
-  border-radius:inherit;
-  background:#C42641;
-  color:white;
-  font-size:23px;
+.spotify-persistent-player[data-presentation="compact"] .spotify-embed-notice {
+  display:none;
+}
+.spotify-persistent-player[data-presentation="compact"] iframe {
+  height:152px;
+}
+.spotify-persistent-player[data-presentation="compact"] .spotify-embed-title {
+  cursor:pointer;
+}
+.spotify-persistent-player .spotify-embed-heading button[hidden] {
+  display:none;
+}
+@media(prefers-reduced-motion:no-preference) {
+  .spotify-persistent-player iframe {
+    transition:height .18s ease;
+  }
 }
 @supports selector(:has(*)) {
-  body:has(.spotify-persistent-player:not([hidden]):not(
-    [data-presentation="side"])) > main {
+  body:has(.spotify-persistent-player:not([hidden])) > main {
     padding-bottom:100px;
   }
   body:has(#spotify-page:not([hidden])):has(
     .spotify-persistent-player:not([hidden])) > main {
     padding-bottom:0;
   }
+  /* Keep the last rows reachable above either player height. */
   body:has(.spotify-persistent-player:not([hidden])) #spotify-page
   :is(#music-followed-artists,#music-saved-library) {
-    padding-bottom:110px;
+    padding-bottom:460px;
+  }
+  body:has(.spotify-persistent-player[data-presentation="compact"]:not(
+    [hidden])) #spotify-page
+  :is(#music-followed-artists,#music-saved-library) {
+    padding-bottom:230px;
   }
 }
 @media(max-width:700px) {
@@ -3967,5 +3944,226 @@ body,button,input,select,textarea{font-family:system-ui,-apple-system,"Segoe UI"
   }
   #channel-bulk-manager .manager-actions > button {
     flex:1 1 auto;
+  }
+}
+
+
+/* spotify-compact-tiles-v1 */
+/* Spotify-style shortcut tiles: square cover flush left, one-line text. */
+#spotify-page > #spotify-status:empty {
+  display:none;
+}
+:root #spotify-page .music-library-rows[data-view="grid"] {
+  grid-template-columns:repeat(auto-fill,
+    minmax(min(calc(var(--spotify-cover-size) * 1.85),100%),1fr));
+  gap:8px;
+}
+:root[data-display-density] #spotify-page .music-library-rows .music-library-card,
+:root #spotify-page .music-library-rows .music-library-card {
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  justify-content:flex-start;
+  gap:0;
+  min-width:0;
+  min-height:0;
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  font-size:12px;
+}
+:root #spotify-page .music-library-rows[data-view="grid"] .music-library-card {
+  height:calc(var(--spotify-cover-size) * .4);
+  background:var(--canvas);
+  border:1px solid var(--divider);
+  border-radius:6px;
+}
+#spotify-page .music-library-rows .music-library-card:is(:hover,:focus-within) {
+  background:var(--hover);
+}
+:root #spotify-page .music-library-rows .music-library-cover {
+  flex:0 0 auto;
+  width:auto;
+  height:100%;
+  aspect-ratio:1;
+  border:0;
+  border-radius:0;
+  font-size:calc(var(--spotify-cover-size) * .14);
+}
+#spotify-page .music-library-rows .music-library-label {
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+  justify-content:center;
+  min-width:0;
+  padding:0 10px;
+  line-height:1.35;
+  overflow-wrap:normal;
+}
+#spotify-page .music-library-label .music-library-title {
+  display:block;
+  max-width:100%;
+  min-height:0;
+  margin:0;
+  padding:0;
+  border:0;
+  border-radius:3px;
+  background:transparent;
+  color:var(--text);
+  font:inherit;
+  font-size:12.5px;
+  font-weight:650;
+  line-height:1.35;
+  text-align:left;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#spotify-page button.music-library-title {
+  cursor:pointer;
+}
+#spotify-page button.music-library-title:hover {
+  background:transparent;
+  text-decoration:underline;
+}
+#spotify-page .music-library-rows .music-library-label small {
+  margin:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#spotify-page .music-library-card .music-library-icon,
+#spotify-page .music-library-card a.official.music-library-icon {
+  display:inline-flex;
+  flex:0 0 32px;
+  align-items:center;
+  justify-content:center;
+  align-self:center;
+  width:32px;
+  height:32px;
+  min-width:32px;
+  min-height:32px;
+  margin:0 2px 0 0;
+  padding:0;
+  border:0;
+  border-radius:50%;
+  background:transparent;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1;
+  text-decoration:none;
+}
+#spotify-page .music-library-card .music-library-icon:last-child {
+  margin-right:6px;
+}
+#spotify-page .music-library-card .music-library-icon:hover {
+  background:var(--surface);
+  color:var(--text);
+}
+#spotify-page .music-library-card .music-library-play {
+  background:var(--accent);
+  color:#FFFFFF;
+  font-size:11px;
+  opacity:0;
+}
+#spotify-page .music-library-card:is(:hover,:focus-within) .music-library-play {
+  opacity:1;
+}
+#spotify-page .music-library-card .music-library-play:hover {
+  background:var(--accent);
+  color:#FFFFFF;
+}
+@media(hover:none) {
+  #spotify-page .music-library-card .music-library-play {
+    opacity:1;
+  }
+}
+/* List view: one compact line per row (RSS style). */
+#spotify-page .music-library-rows[data-view="list"] {
+  display:block;
+  border-top:1px solid var(--divider);
+}
+:root #spotify-page .music-library-rows[data-view="list"] .music-library-card {
+  min-height:36px;
+  padding:4px 8px;
+  gap:4px;
+  background:transparent;
+  border:0;
+  border-bottom:1px solid var(--divider);
+  border-radius:0;
+}
+#spotify-page .music-library-rows[data-view="list"] .music-library-card:hover {
+  background:var(--canvas);
+}
+:root #spotify-page .music-library-rows[data-view="list"] .music-library-cover {
+  width:28px;
+  height:28px;
+  border-radius:4px;
+  font-size:13px;
+}
+#spotify-page .music-library-rows[data-view="list"] .music-library-label {
+  flex-direction:row;
+  align-items:center;
+  gap:16px;
+}
+#spotify-page .music-library-rows[data-view="list"] .music-library-label .music-library-title {
+  flex:1 1 auto;
+  min-width:0;
+  font-weight:500;
+}
+#spotify-page .music-library-rows[data-view="list"] .music-library-label small {
+  flex:0 0 220px;
+}
+#spotify-page .music-library-rows[data-view="list"] .music-library-play {
+  opacity:1;
+  background:transparent;
+  color:var(--accent);
+}
+#spotify-page .music-library-rows[data-view="list"] .music-library-play:hover {
+  background:var(--surface);
+  color:var(--accent);
+}
+#spotify-page .music-artist-releases {
+  margin-top:0;
+  padding-top:0;
+  border-top:0;
+}
+#spotify-page .music-artist-releases > .configuration-heading {
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+}
+#spotify-page .music-artist-releases .music-back {
+  min-height:28px;
+  padding:2px 0;
+  border:0;
+  background:transparent;
+  color:var(--label-accent);
+}
+#spotify-page .music-artist-releases .music-back:hover {
+  background:transparent;
+  text-decoration:underline;
+}
+#spotify-page .music-artist-releases .music-latest-collection[hidden] {
+  display:none;
+}
+@media(max-width:700px) {
+  #spotify-page .music-library-rows[data-view="list"] .music-library-label small {
+    display:none;
+  }
+}
+@media(pointer:coarse) {
+  #spotify-page .music-library-card .music-library-icon,
+  #spotify-page .music-library-card a.official.music-library-icon {
+    flex-basis:40px;
+    width:40px;
+    height:40px;
+    min-width:40px;
+    min-height:40px;
+  }
+}
+@media(forced-colors:active) {
+  #spotify-page .music-library-card .music-library-play {
+    opacity:1;
   }
 }

@@ -312,6 +312,52 @@ async function test(name, run) {
     }
   );
 
+  await test("Artist title opens releases; hidden panel pauses auto-loading",
+    async () => {
+      const host = new FakeNode("section");
+      const selected = [], calls = [];
+      const view = create(host, {
+        readArtists: async cursor => {
+          calls.push(cursor);
+          return cursor === null ? page([1, 2], id(2)) : page([3]);
+        }
+      }, () => {}, (artist, trigger) => selected.push({artist, trigger}),
+      () => {}, () => {});
+      await view.load();
+      const panel = host.children[0];
+      const rows = panel.children[2];
+      const card = rows.children.find(n =>
+        descendants(n).some(c => c.textContent === "Artist 2"));
+      const title = descendants(card).find(n =>
+        n.className === "music-library-title");
+      assert.equal(title.tag, "button");
+      assert.equal(title.attrs["aria-label"], "View releases by Artist 2");
+      // No separate text buttons: title, cover and one icon link only.
+      assert(!descendants(card).some(n =>
+        n.textContent === "View releases" || n.textContent === "Open in Spotify"));
+      const link = descendants(card).find(n => n.tag === "a");
+      assert.equal(link.attrs["aria-label"],
+        "Open Artist 2 in Spotify (new tab)");
+      assert.equal(link.rel, "noopener noreferrer");
+      title.events.click();
+      assert.equal(selected.length, 1);
+      assert.equal(selected[0].artist.id, id(2));
+      assert.equal(selected[0].trigger, title);
+
+      // The coordinator hides this panel while releases are shown.
+      panel.hidden = true;
+      host.clientHeight = 400;
+      host.scrollHeight = 1200;
+      host.scrollTop = 750;
+      host.events.scroll();
+      assert.deepEqual(calls, [null]);
+      panel.hidden = false;
+      host.events.scroll();
+      assert.deepEqual(calls, [null, id(2)]);
+      view.clear();
+    }
+  );
+
   console.log(passed + " artist-renderer tests passed.");
 })().catch(error => {
   console.error(error);

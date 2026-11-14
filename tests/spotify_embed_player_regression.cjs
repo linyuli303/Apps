@@ -37,7 +37,18 @@ class Node {
   }
 }
 const body=new Node("body");
-const document={body,createElement:tag=>new Node(tag)};
+const document={
+  body,createElement:tag=>new Node(tag),
+  events:{},
+  addEventListener(name,fn,capture) {
+    assert.equal(capture,true);
+    this.events[name]=fn;
+  },
+  removeEventListener(name,fn,capture) {
+    assert.equal(capture,true);
+    if(this.events[name]===fn) delete this.events[name];
+  },
+};
 const element=(tag,cl,text)=>{
   const node=new Node(tag);
   node.className=cl; node.textContent=text;
@@ -53,8 +64,19 @@ assert.equal(host.children.length,0);
 assert.equal(body.children.length,1);
 
 const panel=body.children[0];
-const [heading,content,restore]=panel.children;
-const [title,expand,bottom,side,close]=heading.children;
+// Panel offers no dock modes: only a title, Expand (compact state) and Close.
+assert.equal(panel.children.length,2);
+const [heading,content]=panel.children;
+assert.equal(heading.children.length,3);
+const [title,expand,close]=heading.children;
+assert.equal(expand.textContent,"Expand");
+assert.equal(close.textContent,"Close");
+for(const label of ["Bottom dock","Side dock"]) {
+  assert(!matches[0][0].includes(label));
+}
+assert(!matches[0][0].includes("spotify-embed-restore"));
+const inside=new Node("button");
+panel.contains=node=>node===panel||node===inside||node.parent===heading;
 const frames=content.children[1];
 const trigger=new Node("button");
 assert(panel.hidden);
@@ -68,26 +90,41 @@ api.open(item,trigger);
 const original=frames.children[0];
 assert.equal(original.src,
   "https://open.spotify.com/embed/playlist/"+item.id);
-assert.equal(panel.dataset.presentation,"bottom");
-assert(content.hidden);
+// Opens expanded by default; Expand is only offered once compacted.
+assert.equal(panel.dataset.presentation,"expanded");
+assert(!content.hidden);
 assert(!heading.hidden);
-assert(expand.focused);
+assert(expand.hidden);
+assert(close.focused);
+
+// Clicks inside the player never compact it.
+document.events.pointerdown({target:inside});
+assert.equal(panel.dataset.presentation,"expanded");
+
+// Click-away compacts the same iframe without moving focus.
+expand.focused=false;
+document.events.pointerdown({target:new Node("main")});
+assert.equal(panel.dataset.presentation,"compact");
+assert(!panel.hidden);
+assert(!content.hidden);
+assert(!expand.hidden);
+assert(!expand.focused);
+assert.equal(frames.children[0],original);
 
 expand.events.click();
 assert.equal(panel.dataset.presentation,"expanded");
-assert(!content.hidden);
+assert(expand.hidden);
 assert.equal(frames.children[0],original);
 
-bottom.events.click();
-assert(content.hidden);
+document.events.pointerdown({target:new Node("main")});
+title.events.click();
+assert.equal(panel.dataset.presentation,"expanded");
 assert.equal(frames.children[0],original);
-side.events.click();
-assert(heading.hidden);
-assert(!restore.hidden);
-assert(restore.focused);
-restore.events.click();
-assert.equal(panel.dataset.presentation,"bottom");
-assert(!heading.hidden);
+
+// Opening another item from a compact player restores the expanded view.
+document.events.pointerdown({target:new Node("main")});
+api.open(item,trigger);
+assert.equal(panel.dataset.presentation,"expanded");
 assert.equal(frames.children[0],original);
 
 // No section observer removes the player during navigation.
@@ -125,10 +162,14 @@ assert.equal(frames.children.length,0);
 assert(trigger.focused);
 
 api.open(item,trigger);
-expand.events.click();
 panel.events.keydown({key:"Escape",stopPropagation(){}});
-assert.equal(panel.dataset.presentation,"bottom");
+assert.equal(panel.dataset.presentation,"compact");
 assert.equal(frames.children.length,1);
+panel.events.keydown({key:"Escape",stopPropagation(){}});
+assert(panel.hidden);
+assert.equal(frames.children.length,0);
+api.open(item,trigger);
+assert.equal(panel.dataset.presentation,"expanded");
 
 api.dispose();
 api.dispose();
@@ -138,7 +179,9 @@ assert.equal(body.children.length,0);
 api.open(item,trigger);
 assert.equal(frames.children.length,0);
 assert.equal(expand.events.click,undefined);
-console.log("PASS: no eager iframe; fixed typed URLs; compact bottom, expand, side dock and restore preserve iframe; root attachment preserves navigation; invalid types rejected; close, Escape and idempotent disposal.");
+assert.equal(title.events.click,undefined);
+assert.equal(document.events.pointerdown,undefined);
+console.log("PASS: no eager iframe; fixed typed URLs; opens expanded; click-away compacts and Expand/title restore without remounting; no dock modes; root attachment preserves navigation; invalid types rejected; close, two-step Escape and idempotent disposal.");
 
 // spotify-media-handoff-regression-v1
 {
